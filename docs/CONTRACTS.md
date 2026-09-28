@@ -39,6 +39,15 @@ Status: the first version is implemented in [`schemas.py`](../schemas.py) with l
 
 Use stable IDs throughout and timezone-aware timestamps. Interpret user-facing NYC times in `America/New_York`. Unknown source information remains null/unknown, not a model-created fact. A duration starts at the agreed start time; if departure is delayed, refresh feasibility rather than silently extending a hard arrival deadline.
 
+## Implemented app and state interfaces (J2)
+
+- `state.SessionRecord` is the one stored record per session: model messages, the chat transcript, `AdventureState`, plans by id, `PhotoAsset`s by id, and replies cached by `client_message_id`. Saves check `storage_version`, so two concurrent turns cannot overwrite each other; the losing turn asks the user to resend.
+- Tools that need the session take a server-built `state.ToolContext` as their first argument and are listed in `tools.SESSION_TOOLS`. `run_tool(name, args, ctx)` injects it; a model-supplied `session_id` argument is rejected.
+- State operations, each returning a tool result: `state.save_plan(ctx, plan, activate=..., waived_required_ids=..., expected_version=...)`, `resolve_checkpoint` (completed/skipped/blocked), `reveal_beat`, `set_status`, `set_photo_visibility`. Activation, and any revision while active, requires `plan.validation.ok`. A revision must set `supersedes_plan_id`, keep completed checkpoints unchanged, keep revealed beats, and keep unresolved required stops unless waived. Repeating a completion is a no-op.
+- Model-facing: `get_adventure_state` (compact summary plus the current checkpoint in full) and `update_adventure_state(operation, ...)`. Kyle's planner saves plans through `state.save_plan` once `evaluate_adventure_plan` passes.
+- Photos: a camera tool calls `ctx.save_asset(data, content_type, camera_id, checkpoint_id, source_url, retrieved_at, frame_time=None)`, which stores bytes and returns a `PhotoAsset` with `media_url = /media/{asset_id}`.
+- HTTP: `POST /chat` (request adds optional `location` and `client_message_id`), `GET /history?session_id=` returning `{"session_id", "messages": [{"role", "text", "tool_calls"?, "at"}]}`, `GET /media/{asset_id}`, `POST /clear?session_id=`.
+
 ## Preserve `/chat`
 
 Retain request fields `message` and optional `session_id`. Proposed additive request fields are `location` and a `client_message_id` for safe retries. Decide their exact types in the shared schema.

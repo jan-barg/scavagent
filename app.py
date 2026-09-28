@@ -1,23 +1,37 @@
 import json
 import os
 import uuid
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import litellm
 import uvicorn
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, Response
 
-from schemas import ChatRequest, ChatResponse, tool_error
+import state
+from schemas import NYC_TIMEZONE, ChatRequest, ChatResponse, tool_error
+from state import SessionRecord, ToolContext, VersionConflict
 from tools import TOOLS, run_tool
 
 # --- Config ---
 
+# Interim prompt so the state tools can be exercised. Kyle's agent work replaces it.
 SYSTEM_PROMPT = (
-    "You are a helpful assistant. When a question depends on the weather or "
-    "outdoor conditions, call get_weather first, then answer in a sentence."
+    "You are Scavagent, a guide for playful NYC adventures run entirely in chat. The user walks between "
+    "messages; each message is one turn. Keep replies short and practical.\n"
+    "- Progress is saved on the server. Call get_adventure_state before judging an answer or moving on, and "
+    "record every change with update_adventure_state. Never claim progress you did not record.\n"
+    "- Keep sourced facts, what the user reports, and invented story clearly distinct. Never invent physical "
+    "features, people, or access at a real place.\n"
+    "- Every challenge has a fallback: offer hints, and let the user skip without getting stuck. A stop the "
+    "user required is only skipped after they explicitly say they no longer need it.\n"
+    "- Only the starting location is required to plan. If the adventure planner is not available yet, say so "
+    "plainly instead of inventing a route."
 )
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 8
+CONTEXT_MESSAGES = 40  # Recent conversation sent to the model; the full plan stays in storage
 # Model choice is deferred; keep it configurable. Defaults to the starter's model.
 MODEL = os.environ.get("SCAVAGENT_MODEL", "vertex_ai/gemini-3.5-flash-lite")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
@@ -25,11 +39,12 @@ VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
 # --- The Harness ---
 
 
-def run_agent(messages: list[dict], tool_calls: list[dict]) -> str:
+def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | None = None) -> str:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text. Every tool call is appended to `tool_calls` as it runs,
-    so the caller keeps the trace even if a later model call raises.
+    so the caller keeps the trace even if a later model call raises. Session tools
+    receive `ctx`, which the server binds to the current session.
     """
     for _ in range(MAX_TOOL_ROUNDS):
         reply = litellm.completion(
@@ -54,7 +69,7 @@ def run_agent(messages: list[dict], tool_calls: list[dict]) -> str:
             except json.JSONDecodeError:
                 args = None
             if isinstance(args, dict):
-                result = run_tool(call.function.name, args)
+                result = run_tool(call.function.name, args, ctx)
             else:
                 result = tool_error(
                     "INVALID_ARGUMENT",
@@ -71,14 +86,52 @@ def run_agent(messages: list[dict], tool_calls: list[dict]) -> str:
     return "Sorry, I hit my tool-call limit before finishing."
 
 
-# --- Session Store ---
+# --- Context for each turn ---
 
-# session_id -> list of messages. In-memory, single process.
-sessions: dict[str, list] = {}
+
+def app_context(record: SessionRecord, now: datetime) -> str:
+    """Server facts the model needs every turn: time, location freshness, adventure status."""
+    local = now.astimezone(ZoneInfo(NYC_TIMEZONE))
+    lines = [f"Now: {local:%A %Y-%m-%d %H:%M} ({NYC_TIMEZONE})"]
+    location = record.adventure.latest_location
+    if location is None:
+        lines.append("Latest location: none. If you need it, ask the user to type where they are.")
+    else:
+        age = int((now - location.observed_at).total_seconds() // 60)
+        where = location.place_text or f"{location.point.lat:.5f},{location.point.lng:.5f}"
+        accuracy = f", accuracy {location.accuracy_m:.0f} m" if location.accuracy_m is not None else ""
+        lines.append(f"Latest location: {where} (from {location.source}, {age} min old{accuracy}).")
+    adventure = record.adventure
+    if adventure.active_plan_id:
+        lines.append(
+            f"Adventure: {adventure.status}, plan {adventure.active_plan_id}, current checkpoint "
+            f"{adventure.current_checkpoint_id or 'none'}. Call get_adventure_state for details."
+        )
+    else:
+        lines.append("Adventure: none yet.")
+    return "App context (from the server, not the user):\n" + "\n".join(f"- {line}" for line in lines)
+
+
+def recent(messages: list[dict]) -> list[dict]:
+    """The last CONTEXT_MESSAGES messages, starting at a user message so tool results keep their calls."""
+    start = max(0, len(messages) - CONTEXT_MESSAGES)
+    while start > 0 and messages[start].get("role") != "user":
+        start -= 1
+    return messages[start:]
+
 
 # --- FastAPI App ---
 
 app = FastAPI()
+store = state.store_from_env()
+
+
+def session_id_or_400(session_id: str | None) -> str:
+    if session_id is None:
+        return str(uuid.uuid4())
+    if not state.SESSION_ID_PATTERN.match(session_id):
+        raise HTTPException(400, "session_id must be 1-128 letters, digits, '.', '_' or '-'.")
+    return session_id
 
 
 @app.get("/")
@@ -88,28 +141,76 @@ def index():
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
-    # Get or create the session
-    session_id = request.session_id or str(uuid.uuid4())
-    if session_id not in sessions:
-        sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Get or create the session. A client may choose its own id; the server makes one otherwise.
+    session_id = session_id_or_400(request.session_id)
+    record = store.load(session_id) or SessionRecord.new(session_id)
 
-    # Append user's message to the context
-    sessions[session_id] += [{"role": "user", "content": request.message}]
+    # A retried send returns the reply already given, without running tools twice.
+    if request.client_message_id and request.client_message_id in record.replies:
+        return record.replies[request.client_message_id]
+
+    now = state.utc_now()
+    if request.location:
+        state.update_location(record, request.location)
+
+    record.messages += [{"role": "user", "content": request.message}]
+    context = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + app_context(record, now)}]
+    conversation = context + recent(record.messages)
+    new_from = len(conversation)
 
     tool_calls = []
     try:
-        response = run_agent(sessions[session_id], tool_calls)
+        response = run_agent(conversation, tool_calls, ToolContext(record=record, store=store))
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         # Tools that already ran stay in the trace.
         response = f"Model call failed: {type(e).__name__}: {str(e)[:300]}"
 
-    return ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls)
+    # Keep what the model produced this turn, made plain JSON so any store can hold it.
+    record.messages += json.loads(json.dumps(conversation[new_from:], default=str))
+    reply = ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls).model_dump(mode="json")
+    record.transcript += [
+        {"role": "user", "text": request.message, "at": now.isoformat()},
+        {"role": "assistant", "text": response, "tool_calls": reply["tool_calls"], "at": state.utc_now().isoformat()},
+    ]
+    if request.client_message_id:
+        record.remember_reply(request.client_message_id, reply)
+    record.trim()
+
+    try:
+        store.save(record)
+    except VersionConflict:
+        # Another message for this session finished first. Its progress stands; this turn is dropped.
+        reply["response"] = (
+            "Another message in this conversation was handled at the same time, so I didn't save this one. "
+            "Please send it again."
+        )
+    return reply
+
+
+@app.get("/history")
+def history(session_id: str):
+    """What the chat shows, so a reloaded page can restore the conversation."""
+    record = store.load(session_id_or_400(session_id))
+    if record is None:
+        raise HTTPException(404, "No conversation with that session_id.")
+    return {"session_id": session_id, "messages": record.transcript}
+
+
+@app.get("/media/{asset_id}")
+def media(asset_id: str):
+    """A saved camera still. The unguessable asset id is the capability; the live camera is never re-fetched."""
+    found = store.get_asset(asset_id) if asset_id.isalnum() else None
+    if found is None:
+        raise HTTPException(404, "No saved image with that id.")
+    data, content_type = found
+    return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.post("/clear")
 def clear(session_id: str | None = None):
-    sessions.pop(session_id, None)
+    if session_id:
+        store.delete(session_id_or_400(session_id))
     return {"status": "ok"}
 
 

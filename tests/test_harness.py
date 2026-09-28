@@ -1,51 +1,21 @@
 """The /chat trace contract, with the model replaced by scripted replies."""
 
 import json
-from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 import app as app_module
+import state
 import tools
-
-
-class FakeMessage(SimpleNamespace):
-    def model_dump(self):
-        calls = None
-        if self.tool_calls:
-            calls = [
-                {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
-                for c in self.tool_calls
-            ]
-        return {"role": "assistant", "content": self.content, "tool_calls": calls}
-
-
-def tool_call(call_id, name, arguments):
-    return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
-
-
-def script(monkeypatch, *steps):
-    """Each step is a FakeMessage to return, or an exception to raise."""
-    remaining = list(steps)
-    seen = []
-
-    def completion(**kwargs):
-        seen.append(json.loads(json.dumps(kwargs["messages"])))  # Must be JSON-serializable
-        step = remaining.pop(0)
-        if isinstance(step, Exception):
-            raise step
-        return SimpleNamespace(choices=[SimpleNamespace(message=step)])
-
-    monkeypatch.setattr(app_module.litellm, "completion", completion)
-    return seen
+from fakes import FakeMessage, script, tool_call
 
 
 @pytest.fixture
 def client(monkeypatch):
     fake_weather = lambda location: tools.tool_ok({"location": location, "temp_f": 70})
     monkeypatch.setitem(tools.TOOL_MAP, "get_weather", fake_weather)
-    app_module.sessions.clear()
+    monkeypatch.setattr(app_module, "store", state.MemoryStore())
     return TestClient(app_module.app)
 
 

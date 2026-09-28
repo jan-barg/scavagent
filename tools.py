@@ -1,10 +1,13 @@
 """The tools the harness can run, and the JSON that describes them to the model."""
 
+import os
 from datetime import datetime, timezone
 
 import requests
 
+import state
 from schemas import Freshness, tool_error, tool_ok
+from state import ToolContext
 
 # Open-Meteo is free and needs no API key.
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
@@ -55,6 +58,79 @@ def get_weather(location: str) -> dict:
     )
 
 
+# --- Adventure state tools ---
+# These receive the server's ToolContext for the current session as their first
+# argument. The model never passes, or chooses, a session id.
+
+STATUS_OPERATIONS = {"start_adventure": "active", "finish_adventure": "completed", "abandon_adventure": "abandoned"}
+CHECKPOINT_OPERATIONS = {"complete_checkpoint": "completed", "skip_checkpoint": "skipped", "block_checkpoint": "blocked"}
+
+
+def get_adventure_state(ctx: ToolContext) -> dict:
+    """The current adventure's progress, current checkpoint, and revealed story."""
+    return tool_ok(state.state_summary(ctx.record))
+
+
+def update_adventure_state(
+    ctx: ToolContext,
+    operation: str,
+    checkpoint_id: str | None = None,
+    beat_id: str | None = None,
+    note: str | None = None,
+    user_waived_required: bool = False,
+    asset_id: str | None = None,
+    visibility: str | None = None,
+    expected_version: int | None = None,
+) -> dict:
+    """Apply one allowed progress change to this session's adventure."""
+    def missing(argument):
+        return tool_error("INVALID_ARGUMENT", f"{operation} needs {argument}.", retryable=False,
+                          next_step=f"Call again with {argument}.")
+
+    if operation in CHECKPOINT_OPERATIONS:
+        if not checkpoint_id:
+            return missing("checkpoint_id")
+        return state.resolve_checkpoint(
+            ctx, checkpoint_id, CHECKPOINT_OPERATIONS[operation], note=note,
+            user_waived_required=user_waived_required, expected_version=expected_version,
+        )
+    if operation == "reveal_beat":
+        return state.reveal_beat(ctx, beat_id, expected_version=expected_version) if beat_id else missing("beat_id")
+    if operation in STATUS_OPERATIONS:
+        return state.set_status(ctx, STATUS_OPERATIONS[operation], expected_version=expected_version)
+    if operation == "set_photo_visibility":
+        if not asset_id or visibility not in ("user_confirmed_visible", "user_reported_not_visible"):
+            return missing("asset_id and visibility ('user_confirmed_visible' or 'user_reported_not_visible')")
+        return state.set_photo_visibility(ctx, asset_id, visibility)
+    return tool_error("INVALID_ARGUMENT", f"Unknown operation '{operation}'.", retryable=False,
+                      next_step="Use one of the operations listed in the tool schema.")
+
+
+def load_dev_adventure(ctx: ToolContext, scenario: str) -> dict:
+    """Development only: load a labeled synthetic fixture adventure into this session."""
+    from fixtures import SCENARIOS, load_scenario
+
+    if scenario not in SCENARIOS:
+        return tool_error("INVALID_ARGUMENT", f"Unknown scenario '{scenario}'.", retryable=False,
+                          next_step=f"Use one of: {', '.join(SCENARIOS)}.")
+    fixture = load_scenario(scenario)
+    ctx.record.plans[fixture.plan.plan_id] = fixture.plan
+    progress = fixture.state.model_dump(include={"completed_ids", "skipped_ids", "blocked_ids", "revealed_beat_ids"})
+    loaded = ctx.record.adventure.model_copy(update={
+        **progress,
+        "status": "active",  # Fixtures carry no evaluation; only this dev path may activate them.
+        "active_plan_id": fixture.plan.plan_id,
+        "current_checkpoint_id": fixture.state.current_checkpoint_id,
+        "user_reports": [],
+    })
+    state._commit(ctx, loaded)
+    return tool_ok(
+        state.state_summary(ctx.record),
+        warnings=["Synthetic development fixture: places, routes, and clues are invented, not researched."],
+        freshness=Freshness(kind="synthetic_fixture"),
+    )
+
+
 # What the model sees: the "set notes" in the screenplay.
 TOOLS = [
     {
@@ -71,13 +147,83 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_adventure_state",
+            "description": (
+                "Get this user's saved adventure: status, state_version, every checkpoint's outcome, the current "
+                "checkpoint's full activity (prompt, answer rule, hints, fallback), revealed story beats, the next "
+                "beat to reveal, latest location, and saved photos. Call it before judging an answer or changing progress."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_adventure_state",
+            "description": (
+                "Record one change to this user's adventure progress. complete_checkpoint when the user finishes "
+                "a checkpoint's activity (put what they said or saw in note); skip_checkpoint when they choose to skip "
+                "(a stop they required needs user_waived_required=true after they explicitly confirm); "
+                "block_checkpoint when it is impossible, e.g. closed or camera offline; reveal_beat after telling "
+                "the user a story beat; start_adventure / finish_adventure / abandon_adventure; "
+                "set_photo_visibility after the user says whether they appear in a saved photo."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": [*CHECKPOINT_OPERATIONS, "reveal_beat", *STATUS_OPERATIONS, "set_photo_visibility"],
+                    },
+                    "checkpoint_id": {"type": "string", "description": "For checkpoint operations, e.g. 'stop_2'"},
+                    "beat_id": {"type": "string", "description": "For reveal_beat"},
+                    "note": {"type": "string", "description": "The user's answer or report, in their words"},
+                    "user_waived_required": {"type": "boolean", "description": "The user explicitly dropped a stop they required"},
+                    "asset_id": {"type": "string", "description": "For set_photo_visibility"},
+                    "visibility": {"type": "string", "enum": ["user_confirmed_visible", "user_reported_not_visible"]},
+                    "expected_version": {"type": "integer", "description": "state_version you last read; rejected if stale"},
+                },
+                "required": ["operation"],
+            },
+        },
+    },
 ]
 
 # What the harness runs: tool name -> Python function.
-TOOL_MAP = {"get_weather": get_weather}
+TOOL_MAP = {
+    "get_weather": get_weather,
+    "get_adventure_state": get_adventure_state,
+    "update_adventure_state": update_adventure_state,
+}
+
+# Tools that receive the session's ToolContext as their first argument.
+SESSION_TOOLS = {"get_adventure_state", "update_adventure_state", "load_dev_adventure"}
+
+if os.environ.get("SCAVAGENT_DEV_FIXTURES") == "1":
+    TOOL_MAP["load_dev_adventure"] = load_dev_adventure
+    TOOLS.append({
+        "type": "function",
+        "function": {
+            "name": "load_dev_adventure",
+            "description": (
+                "DEVELOPMENT ONLY. Load a synthetic test adventure into this session so progression can be tested. "
+                "Use only when the user explicitly asks for a test/dev adventure; tell them it is synthetic."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "scenario": {"type": "string", "enum": ["start_only", "constrained_route", "revision_after_skip"]},
+                },
+                "required": ["scenario"],
+            },
+        },
+    })
 
 
-def run_tool(name: str, args: dict) -> dict:
+def run_tool(name: str, args: dict, ctx: ToolContext | None = None) -> dict:
     """Run one tool call. Models invent tool names and arguments; never let that crash the loop."""
     if name not in TOOL_MAP:
         return tool_error(
@@ -87,6 +233,10 @@ def run_tool(name: str, args: dict) -> dict:
             next_step=f"Use one of: {', '.join(TOOL_MAP)}.",
         )
     try:
+        if name in SESSION_TOOLS:
+            if ctx is None:
+                raise RuntimeError("session tool called without a session")
+            return TOOL_MAP[name](ctx, **args)
         return TOOL_MAP[name](**args)
     except TypeError as e:
         return tool_error(

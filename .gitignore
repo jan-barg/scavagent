@@ -13,3 +13,6 @@ __pycache__/
 
 # Test cache
 .pytest_cache/
+
+# Local session store (SQLite)
+.data/
