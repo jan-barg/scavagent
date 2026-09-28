@@ -1,194 +1,317 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Gemini Web Tool Calling</title>
-        <style>
-            * {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0;
-            }
-            body {
-                font-family: system-ui, sans-serif;
-                height: 100vh;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 3rem 1rem;
-            }
-            #container {
-                width: 100%;
-                max-width: 900px;
-                display: flex;
-                flex-direction: column;
-                border: 1px solid #e0e0e0;
-            }
-            #messages {
-                overflow-y: auto;
-                padding: 2rem;
-                display: flex;
-                flex-direction: column;
-                gap: 1.5rem;
-                min-height: 450px;
-                max-height: 70vh;
-            }
-            .msg {
-                line-height: 1.5;
-                max-width: 80%;
-            }
-            .msg.user {
-                align-self: flex-end;
-                text-align: right;
-            }
-            .msg .role {
-                font-size: 0.75rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #999;
-                margin-bottom: 0.25rem;
-            }
-            .msg.loading .content {
-                color: #999;
-            }
-            #input-area {
-                display: flex;
-                gap: 1rem;
-                padding: 1.5rem;
-                border-top: 1px solid #e0e0e0;
-            }
-            #user-input {
-                flex: 1;
-                padding: 0.75rem 0;
-                border: none;
-                border-bottom: 1px solid #e0e0e0;
-                font-size: 1rem;
-                outline: none;
-            }
-            #user-input:focus {
-                border-bottom-color: #000;
-            }
-            button {
-                padding: 0.75rem 1.5rem;
-                background: #000;
-                color: #fff;
-                border: none;
-                font-size: 0.75rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                cursor: pointer;
-            }
-            .tool {
-                font-family: ui-monospace, monospace;
-                font-size: 0.75rem;
-                color: #555;
-                background: #f5f5f5;
-                border-left: 3px solid #f59e0b;
-                padding: 0.5rem 0.75rem;
-                margin: 0.25rem 0 0.75rem;
-                white-space: pre-wrap;
-                word-break: break-word;
-            }
-            .tool .label {
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #b45309;
-            }
-            button:disabled {
-                opacity: 0.3;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="container">
-            <div id="messages"></div>
-            <div id="input-area">
-                <input
-                    type="text"
-                    id="user-input"
-                    placeholder="Type a message..."
-                    autocomplete="off"
-                />
-                <button id="send-btn">Send</button>
-            </div>
-        </div>
-        <script>
-            const messages = document.getElementById("messages");
-            const userInput = document.getElementById("user-input");
-            const sendBtn = document.getElementById("send-btn");
-            let sessionId = null;
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#183e35">
+  <title>Scavagent · Take the scenic story</title>
+  <style>
+    :root { color-scheme: light; --paper:#f7f5ed; --ink:#183e35; --muted:#58695e; --line:#d9dfd2; --accent:#d35b35; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#e8ece3; color:var(--ink); font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    .app { width:min(100%,820px); margin:auto; height:100vh; height:100dvh; display:flex; flex-direction:column; background:var(--paper); box-shadow:0 0 70px #193e350d; }
+    header { padding:22px 28px 18px; display:flex; align-items:center; gap:13px; border-bottom:1px solid var(--line); flex-shrink:0; }
+    .mark { width:37px; height:37px; border:1px solid var(--ink); border-radius:50%; display:grid; place-items:center; flex-shrink:0; }
+    .mark::before { content:""; width:13px; height:20px; background:linear-gradient(155deg,var(--accent) 50%,var(--ink) 51%); clip-path:polygon(50% 0,100% 100%,50% 72%,0 100%); transform:rotate(28deg); }
+    .brand { font-weight:800; font-size:20px; letter-spacing:-.8px; }
+    .edition { margin-left:auto; font-size:10px; letter-spacing:1.8px; text-transform:uppercase; line-height:1.6; text-align:right; }
+    main { min-height:0; flex:1; overflow-y:auto; overscroll-behavior:contain; padding:30px 28px 24px; scroll-behavior:smooth; }
+    .welcome { padding:12px 0 24px; max-width:620px; }
+    .eyebrow { color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:2px; font-weight:750; }
+    h1 { font-family:Georgia,"Times New Roman",serif; font-weight:400; font-size:clamp(42px,8vw,64px); line-height:1.02; letter-spacing:-2.5px; margin:17px 0 22px; }
+    h1 em { font-weight:400; }
+    .intro { max-width:450px; color:var(--muted); font-size:15px; line-height:1.65; }
+    .example { margin:26px 0 12px; padding:18px 20px; border-left:2px solid var(--accent); background:#edeedf; font-size:14px; line-height:1.7; }
+    .example span { display:block; font-size:9px; letter-spacing:1.6px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+    .fine { font-size:12px; color:var(--muted); line-height:1.6; }
+    #messages { display:flex; flex-direction:column; gap:25px; }
+    .message { width:100%; max-width:93%; animation:arrive .18s ease-out; }
+    .message.user { align-self:flex-end; max-width:86%; }
+    .role { margin:0 0 8px 2px; font-size:9px; font-weight:750; text-transform:uppercase; letter-spacing:1.6px; color:var(--muted); }
+    .user .role { text-align:right; }
+    .content { font-size:15px; line-height:1.75; overflow-wrap:anywhere; white-space:pre-wrap; }
+    .user .content { background:var(--ink); color:var(--paper); padding:13px 18px; border-radius:16px 16px 3px 16px; }
+    .assistant .content { padding:0 2px; }
+    .content a { color:inherit; text-decoration-color:var(--accent); text-underline-offset:3px; }
+    .content code { font-size:.85em; padding:2px 5px; background:#e7eadf; border-radius:3px; color:var(--ink); }
+    .content img { display:block; width:100%; height:auto; max-height:440px; object-fit:contain; margin:14px 0 5px; border-radius:10px; background:#e7eadf; }
+    .photo-note { display:block; font-size:11px; color:var(--muted); margin-bottom:14px; }
+    .activity { list-style:none; padding:0; margin:0 0 10px; display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--muted); font-size:10px; line-height:1.5; }
+    .activity li::before { content:"↳ "; color:var(--accent); }
+    .pending { color:var(--muted); font-style:italic; }
+    footer { padding:13px 24px max(16px, env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--paper); flex-shrink:0; }
+    #status { min-height:18px; font-size:11px; line-height:1.5; color:var(--muted); margin:0 3px 9px; }
+    form { display:flex; gap:10px; align-items:flex-end; border:1px solid #bdc9b8; background:#fffef9; border-radius:15px; padding:7px; }
+    form:focus-within { border-color:var(--ink); box-shadow:0 0 0 2px #183e3510; }
+    textarea { width:100%; min-height:44px; max-height:150px; resize:none; border:0; outline:0; background:transparent; padding:10px 9px; font:inherit; font-size:16px; line-height:24px; color:var(--ink); }
+    textarea::placeholder { color:#657469; }
+    button { min-width:68px; height:44px; border:0; border-radius:9px; padding:0 16px; background:var(--ink); color:#fff; font:inherit; font-size:13px; font-weight:650; cursor:pointer; }
+    button:hover { background:#2a5948; }
+    button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+    button:disabled { opacity:.4; cursor:default; }
+    .composer-note { margin:9px 3px 0; font-size:10px; color:var(--muted); }
+    .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+    [hidden] { display:none !important; }
+    @keyframes arrive { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+    @media (max-width:480px) { header { padding:16px 19px; } main { padding:24px 20px; } footer { padding-left:13px; padding-right:13px; } .edition { font-size:9px; } .message { max-width:100%; } .welcome { padding-top:5px; } }
+    @media (prefers-reduced-motion:reduce) { main { scroll-behavior:auto; } .message { animation:none; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header><span class="mark" aria-hidden="true"></span><span class="brand">Scavagent</span><span class="edition">New York City<br>Adventures on foot & beyond</span></header>
+    <main id="trail" aria-label="Your adventure conversation">
+      <section class="welcome" id="welcome">
+        <div class="eyebrow">Follow your curiosity</div>
+        <h1>Familiar streets.<br><em>Unfamiliar stories.</em></h1>
+        <p class="intro">A little exploring, a few clues, and a different way through New York. Tell me where you’re starting. We’ll take it from there.</p>
+        <p class="example"><span>A place to begin</span>“I’m at Central Park West & 86th. I have 45 minutes and feel like a mystery.”</p>
+        <p class="fine">Just a starting place is enough. Add a finish, a must-see stop, or a mood if you like.</p>
+      </section>
+      <div id="messages" role="log" aria-label="Messages" aria-live="polite" aria-relevant="additions text"></div>
+    </main>
+    <footer>
+      <p id="status" role="status" aria-live="polite">Type a starting place, or share your browser location when prompted.</p>
+      <form id="composer">
+        <label for="message" class="sr-only">Message Scavagent</label>
+        <textarea id="message" rows="1" maxlength="8000" placeholder="Where are we starting?" enterkeyhint="send" aria-describedby="status composer-note" disabled></textarea>
+        <button id="send" type="submit" disabled>Send</button>
+      </form>
+      <p class="composer-note" id="composer-note">Say “ready”, “hint”, “skip”, or change your plans. It all happens here.</p>
+    </footer>
+  </div>
+<script>
+"use strict";
+const trail = document.getElementById("trail");
+const messages = document.getElementById("messages");
+const input = document.getElementById("message");
+const sendButton = document.getElementById("send");
+const statusLine = document.getElementById("status");
+const SESSION_KEY = "scavagent.session_id";
+const PENDING_KEY = "scavagent.pending_message.v1";
+const LOCATION_MAX_AGE = 90_000;
+let sessionId = readStored(SESSION_KEY);
+if (!sessionId || sessionId.length > 128) sessionId = null;
+let pending = readPending();
+let pendingUser = null;
+let pendingReply = null;
+let busy = true;
+let locationSample = null;
+let locationRequest = 0;
 
-            function addMessage(role, text, isLoading = false) {
-                const div = document.createElement("div");
-                div.className =
-                    "msg " +
-                    (role === "you" ? "user" : "assistant") +
-                    (isLoading ? " loading" : "");
-                div.innerHTML =
-                    '<div class="role">' +
-                    role +
-                    '</div><div class="content">' +
-                    text +
-                    "</div>";
-                messages.appendChild(div);
-                messages.scrollTop = messages.scrollHeight;
-                return div;
-            }
+function readStored(key) { try { return localStorage.getItem(key); } catch { return null; } }
+function store(key, value) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* The current tab still works if storage is disabled. */ } }
+function readPending() {
+  try {
+    const value = JSON.parse(readStored(PENDING_KEY));
+    if (value && typeof value.message === "string" && value.message.length <= 8000 &&
+        typeof value.client_message_id === "string" && /^[0-9a-f-]{36}$/i.test(value.client_message_id) &&
+        (value.session_id === null || typeof value.session_id === "string") && value.session_id === sessionId) return value;
+  } catch { /* Ignore corrupt or unavailable browser storage. */ }
+  return null;
+}
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+function scrollToLatest() { trail.scrollTop = trail.scrollHeight; }
+function refreshControls() {
+  input.disabled = busy;
+  input.readOnly = Boolean(pending);
+  sendButton.disabled = busy || !(pending || input.value.trim());
+  input.style.height = "44px";
+  input.style.height = Math.min(input.scrollHeight, 150) + "px";
+}
 
-            async function send() {
-                const text = userInput.value.trim();
-                if (!text) return;
+function safeMediaUrl(raw) {
+  try {
+    if (raw.length > 2048 || /[\\\x00-\x20]/.test(raw)) return null;
+    const url = new URL(raw, window.location.origin);
+    const decoded = decodeURIComponent(decodeURIComponent(url.pathname));
+    if (url.origin !== window.location.origin || url.username || url.password ||
+        !url.pathname.startsWith("/media/") || !decoded.startsWith("/media/") ||
+        decoded.includes("\\") || decoded.split("/").some(part => part === "." || part === "..")) return null;
+    return url.href;
+  } catch { return null; }
+}
+function safeLink(raw) {
+  try {
+    const url = new URL(raw, window.location.origin);
+    return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;
+  } catch { return null; }
+}
+function renderText(target, text, allowMarkdown) {
+  target.replaceChildren();
+  text = String(text).slice(0, 40_000);
+  if (!allowMarkdown) { target.textContent = text; return; }
+  // Tiny, DOM-built subset: images, links, bold, inline code. HTML stays plain text.
+  const tokens = /!\[([^\]\n]*)\]\(([^\s)]+)\)|\[([^\]\n]+)\]\(([^\s)]+)\)|\*\*([^*\n]+)\*\*|`([^`\n]+)`/g;
+  let end = 0;
+  for (const match of text.matchAll(tokens)) {
+    target.appendChild(document.createTextNode(text.slice(end, match.index)));
+    let node;
+    if (match[1] !== undefined) {
+      const url = safeMediaUrl(match[2]);
+      if (url) {
+        node = document.createElement("img"); node.src = url; node.alt = match[1] || "Saved adventure photo";
+        node.loading = "lazy"; node.referrerPolicy = "no-referrer";
+        const note = document.createElement("span"); note.className = "photo-note"; note.textContent = "Saved frame · tell me whether you’re visible.";
+        node.addEventListener("error", () => { node.hidden = true; note.textContent = "This saved photo couldn’t load. Tell me in chat and we’ll continue."; });
+        target.append(node, note); node = null;
+      } else { node = document.createTextNode(match[1] ? `[Image unavailable: ${match[1]}]` : "[Image unavailable]"); }
+    } else if (match[3] !== undefined) {
+      const url = safeLink(match[4]);
+      if (url) { node = document.createElement("a"); node.href = url; node.rel = "noopener noreferrer"; node.target = "_blank"; node.textContent = match[3]; }
+      else node = document.createTextNode(match[3]);
+    } else {
+      node = document.createElement(match[5] !== undefined ? "strong" : "code");
+      node.textContent = match[5] !== undefined ? match[5] : match[6];
+    }
+    if (node) target.appendChild(node);
+    end = match.index + match[0].length;
+  }
+  target.appendChild(document.createTextNode(text.slice(end)));
+}
+function toolActivity(calls) {
+  const list = document.createElement("ul"); list.className = "activity"; list.setAttribute("aria-label", "Tool activity");
+  const names = { find_camera_checkpoints:"Camera positions", capture_camera_checkpoint:"Save camera frame", get_weather:"Local weather", evaluate_adventure_plan:"Route check" };
+  for (const call of (Array.isArray(calls) ? calls : []).slice(0, 12)) {
+    if (!call || typeof call.name !== "string") continue;
+    const item = document.createElement("li");
+    const label = names[call.name] || call.name.replaceAll("_", " ").slice(0, 60);
+    const outcome = call.result?.ok === true ? "complete" : call.result?.ok === false ? "unavailable" : "checked";
+    item.textContent = `${label} · ${outcome}`; list.appendChild(item);
+  }
+  return list;
+}
+function addMessage(role, text, calls = []) {
+  document.getElementById("welcome").hidden = true;
+  const article = document.createElement("article"); article.className = "message " + role;
+  const label = document.createElement("div"); label.className = "role"; label.textContent = role === "user" ? "You" : "Scavagent";
+  const content = document.createElement("div"); content.className = "content";
+  article.appendChild(label);
+  if (role === "assistant") article.appendChild(toolActivity(calls));
+  renderText(content, text, role === "assistant"); article.appendChild(content); messages.appendChild(article);
+  scrollToLatest(); return article;
+}
+function updateReply(article, data) {
+  article.querySelector(".activity")?.remove();
+  article.insertBefore(toolActivity(data.tool_calls), article.querySelector(".content"));
+  article.classList.remove("pending"); renderText(article.querySelector(".content"), data.response, true); scrollToLatest();
+}
 
-                userInput.value = "";
-                sendBtn.disabled = true;
-                addMessage("you", text);
-                const loading = addMessage("assistant", "Thinking...", true);
+function currentLocation() {
+  if (!locationSample) return null;
+  const age = Date.now() - Date.parse(locationSample.observed_at);
+  return age >= -10_000 && age <= LOCATION_MAX_AGE ? locationSample : null;
+}
+function refreshLocation() {
+  const request = ++locationRequest;
+  locationSample = null;
+  if (!navigator.geolocation || document.visibilityState === "hidden") return;
+  try { navigator.geolocation.getCurrentPosition(position => {
+    if (request !== locationRequest || document.visibilityState === "hidden") return;
+    const { latitude, longitude, accuracy } = position.coords;
+    if (![latitude, longitude, accuracy, position.timestamp].every(Number.isFinite) || accuracy < 0 ||
+        Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return;
+    locationSample = { point:{lat:latitude, lng:longitude}, source:"browser", observed_at:new Date(position.timestamp).toISOString(), accuracy_m:accuracy };
+    if (!currentLocation()) locationSample = null;
+  }, () => { if (request === locationRequest) locationSample = null; }, { enableHighAccuracy:true, timeout:8000, maximumAge:30_000 }); }
+  catch { locationSample = null; }
+}
+document.addEventListener("visibilitychange", () => {
+  locationSample = null;
+  if (document.visibilityState === "visible") refreshLocation();
+  else locationRequest += 1;
+});
+setInterval(() => { if (document.visibilityState === "visible") refreshLocation(); }, 60_000);
 
-                try {
-                    const res = await fetch("/chat", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            message: text,
-                            session_id: sessionId,
-                        }),
-                    });
-                    const data = await res.json();
-                    sessionId = data.session_id;
-
-                    // Show each tool the harness ran, above the assistant's answer
-                    for (const call of data.tool_calls || []) {
-                        const div = document.createElement("div");
-                        div.className = "tool";
-                        const label = document.createElement("span");
-                        label.className = "label";
-                        label.textContent = "tool call  ";
-                        div.appendChild(label);
-                        div.appendChild(
-                            document.createTextNode(
-                                call.name + "(" + JSON.stringify(call.args) + ")\n→ " + JSON.stringify(call.result),
-                            ),
-                        );
-                        messages.insertBefore(div, loading);
-                    }
-                    loading.querySelector(".content").textContent =
-                        data.response;
-                    loading.classList.remove("loading");
-                } catch (e) {
-                    loading.querySelector(".content").textContent =
-                        "Error: " + e.message;
-                    loading.classList.remove("loading");
-                }
-                sendBtn.disabled = false;
-                userInput.focus();
-            }
-
-            sendBtn.addEventListener("click", send);
-            userInput.addEventListener("keydown", function (e) {
-                if (e.key === "Enter") send();
-            });
-            userInput.focus();
-        </script>
-    </body>
+async function fetchWithTimeout(url, options, milliseconds) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), milliseconds);
+  try { return await fetch(url, { ...options, signal:controller.signal, credentials:"same-origin", cache:"no-store" }); }
+  finally { clearTimeout(timeout); }
+}
+async function restore() {
+  if (sessionId) {
+    statusLine.textContent = "Picking up your trail…";
+    try {
+      const response = await fetchWithTimeout(`/history?session_id=${encodeURIComponent(sessionId)}`, {}, 10_000);
+      if (response.status !== 404) {
+        if (!response.ok) throw new Error("History unavailable");
+        const data = await response.json();
+        if (data.session_id !== sessionId || !Array.isArray(data.messages)) throw new Error("Invalid history");
+        const history = data.messages.filter(m => m && ["user", "assistant"].includes(m.role) && typeof m.text === "string").slice(-100);
+        for (const message of history) addMessage(message.role, message.text, message.tool_calls);
+        // If a response was lost after the server committed, replay the SAME ID
+        // and replace its latest visible reply rather than adding duplicate bubbles.
+        if (pending) {
+          let index = history.length - 1;
+          if (history[index]?.role === "assistant") index -= 1;
+          if (history[index]?.role === "user" && history[index].text === pending.message) {
+            pendingUser = messages.children[index]; pendingReply = messages.children[index + 1] || null;
+          }
+        }
+      }
+      statusLine.textContent = messages.children.length ? "Your trail is here. Pick up wherever you left off." : "Tell me where you are, and we’ll start from there.";
+    } catch { statusLine.textContent = "History couldn’t load. You can still send a message to reconnect."; }
+  }
+  if (pending) {
+    input.value = pending.message;
+    statusLine.textContent = "A message is awaiting confirmation. Press Send to retry it.";
+  }
+  busy = false; refreshControls(); scrollToLatest();
+}
+async function send(event) {
+  event?.preventDefault();
+  if (busy) return;
+  const text = input.value.trim();
+  if (!pending && !text) return;
+  if (!pending) {
+    pending = { message:text, session_id:sessionId, client_message_id:uuid() };
+    store(PENDING_KEY, JSON.stringify(pending));
+  }
+  busy = true; input.value = ""; refreshControls();
+  if (!pendingUser) pendingUser = addMessage("user", pending.message);
+  if (!pendingReply) { pendingReply = addMessage("assistant", "Following the thread…"); pendingReply.classList.add("pending"); }
+  statusLine.textContent = "Scavagent is working on your next step…";
+  const payload = { ...pending };
+  const location = currentLocation();
+  if (location) payload.location = location;
+  else refreshLocation(); // Never wait on location or send stale coordinates.
+  let permanentFailure = false;
+  try {
+    const response = await fetchWithTimeout("/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) }, 90_000);
+    if (!response.ok) {
+      permanentFailure = response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status);
+      throw new Error("Chat unavailable");
+    }
+    const data = await response.json();
+    if (typeof data.response !== "string" || typeof data.session_id !== "string" || !data.session_id || data.session_id.length > 128 || !Array.isArray(data.tool_calls)) throw new Error("Invalid reply");
+    sessionId = data.session_id; store(SESSION_KEY, sessionId);
+    updateReply(pendingReply, data);
+    pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
+    input.placeholder = "What’s our next move?";
+    statusLine.textContent = "Ready when you are. Type your next move.";
+  } catch {
+    if (pendingReply?.classList.contains("pending")) { pendingReply.remove(); pendingReply = null; }
+    input.value = pending.message;
+    if (permanentFailure) {
+      pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
+      statusLine.textContent = "That message wasn’t accepted. Check the text or your session, then send again.";
+    } else {
+      statusLine.textContent = "The reply didn’t arrive. Press Send to retry the same message.";
+    }
+  } finally { busy = false; refreshControls(); }
+}
+document.getElementById("composer").addEventListener("submit", send);
+input.addEventListener("input", refreshControls);
+input.addEventListener("keydown", event => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) send(event); });
+refreshLocation();
+restore();
+</script>
+</body>
 </html>
