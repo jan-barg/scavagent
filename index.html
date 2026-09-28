@@ -167,7 +167,7 @@
                         div.appendChild(label);
                         div.appendChild(
                             document.createTextNode(
-                                call.name + "(" + JSON.stringify(call.args) + ")\n→ " + call.result,
+                                call.name + "(" + JSON.stringify(call.args) + ")\n→ " + JSON.stringify(call.result),
                             ),
                         );
                         messages.insertBefore(div, loading);

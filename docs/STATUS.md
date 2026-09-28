@@ -16,7 +16,7 @@ Initial handoff recorded September 28, 2026. This file records observed implemen
 
 | ID | Task | Status | Depends on |
 |---|---|---|---|
-| J1 | Shared schemas, fixture examples, tool-result convention | Not started | Review proposed contracts |
+| J1 | Shared schemas, fixture examples, tool-result convention | Done on branch `jan/j1-shared-contracts`: `schemas.py`, `fixtures/`, tools/harness on the result convention, trace kept when a later model call fails; 17 pytest checks pass; one live local `/chat` call (Vertex Gemini + Open-Meteo) returned the new trace shape | Kyle review of `docs/CONTRACTS.md` |
 | J2 | App/session persistence and compatible tool traces | Not started | J1 |
 | J3 | Camera adapter, saved images, calibrated catalogue, original finder | Not started | Camera API spike; J1 for final integration; joint field checks |
 | J4 | Chat presentation, foreground location and resume | Not started | J1; J2 for integration |

@@ -1,0 +1,132 @@
+{
+  "provenance": {
+    "kind": "synthetic_fixture",
+    "description": "Start-only request and a short two-stop first chapter. Places, routes, and clues are invented for development; nothing here was researched or walked.",
+    "field_verified": false
+  },
+  "request": {
+    "start": {
+      "point": {"lat": 40.7856, "lng": -73.9695},
+      "place_text": "Central Park West and West 86th Street",
+      "source": "user",
+      "observed_at": "2026-09-28T15:00:00-04:00"
+    },
+    "allowed_modes": ["walk", "transit"],
+    "theme": "playful NYC mystery",
+    "defaulted_fields": ["allowed_modes", "theme"]
+  },
+  "plan": {
+    "plan_id": "fixture_plan_start_only",
+    "version": 1,
+    "request": {
+      "start": {
+        "point": {"lat": 40.7856, "lng": -73.9695},
+        "place_text": "Central Park West and West 86th Street",
+        "source": "user",
+        "observed_at": "2026-09-28T15:00:00-04:00"
+      },
+      "allowed_modes": ["walk", "transit"],
+      "theme": "playful NYC mystery",
+      "defaulted_fields": ["allowed_modes", "theme"]
+    },
+    "places": [
+      {
+        "place_id": "fixture_place_a",
+        "name": "Fixture Place A (synthetic)",
+        "address": "Synthetic address near West 84th Street",
+        "point": {"lat": 40.7843, "lng": -73.9713},
+        "claims": [],
+        "checked_at": "2026-09-28T14:55:00-04:00",
+        "uncertainty": "Synthetic place for development; no research performed."
+      },
+      {
+        "place_id": "fixture_place_b",
+        "name": "Fixture Place B (synthetic)",
+        "address": "Synthetic address near West 82nd Street",
+        "point": {"lat": 40.7830, "lng": -73.9740},
+        "claims": [],
+        "checked_at": "2026-09-28T14:55:00-04:00",
+        "uncertainty": "Synthetic place for development; no research performed."
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "stop_1",
+        "place_id": "fixture_place_a",
+        "activity": {
+          "type": "chat_puzzle",
+          "prompt": "A telegram arrives: 'THE PIGEON FLIES AT NOON. COUNT THE LETTERS IN HIS NAME.' What number do you get?",
+          "answer_rule": "Accept 6 (P-I-G-E-O-N), in digits or words.",
+          "hints": ["Only one word in the telegram could be a name.", "Spell out PIGEON."],
+          "fallback": "Reveal that the answer is 6 and continue the story."
+        },
+        "dwell_minutes": 4,
+        "story_beat_id": "beat_1"
+      },
+      {
+        "checkpoint_id": "stop_2",
+        "place_id": "fixture_place_b",
+        "activity": {
+          "type": "user_observation",
+          "prompt": "Describe one detail on this block that catches your eye.",
+          "answer_rule": "Accept any description; weave it into the fiction without claiming it was verified.",
+          "hints": ["Look up: doorways, cornices, and signs all count."],
+          "fallback": "Continue with the story's default detail if the user skips."
+        },
+        "dwell_minutes": 3,
+        "story_beat_id": "beat_2"
+      }
+    ],
+    "legs": [
+      {
+        "leg_id": "leg_1",
+        "from_id": "start",
+        "to_id": "stop_1",
+        "allowed_modes": ["walk", "transit"],
+        "actual_modes": ["walk"],
+        "duration_minutes": 5,
+        "distance_m": 400,
+        "instructions": ["Synthetic directions: walk south two blocks."],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T14:56:00-04:00"
+      },
+      {
+        "leg_id": "leg_2",
+        "from_id": "stop_1",
+        "to_id": "stop_2",
+        "allowed_modes": ["walk", "transit"],
+        "actual_modes": ["walk"],
+        "duration_minutes": 6,
+        "distance_m": 450,
+        "instructions": ["Synthetic directions: continue south and turn west."],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T14:56:00-04:00"
+      }
+    ],
+    "story": {
+      "premise": "Fiction: a pigeon courier has lost a coded message somewhere on the Upper West Side.",
+      "cast": ["The Pigeon (fictional courier)", "The Handler (fictional)"],
+      "solution": "The message was never lost; the Handler hid it to test the recruit.",
+      "beats": [
+        {"beat_id": "beat_1", "checkpoint_id": "stop_1", "summary": "The telegram gives the recruit a number.", "reveals": "The code key is 6."},
+        {"beat_id": "beat_2", "checkpoint_id": "stop_2", "summary": "The recruit's own observation becomes the hiding place in the story.", "reveals": "The Handler staged the loss."}
+      ]
+    },
+    "estimated_total_minutes": 18,
+    "contingency_minutes": 0,
+    "created_at": "2026-09-28T14:57:00-04:00"
+  },
+  "state": {
+    "version": 1,
+    "status": "proposed",
+    "active_plan_id": "fixture_plan_start_only",
+    "current_checkpoint_id": "stop_1",
+    "latest_location": {
+      "point": {"lat": 40.7856, "lng": -73.9695},
+      "place_text": "Central Park West and West 86th Street",
+      "source": "user",
+      "observed_at": "2026-09-28T15:00:00-04:00"
+    },
+    "updated_at": "2026-09-28T15:00:00-04:00"
+  }
+}
