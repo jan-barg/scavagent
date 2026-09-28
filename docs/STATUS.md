@@ -23,7 +23,7 @@ Initial handoff recorded September 28, 2026. This file records observed implemen
 | J5 | Cloud Run setup and GitHub continuous deployment | Not started | Cloud project/configuration access; can start alongside J1 |
 | J6 | Final photo recap, recovery checks, deployment documentation | Not started | J2–J5 |
 
-Latest changes/checks: no application work yet. Next action: implement J1 and verify J5 prerequisites; a separate isolated task can inspect the camera integration.
+Latest changes/checks: J1 landed on `jan/j1-shared-contracts` (see row). On September 28, local gcloud CLI and Application Default Credentials were reauthenticated with `agentic-ai-msds` as the configured project; a local `/chat` call then reached Vertex Gemini successfully. The project is under the Columbia organization with billing enabled and `aiplatform.googleapis.com` on; Cloud Run, Cloud Build, Artifact Registry, and Firestore APIs are not yet enabled, and nothing is deployed. Next action: J2 persistence (Claude worktree) and the camera adapter/frontend (Codex worktree, branch `jan/camera-frontend`).
 
 ## Kyle workstream
 
