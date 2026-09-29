@@ -1,6 +1,6 @@
 # Story design v2
 
-Status: agreed by Jan and Kyle on September 29, 2026; written up by Claude. To be implemented in Kyle's workstream (`agent.py`, `adventure/`), with the additive `schemas.py` fields below approved by Jan. Nothing here is implemented yet.
+Status: agreed by Jan and Kyle on September 29, 2026; written up by Claude. Implemented in Kyle's workstream (`agent.py`, `adventure/`) on `kyle/story-design-v2`, with the additive `schemas.py` fields below approved by Jan. [Implementation notes](#implementation-notes) record the choices the spec left open.
 
 ## Why
 
@@ -113,3 +113,20 @@ Keep every current check. Suggestions should say exactly what to add ("give stop
 ## Model
 
 Jan wants a Claude model instead of Gemini. Claude Sonnet 5 on Vertex AI is reachable in `agentic-ai-msds`, but its quota is still 0 until Jan's quota request is granted. Claude (Jan's agent) will wire `SCAVAGENT_MODEL` and check tool calling once it is. Keep the prompt model-neutral and run the acceptance checks on whichever model is configured. These design changes are needed whichever model runs them.
+
+## Implementation notes
+
+September 29, branch `kyle/story-design-v2`.
+
+- **Where it lives.** Schema fields in `schemas.py`. Draft fields in `adventure/drafts.py` and the `evaluate_adventure_plan` schema; a beat's `uses` names stops (`stop_1`, `stop_2`, … in visiting order), and the plan stores beat ids. Checks in `adventure/validation.py` (`_check_story_design`), the prompt in `agent.py`, and tests in `tests/test_story.py`.
+- **Which plans are checked.** A new plan gets every check. A revision of a plan with a briefing gets them for the stops and beats it adds. A revision of an older plan, and a `check` that only re-times a saved plan, skip them, so sessions already under way keep working.
+- **`THEME_UNLINKED`** skips stops the user required and camera stops: neither was chosen for the theme, and a camera position has no claims.
+- **`TOO_FEW_STOPS`** reads "nothing else fits" as fewer than 10 unused minutes of a limit the user gave. With no time limit from the user (a budget the model chose does not count) it asks for 2 stops. A stop count the user gave is `"stop_count"` in `user_stated`.
+- **`OBJECT_UNEARNED`.** A stop's clue is earned when the user solves its `chat_puzzle` and the beat's `clue` states the `solution`. A beat may speak of a code, key, combination, password, or coordinates at such a stop, when it builds on an earned clue (its `uses`), or when an earlier earned clue names that kind of object ("the locker code 1021"). The story's solution counts as building on what the finale uses. (A first version required the clue to name the object; in a live run the model then rewrote its draft five times, so the rule now follows the clue chain.)
+- **`REAL_PERSON_IN_FICTION`** also matches cast names against the surnames and nicknames of people named in the claims and in the user's words. The user's words come from a new optional draft field, `user_request`, plus earlier user messages; tools cannot see the current message. It flags a voice or look-alike of a full name ("sounding remarkably like Julian Casablancas") but not a figure of speech ("It looks like Mara Quill was right").
+- **Real architects** from the LPC records may be stated as fact in a beat ("Emery Roth built this giant") but not act in the plot or join the cast. The first version flagged any mention, and in a live run it rejected three drafts whose handler stated exactly that sourced fact.
+- **Required stops.** `REQUIRED_STOP_MISSING` and `REQUIRED_MISMARKED` now spell out the stop to add (name and coordinates) and how far a stand-in landmark is: in one live run the model marked the Natural History Museum, 275 m away, as the user's corner for seven drafts.
+- **One code beyond the table:** `CLUE_OUT_OF_ORDER`, for a stop beat that uses the clue of a later stop. `CAST_UNINTRODUCED` also fails a character introduced at a stop whose beat does not list them (a live run introduced "Viktor" at stop 1 and first showed him in the finale).
+- **Guiding across turns.** `get_adventure_state` also returns the cast, the clues still to tell in chat, and the finale once the stops are done. This is a logged edit to Jan's `state.py`: the planning turn scrolls out of the model's 40-message window.
+- **Research.** `find_places` searches each key term of a query separately, lists each candidate's `matched_terms`, and ranks the places matching more terms first. With no match nearby, it returns the nearest places with a warning.
+- **Regression fixtures.** Both live drafts now fail with the listed codes, among others, and the worked example passes, seeded from Jan's run's research. The Strokes draft is replayed with transit available (faked in the test), since its 73-minute walk came from transit being down.
