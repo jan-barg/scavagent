@@ -6,11 +6,13 @@ Never let the model supply save_asset, checkpoint records, URLs, or a session ID
 Storage owns persistence, media authorization, and replay protection; call capture
 only after the user types readiness. The finder probes but does not save images.
 
-Only enabled, field-verified records are usable in production. Set the server-side
-SCAVAGENT_DEV_CAMERA_FIXTURES=1 flag to include fixtures in FINDER results. Fixtures
-are explicitly labeled and cannot be captured. No production standing positions
-exist yet: data/camera_catalogue.json separates pending candidates from validated
-CameraCheckpoint records because stand_location cannot currently be null.
+Only enabled, verified records are usable in production: field_verified (someone stood
+there) or image_verified (a spot matched in a live still to map imagery; the finder
+warns so the agent can tell the user). Set the server-side SCAVAGENT_DEV_CAMERA_FIXTURES=1
+flag to include fixtures in FINDER results. Fixtures are explicitly labeled and cannot be
+captured. data/camera_catalogue.json keeps pending candidates apart from validated
+CameraCheckpoint records because stand_location cannot be null; see
+docs/CAMERA_FIELDWORK.md and scripts/calibrate_camera.py for how records are added.
 
 Distances are geometric estimates using pedestrian positions, never camera mounts.
 Corridor detour is an out-and-back estimate from the nearest polyline point, not a
@@ -31,7 +33,7 @@ from urllib.parse import unquote, urlsplit
 import requests
 from pydantic import ValidationError
 
-from schemas import CameraCheckpoint, Freshness, LatLng, PhotoAsset, tool_error, tool_ok
+from schemas import VERIFIED_CAMERA_STATUSES, CameraCheckpoint, Freshness, LatLng, PhotoAsset, tool_error, tool_ok
 
 CATALOGUE_URL = "https://webcams.nyctmc.org/api/cameras"
 CATALOGUE_PATH = Path(__file__).resolve().parents[1] / "data" / "camera_catalogue.json"
@@ -166,9 +168,30 @@ def _checkpoints(provided, allow_synthetic):
     return records
 
 
+def load_checkpoints(allow_synthetic=False):
+    """Every validated catalogue record, plus the labeled fixtures when allow_synthetic is True.
+
+    Public read access for the planner and scripts. Disabled and unverified records are included;
+    callers decide eligibility. A missing or invalid catalogue raises (OSError, ValueError, TypeError,
+    KeyError) instead of reading as empty.
+    """
+    return _checkpoints(None, allow_synthetic is True)
+
+
+IMAGE_VERIFIED_CAPTURE_WARNING = "This position was matched on the camera image, not tested in person. If they cannot find themselves, suggest a step toward the curb and offer a retake."
+
+
+def verification_status(checkpoint_id):
+    """The catalogue's verification status for a checkpoint, or None if it is unknown or the catalogue is invalid."""
+    try:
+        return next((c.verification_status for c in load_checkpoints() if c.checkpoint_id == checkpoint_id), None)
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
 def _eligible(checkpoint, allow_synthetic):
     return checkpoint.enabled and (
-        checkpoint.verification_status == "field_verified"
+        checkpoint.verification_status in VERIFIED_CAMERA_STATUSES
         or (allow_synthetic and checkpoint.verification_status == "synthetic_fixture")
     )
 
@@ -278,6 +301,8 @@ def find_camera_checkpoints(
     synthetic = any(m["checkpoint"]["verification_status"] == "synthetic_fixture" for m in matches)
     if synthetic:
         warnings.append("DEVELOPMENT FIXTURE: synthetic positions are not real discoveries or verified views; capture is disabled for them.")
+    if any(m["checkpoint"]["verification_status"] == "image_verified" for m in matches):
+        warnings.append("image_verified positions were matched on the camera image, not tested in person: tell the user, and offer a retake if they cannot find themselves.")
     if unavailable:
         warnings.append(f"Skipped {unavailable} unavailable candidate feed(s).")
     if len(ranked) > MAX_PROBES:
@@ -340,9 +365,13 @@ def capture_camera_checkpoint(checkpoint_id, save_asset: SaveAsset | None = None
         # Never leak storage errors, paths, session IDs or credentials. Do not retry
         # a possibly successful write here: the session store owns deduplication.
         return _failure("INTERNAL_ERROR", "Photo storage did not return a valid saved-asset record.", "Keep existing photos; check session storage before retrying this capture.")
+    warnings = ["Frame time is unknown; retrieval time is not exposure time. Ask the user whether they are visible. Reuse this saved media URL in the finale."]
+    if checkpoint.verification_status == "image_verified":
+        warnings.append(IMAGE_VERIFIED_CAPTURE_WARNING)
     return tool_ok(
-        {"photo": asset.model_dump(mode="json"), "positioning_instructions": checkpoint.positioning_instructions},
-        warnings=["Frame time is unknown; retrieval time is not exposure time. Ask the user whether they are visible. Reuse this saved media URL in the finale."],
+        {"photo": asset.model_dump(mode="json"), "positioning_instructions": checkpoint.positioning_instructions,
+         "verification_status": checkpoint.verification_status},
+        warnings=warnings,
         freshness=Freshness(kind="live", retrieved_at=retrieved_at),
     )
 
@@ -354,7 +383,7 @@ _POINT_SCHEMA = {
 CAMERA_TOOLS = [
     {"type": "function", "function": {
         "name": "find_camera_checkpoints",
-        "description": "Find enabled, field-verified pedestrian camera positions near a point OR a route corridor. Filters by estimated detour and current still availability; returns standing instructions and fallback. Distances are geometric, not confirmed walking routes. No photo is saved.",
+        "description": "Find enabled, verified pedestrian camera positions near a point OR a route corridor. Filters by estimated detour and current still availability; returns standing instructions and fallback. Distances are geometric, not confirmed walking routes. No photo is saved.",
         "parameters": {"type": "object", "properties": {
             "point": _POINT_SCHEMA,
             "corridor": {"type": "array", "items": _POINT_SCHEMA, "minItems": 2, "maxItems": 50, "description": "Ordered local route polyline, at most 50 km. Omit point when supplied."},
@@ -365,7 +394,7 @@ CAMERA_TOOLS = [
     }},
     {"type": "function", "function": {
         "name": "capture_camera_checkpoint",
-        "description": "After the user types readiness, fetch a known enabled, field-verified checkpoint's DOT still and save it to the current session. Does not operate a shutter or establish visibility. On failure offer a skip. Never invent a checkpoint ID.",
+        "description": "After the user types readiness, fetch a known enabled, verified checkpoint's DOT still and save it to the current session. Does not operate a shutter or establish visibility. On failure offer a skip. Never invent a checkpoint ID.",
         "parameters": {"type": "object", "properties": {"checkpoint_id": {"type": "string", "minLength": 1, "maxLength": 128}}, "required": ["checkpoint_id"], "additionalProperties": False},
     }},
 ]

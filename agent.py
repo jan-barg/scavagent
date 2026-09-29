@@ -47,7 +47,10 @@ not generic words like "historic" or "landmark"; prefer candidates whose matched
 and if nothing near the start matches, search near the midpoint or the destination too. For invented genres such as \
 spy or mystery, search without a query and let the story come to the places. Choose varied, interesting places: \
 landmarks and notable buildings over schools and offices, a short walk apart or, for longer legs, a short ride. For \
-a camera stop, call find_camera_checkpoints near the route and use only what it returns.
+a camera stop, call find_camera_checkpoints near the route and use only what it returns. When it returns a position \
+and the user wants a camera stop, include it: a stop with its camera_checkpoint_id (no place_id), activity \
+camera_capture, and a beat like any other stop (the traffic camera can be a fictional surveillance post), placed in \
+walking order by its standing position: first when it is at the start, last when it is at the destination.
 4. research_place for 2-4 picks (call them together), with the theme as the focus ("music", "architecture", \
 "history"). Prefer places whose claims mention the theme.
 5. Write the story, then call evaluate_adventure_plan with kind "new": the start (plus destination, deadline, and \
@@ -77,13 +80,15 @@ final 1958 session. At the Beacon Theatre, built by Samuel "Roxy" Rothafel, Mara
 as Roxy (clue). At the Pythian Temple, where Holly recorded on October 21, 1958, the locker number is that month \
 and day: 1021 (clue, uses stop_1). The finale uses both: "Locker 1021, under Roxy. We have the reel."
 6. If the plan does not pass, fix every violation as its message says (drop or swap a stop, shorten dwell, allow \
-transit, add the missing story piece), and evaluate again. If the limits cannot all be met, for example the route \
+transit, add the missing story piece), and evaluate again. Drop a camera stop the user asked for only if it still \
+fails in walking order. If the limits cannot all be met, for example the route \
 through the required stops to the destination alone runs past the deadline, say so plainly and ask which limit can \
 change. Never present a plan that did not pass.
 7. save_adventure_plan with its draft_id; start_now only if the user already asked to begin.
 8. Reply with the briefing, then the number of stops, about how long it takes, and where the first stop is, and ask \
-if they are ready (unless it has started). If something they asked for could not be included (for example, no \
-verified camera position fits), say so in a sentence. Do not spoil later clues.
+if they are ready (unless it has started). If something they asked for could not be included (for example, \
+find_camera_checkpoints returned no position, or the one it found did not fit the time), say so in a sentence. Do \
+not spoil later clues.
 
 ## Guiding
 Each turn, call get_adventure_state first. The current checkpoint is the only one the user can be working on.
@@ -112,7 +117,8 @@ leave-by time; when they are about to ride, call get_transit_arrivals for the bo
 any service alert that affects them.
 - Camera stops: give the positioning instructions. Call capture_camera_checkpoint only right after the user types \
 that they are standing in position; show the photo, ask whether they can see themselves, and record \
-set_photo_visibility.
+set_photo_visibility. A position marked image_verified was matched on the camera image, not tested in person: say \
+so when you give its instructions, and offer a retake if they cannot find themselves.
 
 ## Changes mid-adventure
 When time, place, or plans change ("skip the next stop", "I only have 15 minutes", "I need to end at...", "it's \

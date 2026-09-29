@@ -172,10 +172,16 @@ class PlaceEvidence(Record):
 # --- Cameras ---
 
 
+VERIFIED_CAMERA_STATUSES = ("field_verified", "image_verified")  # Positions that may be offered to users
+
+
 class CameraCheckpoint(Record):
     """Where a participant stands to appear in a DOT camera view.
 
     `stand_location` is the pedestrian position, never the camera's mounting point.
+    Verification: `field_verified` means someone stood there and saw themselves in the still;
+    `image_verified` means a teammate matched a sidewalk spot in a live still to map imagery,
+    but nobody has stood there yet. Both are usable; users are told which applies.
     """
 
     checkpoint_id: Id
@@ -190,8 +196,9 @@ class CameraCheckpoint(Record):
     person_region: tuple[float, float, float, float] | None = Field(
         default=None, description="Normalized x0, y0, x1, y1 where a participant appears"
     )
-    verification_status: Literal["field_verified", "unverified", "synthetic_fixture"]
+    verification_status: Literal["field_verified", "image_verified", "unverified", "synthetic_fixture"]
     last_field_verified_at: AwareDatetime | None = None
+    last_image_verified_at: AwareDatetime | None = None
     visibility_notes: str | None = None
     enabled: bool = False
     fallback_checkpoint_id: Id | None = None
@@ -200,6 +207,8 @@ class CameraCheckpoint(Record):
     def _verification_is_dated(self):
         if self.verification_status == "field_verified" and self.last_field_verified_at is None:
             raise ValueError("a field-verified checkpoint needs last_field_verified_at")
+        if self.verification_status == "image_verified" and self.last_image_verified_at is None:
+            raise ValueError("an image-verified checkpoint needs last_image_verified_at")
         if self.person_region is not None:
             x0, y0, x1, y1 = self.person_region
             if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):

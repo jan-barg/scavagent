@@ -12,7 +12,7 @@ the user's request and the product rules in docs/PLAN.md:
   already missed, no synthetic fixture data in a live plan;
 - activities: a physical task only with physical-feature evidence from its own place, no invented
   object for the user to find there, hints for a puzzle, a camera stop only at an enabled,
-  field-verified position near the stop;
+  verified position near the stop;
 - story: every optional stop moves the story, beats tied to the right stop and used once, no clue
   stranded at a skipped stop, no real person given a part in the plot (an architect from the
   sources, anyone the sources or the user name, or a voice "sounding like" someone);
@@ -37,6 +37,7 @@ from zoneinfo import ZoneInfo
 
 from schemas import (
     NYC_TIMEZONE,
+    VERIFIED_CAMERA_STATUSES,
     AdventurePlan,
     AdventureState,
     CameraCheckpoint,
@@ -452,11 +453,11 @@ def _check_checkpoint(checkpoint: Checkpoint, place, claims, camera_lookup, allo
     if activity.type == "camera_capture":
         camera = camera_lookup(checkpoint.camera_checkpoint_id) if camera_lookup else None
         usable = camera is not None and camera.enabled and (
-            camera.verification_status == "field_verified"
+            camera.verification_status in VERIFIED_CAMERA_STATUSES
             or (allow_synthetic and camera.verification_status == "synthetic_fixture"))
         if not usable:
             flag("CAMERA_UNAVAILABLE", f"Camera checkpoint {checkpoint.camera_checkpoint_id} is unknown, disabled, or "
-                                       "not field-verified; use a non-camera activity.", cid)
+                                       "not verified; use a non-camera activity.", cid)
         elif place.point is not None and _meters(camera.stand_location.lat, camera.stand_location.lng,
                                                   place.point.lat, place.point.lng) > SAME_PLACE_M:
             flag("CAMERA_ELSEWHERE", f"The standing position for {camera.checkpoint_id} is more than {SAME_PLACE_M} m "
@@ -777,10 +778,14 @@ def _time_savers(remaining, legs_by_pair, order):
         out_of = legs_by_pair.get((order[i], order[i + 1])) if i + 1 < len(order) else None
         around = sum(leg.duration_minutes for leg in (into, out_of) if leg is not None)
         savings.append((checkpoint.dwell_minutes + around, checkpoint))
-    savings.sort(key=lambda item: -item[0])
+    # A camera stop is usually what the user asked for, so it is suggested last.
+    savings.sort(key=lambda item: (item[1].activity.type == "camera_capture", -item[0]))
     return [f"Dropping optional {c.checkpoint_id} saves up to {minutes:.0f} minutes ({c.dwell_minutes} dwell plus its "
             "legs); re-route to confirm. Or swap it for a place a few minutes' walk from the route (find_places around "
-            "the stop before it) if the plan needs that many stops." for minutes, c in savings[:3]] or [
+            "the stop before it) if the plan needs that many stops." + (
+                " It is the camera stop: if the user asked for one, drop other stops first."
+                if c.activity.type == "camera_capture" else "")
+            for minutes, c in savings[:3]] or [
         "No optional stop is left to drop; shorten dwell times, allow transit, or ask the user which limit can change."]
 
 

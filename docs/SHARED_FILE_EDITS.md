@@ -164,3 +164,17 @@ Why: the model sees only the last 40 messages (`app.CONTEXT_MESSAGES`), so by th
 
 Original: `state_summary` at `00c25f4` had none of these keys and no `finale`/`missed` locals.
 - `agent.py` (after PR #13): one sentence in "Ending": when the user says they have arrived at the destination, call `update_adventure_state reach_destination`, then `finish_adventure`; the server now refuses to finish a plan with a destination before `reach_destination`. Why: grader query 3 sometimes ended the adventure while the user was still on the way (Kyle's report).
+
+# Jan's camera session: edits to Kyle's files (September 29)
+
+Made on `claude/camera-calibration` so a field-verified camera position reaches the plan. Each is small and in its own commit; revert the commit to undo it.
+
+| File | Commit | Change | Revert |
+|---|---|---|---|
+| `adventure/agent_tools.py` | `016ca8e` | `camera_lookup` reads `cameras.load_checkpoints(allow_synthetic=dev_mode())` instead of the private `cameras._checkpoints` (Kyle's request) | `git revert 016ca8e` (also removes the accessor) |
+| `scripts/acceptance_checks.py` | `977017a` | New check: when the finder returns a camera for query 2, the passing plan includes a `camera_capture` stop | `git revert 977017a` |
+| `agent.py`, `adventure/drafts.py`, `adventure/validation.py`, `tests/test_planning_tools.py` | `76c6103` | The prompt says how to add a found camera stop; a draft refuses a stop with `camera_checkpoint_id` whose activity is not `camera_capture`; the evaluator lists a camera stop last among cuts | `git revert 76c6103` |
+
+When `main` (with Kyle's story design v2 prompt) was merged into this branch, the three camera sentences were re-applied to the rewritten `agent.py` and the camera-last ordering was kept beside the new "or swap it" suggestion text, in the merge commit; revert those hunks there too.
+
+Why `76c6103`: in local live runs of query 2 with a camera position 5 m from the start, Flash-Lite dropped the camera in 5 of 5 runs and said no position fit. It either put the camera at the start with a `user_observation` activity (the plan passed but would never capture) or followed the first cut suggestion, which named the camera stop ("saves up to 16 minutes" for a stop 0.6 minutes from the start). With the three changes, 2 of 2 runs kept it.
