@@ -44,17 +44,28 @@ def activity(**changes):
             "fallback": "Reveal the answer and continue.", **changes}
 
 
+HANDLER = {"name": "Nell Harrow", "role": "handler", "contact": "radio", "introduced_in": "briefing"}
+BRIEFING = ("It is 1964, and you are the newest runner for a quiet agency on Central Park West. Nell Harrow, your "
+            "handler, radios you: a courier vanished this morning with the day's dispatches. At each stop, message her "
+            "when you arrive; she will brief you, and what you work out there points to the next lead.")
+
+
+def beat(summary, clue, uses=(), **changes):
+    return {"summary": summary, "characters": ["Nell Harrow"], "clue": clue, "uses": list(uses), **changes}
+
+
 def draft(**changes):
     return {
         "kind": "new", "start": START, "allowed_modes": ["walk"], "user_stated": ["allowed_modes"],
-        "story": {"premise": "It is 1964. A courier has vanished.", "cast": ["The Courier"], "solution": "The doorman did it."},
+        "story": {"premise": "It is 1964. A courier has vanished.", "briefing": BRIEFING, "cast": [HANDLER],
+                  "solution": "The doorman did it."},
         "stops": [
             {"place_id": "wiki:9238071", "dwell_minutes": 5, "activity": activity(),
-             "beat": {"summary": "A torn ticket stub.", "reveals": "The courier took the A train."}},
+             "beat": beat("A torn ticket stub.", "The courier took the A train.")},
             {"place_id": "wiki:5667636", "dwell_minutes": 5, "activity": activity(),
-             "beat": {"summary": "A matchbook.", "reveals": "The doorman smokes."}},
+             "beat": beat("A matchbook.", "The doorman smokes.", ["stop_1"])},
         ],
-        "chat_beats": [{"summary": "The finale.", "reveals": "The doorman did it."}],
+        "chat_beats": [beat("The finale.", None, ["stop_1", "stop_2"], reveals="The doorman did it.")],
         **changes,
     }
 
@@ -189,7 +200,7 @@ def test_a_revision_keeps_the_finished_stop_and_moves_the_dropped_stops_clue_int
     ctx = started_and_first_stop_done()
     old = state.active_plan(ctx.record)
     corner = {"place": {"name": "West 81st Street & Columbus Avenue", "lat": 40.78326, "lng": -73.97455},
-              "dwell_minutes": 3, "activity": activity(), "beat": {"summary": "A footprint.", "reveals": "Size 11."}}
+              "dwell_minutes": 3, "activity": activity(), "beat": beat("A footprint.", "Size 11 shoes.", ["stop_1"])}
     result = evaluate(ctx, {"kind": "revision", "stops": [corner], "deadline": "2026-10-01T15:30:00-04:00"}, 7)
 
     data = result["data"]
@@ -218,6 +229,7 @@ def test_after_the_user_skips_a_required_stop_a_revision_no_longer_requires_it()
     ctx = session()
     plan_draft = draft(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
     plan_draft["stops"].insert(1, corner)
+    plan_draft["chat_beats"][0]["uses"] = ["stop_1", "stop_3"]  # the corner, now stop_2, tells no part of the story
     save_adventure_plan(ctx, evaluate(ctx, plan_draft, 5, 4, 3)["data"]["draft_id"], start_now=True)
     state.resolve_checkpoint(ctx, "stop_1", "completed")
     state.resolve_checkpoint(ctx, "stop_2", "skipped", user_waived_required=True)
@@ -361,7 +373,7 @@ def test_a_nearby_landmark_cannot_stand_in_for_the_corner_the_user_required():
 
 
 def test_a_plan_leaving_much_of_the_users_time_unused_suggests_another_stop():
-    roomy = draft(deadline="2026-10-01T16:30:00-04:00", user_stated=["deadline", "allowed_modes"])
+    roomy = draft(deadline="2026-10-01T15:45:00-04:00", user_stated=["deadline", "allowed_modes"])  # 18 minutes spare
     result = evaluate(session(), roomy, 5, 9)
 
     assert result["data"]["passes"]
@@ -397,12 +409,13 @@ def test_a_departure_hours_away_is_rejected_as_a_time_zone_mix_up():
 SAN_REMO = {"place": {"name": "The San Remo", "lat": 40.7775, "lng": -73.9754}, "dwell_minutes": 5,
             "activity": {"type": "user_observation", "prompt": "Describe the twin towers from the corner.",
                          "answer_rule": "Any honest description.", "fallback": "Continue."},
-            "beat": {"summary": "A coded radio message.", "reveals": "The doorman took the C train."}}
+            "beat": beat("A coded radio message.", "The doorman took the C train.")}
 
 
 def three_stops(**changes):
     plan_draft = draft(**changes)
     plan_draft["stops"].append(SAN_REMO)
+    plan_draft["chat_beats"][0]["uses"] = ["stop_1", "stop_2", "stop_3"]
     return plan_draft
 
 
@@ -496,6 +509,7 @@ def test_a_blocked_required_stop_stays_required_until_the_user_waives_it():
               "required_by_user": True, "dwell_minutes": 2, "activity": activity(type="user_observation", hints=[])}
     plan_draft = three_stops(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
     plan_draft["stops"][1] = corner
+    plan_draft["chat_beats"][0]["uses"] = ["stop_1", "stop_3"]
     ctx = session()
     save_adventure_plan(ctx, evaluate(ctx, plan_draft, 5, 4, 6)["data"]["draft_id"], start_now=True)
     state.resolve_checkpoint(ctx, "stop_1", "completed")

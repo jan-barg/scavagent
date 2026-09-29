@@ -1,4 +1,7 @@
-"""The plan evaluator against Jan's labeled fixtures, each test breaking one rule."""
+"""The plan evaluator against Jan's labeled fixtures, each test breaking one rule.
+
+The fixture plans predate story design v2, so the new plans here get a v2 story first (story_v2);
+tests/test_story.py covers the story design checks themselves."""
 
 from datetime import timedelta
 
@@ -10,11 +13,6 @@ CAMERAS = {c.checkpoint_id: c for c in load_cameras().checkpoints}
 BASE = load_scenario("constrained_route")  # deadline 15:45; 27 min of legs, 13 of dwell, 5 of contingency
 DEADLINE = BASE.request.deadline
 ON_TIME = DEADLINE - timedelta(minutes=50)
-
-
-def evaluate(plan=None, *, start_at=ON_TIME, allow_synthetic=True, **kwargs):
-    return evaluate_plan(plan or BASE.plan, now=start_at, start_at=start_at, camera_lookup=CAMERAS.get,
-                         allow_synthetic=allow_synthetic, **kwargs)
 
 
 def edit(plan, change):
@@ -30,6 +28,33 @@ def codes(evaluation):
 
 def checkpoint(data, checkpoint_id):
     return next(c for c in data["checkpoints"] if c["checkpoint_id"] == checkpoint_id)
+
+
+def story_v2(data):
+    """A briefing and a handler, a clue at each stop that later beats use, a finale, and the themed stop's link."""
+    story = data["story"]
+    story["briefing"] = ("You're a junior surveyor with a good eye. Iris Vane, the city's archivist, radios you: an "
+                         "architect's lost blueprint was torn into pieces, and the trail runs past three facades. At "
+                         "each stop, message her when you arrive; she briefs you, and what you learn opens the next lead.")
+    story["cast"] = [{"name": "Iris Vane", "role": "handler", "contact": "radio", "introduced_in": "briefing"},
+                     {"name": "The Rival", "role": "rival", "introduced_in": "stop_3"}]
+    first, second, third = story["beats"]
+    first.update(characters=["Iris Vane"], clue="The Architect was here at noon.")
+    second.update(characters=["Iris Vane"], clue="Page 2 is missing.", uses=["beat_1"])
+    third.update(characters=["Iris Vane", "The Rival"], clue="The Rival was photographed here.", uses=["beat_2"])
+    story["beats"].append({"beat_id": "beat_4", "summary": "Iris lays it out: noon, page 2, and the photo.",
+                           "reveals": "The Rival copied the blueprint.", "characters": ["Iris Vane"],
+                           "uses": ["beat_1", "beat_2", "beat_3"]})
+    checkpoint(data, "stop_2")["theme_link"] = {"claim_ids": ["fixture_claim_1"],
+                                                "why": "The Architect chose this facade for its carved guardians."}
+
+
+PLAN = edit(BASE.plan, story_v2)
+
+
+def evaluate(plan=None, *, start_at=ON_TIME, allow_synthetic=True, **kwargs):
+    return evaluate_plan(plan or PLAN, now=start_at, start_at=start_at, camera_lookup=CAMERAS.get,
+                         allow_synthetic=allow_synthetic, **kwargs)
 
 
 # --- A plan that fits ---
@@ -61,7 +86,7 @@ def test_the_stated_total_must_match_and_contingency_must_cover_ten_percent():
         data["estimated_total_minutes"] = 30
         data["contingency_minutes"] = 2
 
-    evaluation = evaluate(edit(BASE.plan, understate))
+    evaluation = evaluate(edit(PLAN, understate))
 
     assert set(codes(evaluation)) == {"ESTIMATE_MISMATCH", "CONTINGENCY_TOO_SMALL"}
 
@@ -73,7 +98,7 @@ def test_a_missed_train_is_stale_and_an_early_arrival_waits_for_the_timed_depart
             leg["actual_modes"] = ["walk", "transit"]
             leg["depart_at"] = (ON_TIME + timedelta(minutes=minutes_after_start)).isoformat()
             data["request"]["allowed_modes"] = ["walk", "transit"]
-        return edit(BASE.plan, change)
+        return edit(PLAN, change)
 
     # The plan is ready to leave stop_2 at +22 minutes (8 + 5 dwell + 5 + 4 dwell).
     missed = evaluate(ride_to_camera(10))
@@ -91,7 +116,7 @@ def test_transit_looked_up_long_ago_must_be_refreshed():
         leg["retrieved_at"] = (ON_TIME - timedelta(hours=3)).isoformat()
         data["request"]["allowed_modes"] = ["walk", "transit"]
 
-    assert "STALE_ROUTE" in codes(evaluate(edit(BASE.plan, old_ride)))
+    assert "STALE_ROUTE" in codes(evaluate(edit(PLAN, old_ride)))
 
 
 # --- The request ---
@@ -101,7 +126,7 @@ def test_a_mode_the_user_did_not_allow_is_flagged():
     def ride(data):
         data["legs"][1]["actual_modes"] = ["walk", "transit"]  # the request allows walking only
 
-    assert codes(evaluate(edit(BASE.plan, ride))) == ["MODE_NOT_ALLOWED"]
+    assert codes(evaluate(edit(PLAN, ride))) == ["MODE_NOT_ALLOWED"]
 
 
 def test_required_stop_missing_and_too_short_a_dwell():
@@ -112,15 +137,15 @@ def test_required_stop_missing_and_too_short_a_dwell():
         checkpoint(data, "stop_1")["dwell_minutes"] = 2
         data["estimated_total_minutes"] = 37
 
-    assert "REQUIRED_STOP_MISSING" in codes(evaluate(edit(BASE.plan, unrequire)))
-    assert codes(evaluate(edit(BASE.plan, rush))) == ["DWELL_TOO_SHORT"]
+    assert "REQUIRED_STOP_MISSING" in codes(evaluate(edit(PLAN, unrequire)))
+    assert codes(evaluate(edit(PLAN, rush))) == ["DWELL_TOO_SHORT"]
 
 
 def test_a_required_stop_outside_its_window_is_flagged():
     def close_early(data):
         data["request"]["required_stops"][0]["window_end"] = (ON_TIME + timedelta(minutes=10)).isoformat()
 
-    evaluation = evaluate(edit(BASE.plan, close_early))
+    evaluation = evaluate(edit(PLAN, close_early))
 
     assert codes(evaluation) == ["WINDOW_MISSED"]
     assert evaluation.report.violations[0].checkpoint_id == "stop_1"
@@ -130,7 +155,7 @@ def test_a_missing_leg_is_a_route_gap():
     def drop_leg(data):
         data["legs"] = [leg for leg in data["legs"] if leg["leg_id"] != "leg_2"]
 
-    evaluation = evaluate(edit(BASE.plan, drop_leg))
+    evaluation = evaluate(edit(PLAN, drop_leg))
 
     assert "ROUTE_GAP" in codes(evaluation)
     assert "No route leg from stop_1 to stop_2" in evaluation.report.violations[0].message
@@ -154,15 +179,15 @@ def test_a_physical_task_needs_physical_feature_evidence_from_its_own_place():
         claim = data["places"][1]["claims"].pop(0)
         data["places"][0]["claims"].append(claim)
 
-    assert codes(evaluate(edit(BASE.plan, historical))) == ["UNSUPPORTED_PHYSICAL_TASK"]
-    assert "EVIDENCE_ELSEWHERE" in codes(evaluate(edit(BASE.plan, elsewhere)))
+    assert codes(evaluate(edit(PLAN, historical))) == ["UNSUPPORTED_PHYSICAL_TASK"]
+    assert "EVIDENCE_ELSEWHERE" in codes(evaluate(edit(PLAN, elsewhere)))
 
 
 def test_physical_requirements_without_evidence_are_flagged_even_on_an_observation():
     def plaque(data):
         checkpoint(data, "stop_1")["activity"]["physical_requirements"] = ["the bronze plaque by the door"]
 
-    assert codes(evaluate(edit(BASE.plan, plaque))) == ["UNSUPPORTED_PHYSICAL_TASK"]
+    assert codes(evaluate(edit(PLAN, plaque))) == ["UNSUPPORTED_PHYSICAL_TASK"]
 
 
 def test_a_puzzle_needs_hints():
@@ -170,7 +195,7 @@ def test_a_puzzle_needs_hints():
         activity = checkpoint(data, "stop_2")["activity"]
         activity.update(type="chat_puzzle", evidence_ids=[], physical_requirements=[], hints=[])
 
-    assert codes(evaluate(edit(BASE.plan, puzzle))) == ["MISSING_HINTS"]
+    assert codes(evaluate(edit(PLAN, puzzle))) == ["MISSING_HINTS"]
 
 
 def test_a_camera_stop_must_be_near_its_standing_position():
@@ -178,7 +203,7 @@ def test_a_camera_stop_must_be_near_its_standing_position():
         place = next(p for p in data["places"] if p["place_id"] == "fixture_place_camera")
         place["point"] = {"lat": 40.7700, "lng": -73.9800}  # about a kilometer south
 
-    assert "CAMERA_ELSEWHERE" in codes(evaluate(edit(BASE.plan, move_camera_stop)))
+    assert "CAMERA_ELSEWHERE" in codes(evaluate(edit(PLAN, move_camera_stop)))
 
 
 # --- Story ---
@@ -191,9 +216,9 @@ def test_story_beats_must_be_tied_to_the_stop_that_reveals_them_and_used_once():
     def untie(data):
         checkpoint(data, "stop_2")["story_beat_id"] = None
 
-    reused = codes(evaluate(edit(BASE.plan, reuse)))
+    reused = codes(evaluate(edit(PLAN, reuse)))
     assert "BEAT_REUSED" in reused and "BEAT_MISMATCH" in reused
-    assert codes(evaluate(edit(BASE.plan, untie))) == ["STOP_WITHOUT_STORY"]
+    assert codes(evaluate(edit(PLAN, untie))) == ["STOP_WITHOUT_STORY"]
 
 
 # --- Revisions ---
@@ -284,23 +309,23 @@ def test_an_object_the_user_must_find_at_a_real_place_is_flagged_unless_evidence
     def observe(data):
         checkpoint(data, "stop_1")["activity"]["prompt"] = "Describe one detail of the stonework; it is your recognition sign."
 
-    assert codes(evaluate(edit(BASE.plan, chalk))) == ["INVENTED_PROP"]
-    assert codes(evaluate(edit(BASE.plan, found))) == ["INVENTED_PROP"]
-    assert evaluate(edit(BASE.plan, observe)).report.ok
+    assert codes(evaluate(edit(PLAN, chalk))) == ["INVENTED_PROP"]
+    assert codes(evaluate(edit(PLAN, found))) == ["INVENTED_PROP"]
+    assert evaluate(edit(PLAN, observe)).report.ok
 
 
 def test_a_stop_marked_required_must_be_at_a_place_the_user_required():
     def overclaim(data):
         checkpoint(data, "stop_2")["required_by_user"] = True
 
-    assert codes(evaluate(edit(BASE.plan, overclaim))) == ["REQUIRED_MISMARKED"]
+    assert codes(evaluate(edit(PLAN, overclaim))) == ["REQUIRED_MISMARKED"]
 
 
 def test_a_beat_where_someone_hands_the_user_something_is_flagged():
     def handoff(data):
         data["story"]["beats"][0]["summary"] = "At the corner, a hidden dispatch is handed to you by an anonymous source."
 
-    assert codes(evaluate(edit(BASE.plan, handoff))) == ["INVENTED_PROP"]
+    assert codes(evaluate(edit(PLAN, handoff))) == ["INVENTED_PROP"]
 
 
 def test_a_real_architect_from_the_sources_cannot_join_the_plot():
@@ -317,8 +342,8 @@ def test_a_real_architect_from_the_sources_cannot_join_the_plot():
     def fact_only(data):
         data["places"][1]["claims"].append(lpc_claim)  # stating the fact elsewhere is fine
 
-    assert codes(evaluate(edit(BASE.plan, plot))) == ["REAL_PERSON_IN_FICTION"]
-    assert evaluate(edit(BASE.plan, fact_only)).report.ok
+    assert codes(evaluate(edit(PLAN, plot))) == ["REAL_PERSON_IN_FICTION"]
+    assert evaluate(edit(PLAN, fact_only)).report.ok
 
 
 def test_a_link_in_the_plan_must_be_a_claims_source_url():
@@ -332,9 +357,9 @@ def test_a_link_in_the_plan_must_be_a_claims_source_url():
     def hidden(data):
         data["story"]["beats"][0]["summary"] = "You locate the dead drop behind the stonework."
 
-    assert codes(evaluate(edit(BASE.plan, invented_link))) == ["UNSOURCED_LINK"]
-    assert evaluate(edit(BASE.plan, sourced_link)).report.ok
-    assert codes(evaluate(edit(BASE.plan, hidden))) == ["INVENTED_PROP"]
+    assert codes(evaluate(edit(PLAN, invented_link))) == ["UNSOURCED_LINK"]
+    assert evaluate(edit(PLAN, sourced_link)).report.ok
+    assert codes(evaluate(edit(PLAN, hidden))) == ["INVENTED_PROP"]
 
 
 def test_ordinary_wording_is_not_mistaken_for_an_invented_object():
@@ -342,4 +367,4 @@ def test_ordinary_wording_is_not_mistaken_for_an_invented_object():
         checkpoint(data, "stop_1")["activity"]["prompt"] = "Find the corner tower and note its shape. Take a photo if you like."
         data["story"]["beats"][0]["summary"] = "Your informant gives you the page number over the radio as a cyclist passes you."
 
-    assert evaluate(edit(BASE.plan, ordinary)).report.ok
+    assert evaluate(edit(PLAN, ordinary)).report.ok
