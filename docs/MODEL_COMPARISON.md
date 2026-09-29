@@ -25,24 +25,24 @@ Each model ran the same local app (`app.py` on this branch, in-memory store, liv
 - Jan: "I'm at 72 and west end. I have 25 minutes. Im looking for something related to music history", then "Ready, let's go."
 - Kyle: "I am on 96th and 2nd ave, and need to get to FiDi in 2 hours. I am a big fan of the band The Strokes. Help plan a trip to get there", then "Ready, let's go."
 
-Per turn: wall time, model calls, tokens, and LiteLLM's cost estimate (list prices; cached input discounted). Story quality is judged by reading the saved plan and replies against the seven principles in docs/STORY_DESIGN.md. One run per model, so single turns vary; treat small differences as noise.
+Per turn: wall time, model calls, tokens, and LiteLLM's cost estimate (list prices; cached input discounted), each model call counted once in the turn it belongs to. Story quality is judged by reading the saved plan and replies against the seven principles in docs/STORY_DESIGN.md. One run per model, so single turns vary; treat small differences as noise.
 
 ## Round 1: current `main` prompt and evaluator (before story design v2)
 
 | Model | Acceptance | Planning turn (s) | Follow-up turn (s, median / max) | Cost per planning query | Cost, all 10 turns |
 |---|---|---|---|---|---|
-| Claude Opus 5.5 (effort medium) | 18/18 | 76–124 | 15 / 25 | $0.20–0.29 | $2.05 |
-| Claude Sonnet 5.5 (effort medium) | 18/18 | 39–77 | 7 / 18 | $0.10–0.14 | $0.92 |
-| Gemini 3.5 Flash-Lite | 18/18 | 23–47 | 5 / 13 | $0.015 | $0.13 |
-| Gemini 3.5 Flash | 15/18 (all three from one 429 on Q1) | 52–104 | 21 / 69 | $0.13–0.25 | $1.25 |
-| Kimi K2 Thinking | 17/18 | 66–97 | 9 / 24 | $0.03–0.06 | $0.40 |
-| Qwen3 235B | 14/18 | 86–122 (two hit the 16-round limit) | 7 / 10 | $0.02 | $0.14 |
+| Claude Opus 5.5 (effort medium) | 18/18 | 76–124 | 15 / 25 | $0.20–0.28 | $1.88 |
+| Claude Sonnet 5.5 (effort medium) | 18/18 | 39–77 | 7 / 18 | $0.09–0.13 | $0.84 |
+| Gemini 3.5 Flash-Lite | 18/18 | 23–47 | 5 / 13 | $0.015 | $0.11 |
+| Gemini 3.5 Flash | 15/18 (all three from one 429 on Q1) | 52–104 | 21 / 69 | $0.13–0.25 | $1.08 |
+| Kimi K2 Thinking | 17/18 | 66–97 | 9 / 24 | $0.03–0.06 | $0.34 |
+| Qwen3 235B | 14/18 | 86–122 (two hit the 16-round limit) | 7 / 10 | $0.02 | $0.12 |
 
 No turn exceeded the 240-second limit (gpt-oss, below, reached it once). The Claude runs used commit `70e494d` (same prompt and evaluator; the harness difference is Claude-only prompt caching of the instructions).
 
 Story quality (principle numbers from STORY_DESIGN.md):
 
-- **Claude Opus 5.5:** the best stories, and the only run close to the v2 design without its prompt. Openings are briefings: an operation name, the handler and how they reach you, named suspects, the stakes, then stops, time, and "Ready?" (1, 2). Stops earn clues that the finale uses: alibis that clear suspects, a dead-drop combination derived from the museum's landmark date, Jan's finale keyed to the Beacon's 2,894 seats (3, 5). Every cast member is invented; real people appear only as sourced history (6). For Kyle it found Mercury Lounge, Ludlow Street, and Bowery Ballroom, then said plainly that its sources don't mention The Strokes, so it makes no claims about the band (4). Jan's 25 minutes got three stops (7). On query 3 it gave honest options when 15 minutes could not cover the required corner. Weaknesses: follow-ups cost $0.10–0.24 each, and planning turns take up to about two minutes.
+- **Claude Opus 5.5:** the best stories, and the only run close to the v2 design without its prompt. Openings are briefings: an operation name, the handler and how they reach you, named suspects, the stakes, then stops, time, and "Ready?" (1, 2). Stops earn clues that the finale uses: alibis that clear suspects, a dead-drop combination derived from the museum's landmark date, Jan's finale keyed to the Beacon's 2,894 seats (3, 5). Every cast member is invented; real people appear only as sourced history (6). For Kyle it found Mercury Lounge, Ludlow Street, and Bowery Ballroom, then said plainly that its sources don't mention The Strokes, so it makes no claims about the band (4). Jan's 25 minutes got three stops (7). On query 3 it gave honest options when 15 minutes could not cover the required corner. Weaknesses: follow-ups cost $0.06–0.23 each, and planning turns take up to about two minutes.
 - **Claude Sonnet 5.5:** nearly as good and about twice as fast and cheap. Handler briefings, invented casts, honest "no Strokes connection confirmed" for Kyle, and a neat clue chain for Jan (a catalog code that spells 1954, the year "Rock Around the Clock" was recorded at the Pythian Temple). Thinner than Opus: Kyle's two hours got two stops (7), and some clues are arithmetic on a number rather than something the story needs.
 - **Flash-Lite:** reliable with the tools, weak on story. Openings are one or two lines with no role or handler (1). Stops are "describe one detail" observations that earn nothing (3). Kyle's two-hour trip got one stop at the Chrysler Building with no sourced link to The Strokes (4, 7), and a cast member named "Agent Julian" (6).
 - **Flash:** the best stories so far. It found the real Strokes venues (Mercury Lounge, Arlene's Grocery) and ended on a Strokes song title. Jan's got Verdi Square and the Ansonia with a puzzle built on a sourced fact. Still thin openings, observation stops that earn no clue, and a "Julian (Archivist)". Slower, about 10× Flash-Lite's cost, and one query failed on a 429.
@@ -62,5 +62,5 @@ Story quality (principle numbers from STORY_DESIGN.md):
 
 - Sonnet 5.5 and Opus 5.5 are the only models that passed all 18 acceptance checks and also followed the story rules the current evaluator cannot see (no real people as characters, no invented history, links only from sources, honest when a theme has no sourced place).
 - Opus 5.5 writes the richer mysteries, but it costs about 2.2× as much and takes about 1.6× as long per planning turn (up to 124 s). The v2 design adds briefing, cast, clue, and theme-link checks, so planning turns will need more evaluator rounds; Sonnet has more room under the 240-second turn limit.
-- Against the current Flash-Lite default: Flash-Lite is about 7× cheaper and faster, but its stories are the thin ones STORY_DESIGN.md was written about.
+- Against the current Flash-Lite default: Flash-Lite is about 8× cheaper than Sonnet and faster, but its stories are the thin ones STORY_DESIGN.md was written about.
 - Rerun both Claude models with Kyle's merged prompt and evaluator. If Opus's planning turns stay well under 240 s, switch to Opus 5.5 for the submission; the cost difference is a few dollars for grading.
