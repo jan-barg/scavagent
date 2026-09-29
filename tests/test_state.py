@@ -396,7 +396,8 @@ def test_only_the_newest_evaluated_drafts_are_kept():
     record.remember_draft("d2", state.EvaluatedDraft(kind="new", plan=plan))  # Evaluated again: now the newest
     assert list(record.drafts) == ["d3", "d4", "d2"]
 
-    huge = plan.model_copy(update={"story": plan.story.model_copy(update={"solution": "x" * state.MAX_DRAFT_BYTES})})
+    # Firestore counts UTF-8 bytes: this solution is half the limit in characters but over it in bytes.
+    huge = plan.model_copy(update={"story": plan.story.model_copy(update={"solution": "é" * (state.MAX_DRAFT_BYTES // 2 + 1)})})
     assert record.remember_draft("d5", state.EvaluatedDraft(kind="new", plan=huge)) is False
     assert list(record.drafts) == ["d3", "d4", "d2"]
 
@@ -413,20 +414,21 @@ def bulky_session(session_id, turns=30, blob="x" * 30_000):
         record.transcript += [{"role": "user", "text": f"u{i}", "at": NOW.isoformat()},
                               {"role": "assistant", "text": f"a{i}", "tool_calls": trace, "at": NOW.isoformat()}]
         record.remember_reply(f"m{i}", {"response": f"a{i}", "session_id": session_id, "tool_calls": trace})
-    assert len(record.model_dump_json()) > 1_048_576  # Firestore would refuse to store this
+    assert record.size() > 1_048_576  # Firestore would refuse to store this
     return record
 
 
-def test_a_long_adventure_still_fits_in_one_firestore_document(monkeypatch):
+@pytest.mark.parametrize("blob", ["x" * 30_000, "é" * 15_000], ids=["ascii", "two-byte characters"])
+def test_a_long_adventure_still_fits_in_one_firestore_document(monkeypatch, blob):
     store = state.MemoryStore()  # No size limit of its own, so the test sees exactly what would be written
     monkeypatch.setattr(app_module, "store", store)
-    store.save(bulky_session("long"))
+    store.save(bulky_session("long", blob=blob))
     script(monkeypatch, FakeMessage(content="Still with you.", tool_calls=None))
 
     TestClient(app_module.app).post("/chat", json={"message": "next", "session_id": "long", "client_message_id": "new"})
 
     saved = store.load("long")
-    assert len(saved.model_dump_json()) <= state.MAX_RECORD_BYTES
+    assert saved.size() <= state.MAX_RECORD_BYTES
     assert saved.messages[0]["role"] == "user" and saved.messages[-1]["content"] == "Still with you."
     assert saved.transcript[-1]["text"] == "Still with you." and "new" in saved.replies
     assert saved.adventure.active_plan_id in saved.plans and saved.adventure.status == "active"  # Progress kept
@@ -437,7 +439,40 @@ def test_a_mid_turn_photo_save_also_stays_inside_the_budget():
     ctx = ToolContext(record=record, store=state.MemoryStore(), now=lambda: NOW)
     photo = ctx.save_asset(b"jpeg", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
     saved = ctx.store.load("photo")
-    assert len(saved.model_dump_json()) <= state.MAX_RECORD_BYTES and photo.asset_id in saved.photos
+    assert saved.size() <= state.MAX_RECORD_BYTES and photo.asset_id in saved.photos
+
+
+def test_one_enormous_turn_is_stored_in_brief_but_sent_in_full(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    enormous = {"text": "x" * 1_200_000}  # More than one Firestore document by itself
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_research", lambda: tools.tool_ok(enormous))
+    script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_research", "{}")]),
+           FakeMessage(content="Found a lot.", tool_calls=None))
+    client = TestClient(app_module.app)
+
+    sent = client.post("/chat", json={"message": "research", "session_id": "huge", "client_message_id": "m-1"}).json()
+
+    assert sent["tool_calls"][0]["result"]["data"] == enormous  # The live reply keeps the whole trace
+    assert store.load("huge").size() <= state.MAX_RECORD_BYTES
+    [call] = client.get("/history", params={"session_id": "huge"}).json()["messages"][1]["tool_calls"]
+    assert call["result"]["ok"] is True and "bytes not stored" in call["result"]["omitted"]
+
+
+def test_a_session_that_cannot_fit_says_so_and_keeps_its_last_saved_version(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    record = SessionRecord.new("stuck")
+    tools.load_dev_adventure(ToolContext(record=record, store=store), "constrained_route")
+    active = record.plans[record.adventure.active_plan_id]  # Only protected data, and too much of it
+    record.plans[active.plan_id] = active.model_copy(update={"story": active.story.model_copy(update={"solution": "x" * 1_100_000})})
+    store.save(record)
+    script(monkeypatch, FakeMessage(content="Next clue.", tool_calls=None))
+
+    reply = TestClient(app_module.app).post("/chat", json={"message": "next", "session_id": "stuck"}).json()
+
+    assert "too large to save" in reply["response"]
+    assert store.load("stuck").storage_version == record.storage_version  # Nothing half-written
 
 
 def test_a_saved_plan_cannot_be_overwritten(ctx):

@@ -229,21 +229,28 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     # Keep this turn's messages, made plain JSON so any store can hold them.
     record.messages += json.loads(json.dumps(conversation[new_from:], default=str))
     reply = ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls).model_dump(mode="json")
+    stored = json.loads(json.dumps(reply))  # Trimming may shorten the stored copy; the reply sent stays whole
     record.transcript += [
         {"role": "user", "text": request.message, "at": now.isoformat()},
-        {"role": "assistant", "text": response, "tool_calls": reply["tool_calls"], "at": state.utc_now().isoformat()},
+        {"role": "assistant", "text": response, "tool_calls": stored["tool_calls"], "at": state.utc_now().isoformat()},
     ]
     if request.client_message_id:
-        record.remember_reply(request.client_message_id, reply)
-    record.trim()
-
+        record.remember_reply(request.client_message_id, stored)
     try:
+        record.trim()
         store.save(record)
     except VersionConflict:
         # Another message for this session saved first. Its progress stands; this turn's reply is not stored.
         reply["response"] = (
             "Another message in this conversation was handled at the same time, so this reply wasn't saved. "
             "Anything already recorded, such as a photo, is kept. Please send your message again."
+        )
+    except state.RecordTooLarge:
+        # Only the active plan, photos, and progress are left and they alone exceed one document.
+        logger.error("Session record too large to store even after trimming")
+        reply["response"] = (
+            "This conversation has grown too large to save, so this reply wasn't stored. "
+            "Please start a new conversation to keep going."
         )
     return reply
 

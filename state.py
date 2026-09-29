@@ -46,6 +46,7 @@ MAX_DRAFTS = 3  # Evaluated plans waiting to be saved
 MAX_RECORD_BYTES = 800_000
 MAX_DRAFT_BYTES = 200_000  # One evaluated plan larger than this is refused rather than stored
 MIN_KEPT_REPLIES = 3  # Replies kept for resends even when trimming for size
+COMPACT_BYTES = 4_000  # Last resort: a stored tool argument or result bigger than this becomes a short note
 # A claim older than this belongs to a turn that has stopped: app.run_agent starts no model call after
 # its own shorter deadline. (Cloud Run's request timeout does not stop the code, so it cannot be relied on.)
 IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
@@ -53,6 +54,15 @@ IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _stored_bytes(value) -> int:
+    """UTF-8 bytes, as Firestore counts them (a character can take up to four)."""
+    return len((value if isinstance(value, str) else json.dumps(value)).encode())
+
+
+class RecordTooLarge(Exception):
+    """The session cannot fit one Firestore document even after trimming."""
 
 
 class EvaluatedDraft(Record):
@@ -88,7 +98,7 @@ class SessionRecord(Record):
 
     def remember_draft(self, draft_id: str, draft: EvaluatedDraft) -> bool:
         """Keep an evaluated plan for save_adventure_plan. False, and nothing kept, if it alone is too large."""
-        if len(draft.model_dump_json()) > MAX_DRAFT_BYTES:
+        if _stored_bytes(draft.model_dump_json()) > MAX_DRAFT_BYTES:
             return False
         self.drafts = {**{k: v for k, v in self.drafts.items() if k != draft_id}, draft_id: draft}
         while len(self.drafts) > MAX_DRAFTS:
@@ -101,30 +111,77 @@ class SessionRecord(Record):
         while len(self.replies) > MAX_CACHED_REPLIES:
             self.replies.pop(next(iter(self.replies)))
 
+    def size(self) -> int:
+        return _stored_bytes(self.model_dump_json())
+
     def trim(self) -> None:
-        """Bound stored history by count and by size, cutting only at a user message so tool calls keep
-        their results. Plans, photos, and progress are never dropped."""
+        """Bound stored history by count and by size, or raise RecordTooLarge rather than leave it oversized.
+
+        History is cut only at a user message, so tool calls keep their results. Over the size budget the
+        cheapest losses come first: unsaved drafts (the model can evaluate again), older cached replies, the
+        oldest model turns, the oldest chat entries, superseded plans, and finally the bulk of stored tool
+        arguments and results. The active plan, photos, and progress are never dropped.
+        """
         if len(self.messages) > MAX_STORED_MESSAGES:
             self._drop_messages_before(len(self.messages) - MAX_STORED_MESSAGES)
         self.transcript = self.transcript[-MAX_TRANSCRIPT_ENTRIES:]
-        # Over the size budget, give up what is cheapest to lose first: unsaved drafts (the model can evaluate
-        # again), older cached replies, the oldest model turns, then the oldest chat entries.
-        while len(self.model_dump_json()) > MAX_RECORD_BYTES:
-            if self.drafts:
-                self.drafts.pop(next(iter(self.drafts)))
-            elif len(self.replies) > MIN_KEPT_REPLIES:
-                self.replies.pop(next(iter(self.replies)))
-            elif any(m.get("role") == "user" for m in self.messages[1:]):
-                self._drop_messages_before(1)
-            elif len(self.transcript) > 2:
-                self.transcript = self.transcript[2:]
-            else:
-                break
+        for shrink in (self._drop_oldest_draft, self._drop_oldest_reply, self._drop_oldest_turn,
+                       self._drop_oldest_chat_entries, self._drop_superseded_plan, self._compact_tool_payloads):
+            while self.size() > MAX_RECORD_BYTES and shrink():
+                pass
+        if self.size() > MAX_RECORD_BYTES:
+            raise RecordTooLarge(f"{self.size()} bytes after trimming")
 
     def _drop_messages_before(self, cut: int) -> None:
         while cut < len(self.messages) and self.messages[cut].get("role") != "user":
             cut += 1
         self.messages = self.messages[cut:]
+
+    def _drop_oldest_draft(self) -> bool:
+        return bool(self.drafts) and self.drafts.pop(next(iter(self.drafts))) is not None
+
+    def _drop_oldest_reply(self) -> bool:
+        return len(self.replies) > MIN_KEPT_REPLIES and self.replies.pop(next(iter(self.replies))) is not None
+
+    def _drop_oldest_turn(self) -> bool:
+        if not any(m.get("role") == "user" for m in self.messages[1:]):
+            return False
+        self._drop_messages_before(1)
+        return True
+
+    def _drop_oldest_chat_entries(self) -> bool:
+        if len(self.transcript) <= 2:
+            return False
+        self.transcript = self.transcript[2:]
+        return True
+
+    def _drop_superseded_plan(self) -> bool:
+        old = next((plan_id for plan_id in self.plans if plan_id != self.adventure.active_plan_id), None)
+        return old is not None and self.plans.pop(old) is not None
+
+    def _compact_tool_payloads(self) -> bool:
+        """Replace big stored tool arguments and results with a note; the reply already sent kept them."""
+        def note(value):
+            return {"omitted": f"{_stored_bytes(value)} bytes not stored"}
+
+        changed = False
+        for message in self.messages:
+            if message.get("role") == "tool" and _stored_bytes(message.get("content") or "") > COMPACT_BYTES:
+                message["content"], changed = json.dumps(note(message["content"])), True
+            for call in message.get("tool_calls") or []:
+                function = call.get("function") or {}
+                if _stored_bytes(function.get("arguments") or "") > COMPACT_BYTES:
+                    function["arguments"], changed = json.dumps(note(function["arguments"])), True
+        traces = [c for entry in self.transcript for c in entry.get("tool_calls") or []]
+        traces += [c for reply in self.replies.values() for c in reply.get("tool_calls") or []]
+        for call in traces:
+            if _stored_bytes(call.get("args")) > COMPACT_BYTES:
+                call["args"], changed = note(call["args"]), True
+            result = call.get("result")
+            if isinstance(result, dict) and _stored_bytes(result) > COMPACT_BYTES:
+                # Keep ok and error: the chat history shows each tool's outcome.
+                call["result"], changed = {"ok": result.get("ok"), "error": result.get("error"), **note(result)}, True
+        return changed
 
 
 # --- Storage backends ---
@@ -431,8 +488,8 @@ class ToolContext:
         _commit(self, self.record.adventure.model_copy(
             update={"photo_asset_ids": [*self.record.adventure.photo_asset_ids, asset_id]}
         ))
-        self.record.trim()  # Drafts added this turn could otherwise push the record past one document
         try:
+            self.record.trim()  # Drafts added this turn could otherwise push the record past one document
             self.store.save(self.record)
         except Exception:
             # Not saved: detach it here too, so the end of the turn cannot keep a photo the tool reported as failed.
