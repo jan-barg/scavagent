@@ -59,6 +59,9 @@ class SessionRecord(Record):
     plans: dict[str, AdventurePlan] = {}
     photos: dict[str, PhotoAsset] = {}
     replies: dict[str, dict] = {}  # client_message_id -> the ChatResponse already sent
+    # client_message_id -> {camera checkpoint id: asset id} for photos taken while answering a message that has
+    # no stored reply yet. If that turn dies and the message runs again, the camera tool reuses the photo.
+    captures: dict[str, dict[str, str]] = {}
 
     @classmethod
     def new(cls, session_id: str) -> "SessionRecord":
@@ -67,6 +70,7 @@ class SessionRecord(Record):
 
     def remember_reply(self, client_message_id: str, reply: dict) -> None:
         self.replies[client_message_id] = reply
+        self.captures.pop(client_message_id, None)  # A resend now replays the reply; it never runs again
         while len(self.replies) > MAX_CACHED_REPLIES:
             self.replies.pop(next(iter(self.replies)))
 
@@ -339,6 +343,12 @@ class ToolContext:
     record: SessionRecord
     store: Store
     now: Callable[[], datetime] = field(default=utc_now)
+    message_id: str | None = None  # The client_message_id this turn answers, when the client sent one
+
+    def saved_capture(self, checkpoint_id: str) -> PhotoAsset | None:
+        """The photo already taken at this camera checkpoint while answering this same message, if any."""
+        asset_id = self.record.captures.get(self.message_id, {}).get(checkpoint_id) if self.message_id else None
+        return self.record.photos.get(asset_id) if asset_id else None
 
     def save_asset(
         self,
@@ -370,8 +380,11 @@ class ToolContext:
             frame_time=frame_time,
             provenance=provenance,
         )
-        before = self.record.photos, self.record.adventure
+        before = self.record.photos, self.record.adventure, self.record.captures
         self.record.photos = {**self.record.photos, asset_id: photo}
+        if self.message_id and checkpoint_id:
+            taken = {**self.record.captures.get(self.message_id, {}), checkpoint_id: asset_id}
+            self.record.captures = {**self.record.captures, self.message_id: taken}
         _commit(self, self.record.adventure.model_copy(
             update={"photo_asset_ids": [*self.record.adventure.photo_asset_ids, asset_id]}
         ))
@@ -379,7 +392,7 @@ class ToolContext:
             self.store.save(self.record)
         except Exception:
             # Not saved: detach it here too, so the end of the turn cannot keep a photo the tool reported as failed.
-            self.record.photos, self.record.adventure = before
+            self.record.photos, self.record.adventure, self.record.captures = before
             raise
         return photo
 
