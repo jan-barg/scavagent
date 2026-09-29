@@ -765,6 +765,10 @@ def state_summary(record: SessionRecord) -> dict:
     outcome = {i: "completed" for i in state.completed_ids}
     outcome |= {i: "skipped" for i in state.skipped_ids} | {i: "blocked" for i in state.blocked_ids}
     current = next((c for c in plan.checkpoints if c.checkpoint_id == state.current_checkpoint_id), None)
+    # Story design v2 (Kyle): the last chat beat is the finale. Other unrevealed chat beats, and the beats of
+    # stops the user skipped or could not reach, hold clues still to tell in chat.
+    finale = next((b for b in reversed(plan.story.beats) if b.checkpoint_id is None), None)
+    missed = set(state.skipped_ids) | set(state.blocked_ids)
     summary |= {
         "plan_id": plan.plan_id,
         "plan_version": plan.version,
@@ -772,6 +776,7 @@ def state_summary(record: SessionRecord) -> dict:
         "deadline": plan.request.deadline.isoformat() if plan.request.deadline else None,
         "destination": plan.request.destination.place_text if plan.request.destination else None,
         "premise": plan.story.premise,
+        "cast": [c if isinstance(c, str) else c.model_dump(mode="json") for c in plan.story.cast],
         "checkpoints": [
             {"checkpoint_id": c.checkpoint_id, "required_by_user": c.required_by_user,
              "activity_type": c.activity.type, "camera_checkpoint_id": c.camera_checkpoint_id,
@@ -789,5 +794,9 @@ def state_summary(record: SessionRecord) -> dict:
             None,
         ),
         "solution_if_finished": plan.story.solution if state.current_checkpoint_id is None else None,
+        "clues_to_tell_in_chat": [b.model_dump(mode="json") for b in plan.story.beats
+                                  if b is not finale and b.beat_id not in state.revealed_beat_ids
+                                  and (b.checkpoint_id is None or b.checkpoint_id in missed)],
+        "finale_if_finished": finale.model_dump(mode="json") if finale and state.current_checkpoint_id is None else None,
     }
     return summary

@@ -4,6 +4,10 @@ The agent chooses the stops, activities, and story. This module takes each stop'
 find_places and research_place returned (the agent cannot supply evidence of its own), routes the
 legs with integrations.routes, assigns stable ids, and fills in the totals.
 
+The story follows docs/STORY_DESIGN.md: a briefing, a cast of invented characters, and beats that
+name their characters, the clue the user earns, and the earlier clues they use. A beat names those
+by stop ("stop_1") or beat id; the plan keeps beat ids.
+
 A revision keeps the completed stops, the story, and every revealed beat of the plan it replaces.
 Unrevealed beats of dropped or skipped stops move into chat unless the draft gives them a new stop.
 The remaining route starts from the user's current location.
@@ -27,6 +31,7 @@ from schemas import (
     AdventurePlan,
     AdventureRequest,
     AdventureState,
+    Character,
     Checkpoint,
     LatLng,
     LocationContext,
@@ -44,7 +49,7 @@ LOCATION_FRESH_MINUTES = 15  # a browser location this recent can start a revisi
 DEPART_WINDOW = timedelta(hours=2)  # a departure further ahead is most likely a UTC/local mix-up
 PAST_GRACE = timedelta(minutes=5)  # a departure further back would time the route from a moment already gone
 ACCURATE_ENOUGH_M = 200  # a browser fix less precise than this does not place the user on a block
-STATED_FIELDS = ("destination", "deadline", "duration_minutes", "required_stops", "allowed_modes", "theme")
+STATED_FIELDS = ("destination", "deadline", "duration_minutes", "required_stops", "allowed_modes", "theme", "stop_count")
 
 
 class DraftError(Exception):
@@ -65,8 +70,9 @@ def build_new_plan(draft: dict, now: datetime, camera_lookup: CameraLookup | Non
             beat_id = f"beat_{len(beats) + 1}"
             beats.append(_beat(beat_id, checkpoint_id, spec["beat"]))
         checkpoints.append(_checkpoint(spec, checkpoint_id, place.place_id, beat_id))
-    for beat in draft.get("chat_beats") or []:
+    for beat in _list(draft.get("chat_beats"), "chat_beats"):
         beats.append(_beat(f"beat_{len(beats) + 1}", None, beat))
+    beats = list(_resolve_uses({b.beat_id: b for b in beats}).values())
 
     # The places the user said they must visit, as geocoded; the evaluator checks the stops cover them.
     # They are required whenever a stop is marked required, so a nearby stand-in cannot define them.
@@ -120,7 +126,9 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
     waived = [str(w) for w in draft.get("waived_required_ids") or []]
     for checkpoint_id in waived:
         if checkpoint_id not in required_ids:
-            raise DraftError(f"{checkpoint_id} is not a stop the user required, so there is nothing to waive.")
+            raise DraftError(f"{checkpoint_id} is not a stop the user required, so there is nothing to waive. To skip it, "
+                             "record the skip (update_adventure_state skip_checkpoint, no waiver), then evaluate kind "
+                             "\"check\" with the new time limit, or a revision that leaves it out.")
     # Skipping a required stop took the user's explicit waiver (state.resolve_checkpoint enforces it).
     # A blocked one stays required until the user waives it or picks a substitute (PLAN.md section 7).
     given_up = set(waived) | (required_ids & set(state.skipped_ids))
@@ -182,11 +190,13 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
             beat.checkpoint_id not in kept_ids or beat.checkpoint_id in set(state.skipped_ids) | set(state.blocked_ids))
         if stranded and beat.beat_id not in moved:
             beats[beat.beat_id] = beat.model_copy(update={"checkpoint_id": None})
-    for beat in draft.get("chat_beats") or []:
+    for beat in _list(draft.get("chat_beats"), "chat_beats"):
         beat_id = f"beat_{len(beats) + 1}"
         while beat_id in beats:
             beat_id += "b"
         beats[beat_id] = _beat(beat_id, None, beat)
+    # A new beat may use the clue of any stop the plan has had, including one now skipped.
+    beats = _resolve_uses(beats, {b.checkpoint_id: b.beat_id for b in old.story.beats if b.checkpoint_id})
 
     here = _current_point(draft, state, completed, old_places, old, now)
     remaining = [c for c in checkpoints if c.checkpoint_id not in resolved]
@@ -324,12 +334,18 @@ def _checkpoint(spec, checkpoint_id, place_id, beat_id):
     if not spec.get("activity"):
         raise DraftError(f"Stop {checkpoint_id} needs an activity with type, prompt, answer_rule, and fallback; a "
                          "plain arrival can be a user_observation.")
+    link = spec.get("theme_link")
+    if isinstance(link, str):
+        link = {"why": link}
+    if isinstance(link, dict):
+        link = {"claim_ids": _names(link.get("claim_ids"), r"[,;\s]+"), "why": str(link.get("why") or "").strip()}
     try:
         activity = Activity.model_validate(spec.get("activity") or {})
         return Checkpoint(checkpoint_id=checkpoint_id, place_id=place_id,
                           required_by_user=bool(spec.get("required_by_user")), activity=activity,
                           dwell_minutes=round(parse_minutes(spec.get("dwell_minutes"), "dwell_minutes", DEFAULT_DWELL_MINUTES)),
-                          story_beat_id=beat_id, camera_checkpoint_id=spec.get("camera_checkpoint_id"))
+                          story_beat_id=beat_id, camera_checkpoint_id=spec.get("camera_checkpoint_id"),
+                          theme_link=link or None)
     except (ValidationError, TypeError, ValueError) as e:
         detail = _errors(e) if isinstance(e, ValidationError) else str(e)
         raise DraftError(f"Stop {checkpoint_id} is invalid: {detail}") from e
@@ -338,21 +354,77 @@ def _checkpoint(spec, checkpoint_id, place_id, beat_id):
 def _beat(beat_id, checkpoint_id, spec):
     if not isinstance(spec, dict) or not str(spec.get("summary") or "").strip():
         raise DraftError(f"Story beat for {checkpoint_id or 'chat'} needs a summary.")
-    reveals = spec.get("reveals")
-    if isinstance(reveals, list):
-        reveals = "; ".join(map(str, reveals))
+    uses = [f"stop_{ref}" if ref.isdigit() else ref for ref in _names(spec.get("uses"), r"[,;\s]+")]  # "1": stop_1
     return StoryBeat(beat_id=beat_id, checkpoint_id=checkpoint_id, summary=str(spec["summary"]),
-                     reveals=str(reveals) if reveals is not None else None)
+                     reveals=_text(spec.get("reveals")), characters=_names(spec.get("characters"), r"[,;]"),
+                     clue=_text(spec.get("clue")), uses=uses)
+
+
+def _resolve_uses(beats, earlier_stops=None):
+    """The beats with every `uses` entry as a beat id. `earlier_stops` maps stops a revision replaced to their beats."""
+    at_stop = {**(earlier_stops or {}), **{b.checkpoint_id: b.beat_id for b in beats.values() if b.checkpoint_id}}
+    resolved = {}
+    for beat in beats.values():
+        uses = []
+        for ref in beat.uses:
+            target = ref if ref in beats else at_stop.get(ref)
+            if target is None:
+                known = (f"name the stops whose clues it builds on: {', '.join(at_stop)}." if at_stop else
+                         "no stop in this draft has a beat yet, so give each stop a beat (summary, characters, clue).")
+                raise DraftError(f"The beat for {beat.checkpoint_id or 'chat'} uses {ref!r}, which is not a stop with a "
+                                 f"beat; {known}")
+            if target != beat.beat_id and target not in uses:
+                uses.append(target)
+        resolved[beat.beat_id] = beat.model_copy(update={"uses": uses})
+    return resolved
 
 
 def _story(spec, beats):
     spec = spec or {}
     if not isinstance(spec, dict):
-        raise DraftError("story must be an object with premise, cast, and solution.")
+        raise DraftError("story must be an object with premise, briefing, cast, and solution.")
     if not str(spec.get("premise") or "").strip() or not str(spec.get("solution") or "").strip():
         raise DraftError("story needs a premise and a solution.")
-    return Story(premise=spec["premise"], cast=[str(c) for c in spec.get("cast") or []], solution=spec["solution"],
+    cast = []
+    for member in _list(spec.get("cast"), "story.cast"):
+        if not isinstance(member, dict):
+            cast.append(str(member))
+            continue
+        if not str(member.get("name") or "").strip():
+            raise DraftError("Each cast member needs a name (and a role, the contact channel, and introduced_in).")
+        known = {key: member[key] for key in ("name", "role", "contact", "introduced_in") if member.get(key)}
+        try:
+            cast.append(Character.model_validate({key: str(value).strip() for key, value in known.items()}))
+        except ValidationError as e:
+            raise DraftError(f"Cast member {member['name']!r} is invalid: {_errors(e)}") from e
+    return Story(premise=spec["premise"], briefing=_text(spec.get("briefing")), cast=cast, solution=spec["solution"],
                  beats=beats)
+
+
+def _list(value, name):
+    """A list field; one object or string sent alone counts as a list of one."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, (str, dict)):
+        return [value]
+    if not isinstance(value, list):
+        raise DraftError(f"{name} must be a list.")
+    return value
+
+
+def _names(value, separators=None):
+    """Strings from a list of names or ids; objects give their name. One string alone is split at `separators`."""
+    if isinstance(value, str) and separators:
+        value = re.split(separators, value)
+    names = [item.get("name") if isinstance(item, dict) else item for item in _list(value, "list")]
+    return [str(name).strip() for name in names if name is not None and str(name).strip()]
+
+
+def _text(value):
+    if isinstance(value, list):
+        value = "; ".join(map(str, value))
+    text = str(value).strip() if value is not None else ""
+    return text or None
 
 
 def _route(points, request, depart_at):

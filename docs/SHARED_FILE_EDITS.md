@@ -103,3 +103,63 @@ These are implementation acceptance targets, not currently supported adventure b
 - `adventure/agent_tools.py`: `evaluate_adventure_plan` now answers `INVALID_ARGUMENT` ("too large to keep") when `remember_draft` refuses a plan over `state.MAX_DRAFT_BYTES`.
 - `tests/test_planning_tools.py`: two added tests (`test_a_draft_evaluated_before_a_restart_can_still_be_saved`, `test_a_plan_too_large_to_store_is_refused_with_a_fix`), and `test_minutes_left_mid_adventure_count_from_now` now fakes the routing call of its final "check" (it reached the live Valhalla server; the suite now passes with the network blocked).
 - Kyle's items 3 and 4 from `docs/STATUS.md` are done in Jan's files: model-call retries in `app.py`; completion in plan order and finishing only with every stop resolved in `state.py`. Destination arrival itself is still not tracked in state.
+
+## Story design v2 (branch `kyle/story-design-v2`, from `main` at `00c25f4`)
+
+Two edits to Jan's files, each in its own commit. The story work builds on the schema edit (the evaluator imports `Character`, and the prompt asks for the new fields), so reverting the schema edit means reverting that work too: every later commit on the branch except `42229e5` (`find_places`), newest first, then `94aad1f`.
+
+| File | Commit | Revert |
+|---|---|---|
+| `schemas.py` (optional story fields; approved by Jan in `docs/STORY_DESIGN.md`) | `94aad1f` | revert the story commits after it (see above), then `git revert 94aad1f` |
+| `state.py` (`state_summary` shows the cast, clues to tell in chat, and the finale) | `6fcb1c9` | `git revert 6fcb1c9` (then drop `test_the_adventure_state_shows_the_cast_and_holds_the_finale_until_the_stops_are_done` from `tests/test_story.py`) |
+
+### `schemas.py`: optional story design v2 fields
+
+Why: the agreed design (`docs/STORY_DESIGN.md`). Every new field is optional with a default, so plans stored before it keep loading (`tests/test_story.py::test_plans_stored_before_story_v2_still_load` validates the stored fixture plan and a session record holding it). New models `Character` and `ThemeLink`; new fields `Activity.solution`, `Checkpoint.theme_link`, `StoryBeat.characters`, `StoryBeat.clue`, `StoryBeat.uses`, `Story.briefing`; `Story.cast` is now `list[Character | str]`.
+
+Original lines at `00c25f4`:
+
+```python
+    fallback: str = Field(min_length=1, description="How the user continues if this cannot be done")
+
+    @model_validator(mode="after")
+    def _physical_tasks_need_evidence(self):
+```
+
+```python
+class Checkpoint(Record):
+    checkpoint_id: Id
+    place_id: Id
+    required_by_user: bool = False
+    activity: Activity
+    dwell_minutes: int = Field(ge=0)
+    story_beat_id: Id | None = None
+    camera_checkpoint_id: Id | None = None
+```
+
+```python
+class StoryBeat(Record):
+    """Invented plot. Never presented as historical fact."""
+
+    beat_id: Id
+    checkpoint_id: Id | None = None  # None: delivered in chat, not tied to a stop
+    summary: str
+    reveals: str | None = None
+
+
+class Story(Record):
+    premise: str
+    cast: list[str] = []
+    solution: str
+    beats: list[StoryBeat] = []
+```
+
+### `state.py`: `state_summary` carries the story across turns
+
+Why: the model sees only the last 40 messages (`app.CONTEXT_MESSAGES`), so by the second stop the draft it wrote (the cast's contact channels, the finale, a clue moved to chat after a skip) is gone, and `get_adventure_state` showed only the current stop's beat. Three keys were added; nothing existing changed:
+
+- `cast`: the story's cast, plain names or `Character` objects.
+- `clues_to_tell_in_chat`: unrevealed beats that are chat beats (except the finale) or belong to a stop the user skipped or could not reach.
+- `finale_if_finished`: the last chat beat, once no checkpoint is current (like `solution_if_finished`).
+
+Original: `state_summary` at `00c25f4` had none of these keys and no `finale`/`missed` locals.

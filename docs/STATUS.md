@@ -57,6 +57,36 @@ Latest changes/checks (September 29, overnight):
   5. A public accessor for the camera catalogue: `adventure/agent_tools.camera_lookup` uses `cameras._checkpoints`.
 - Next: push and merge; deploy and run `scripts/acceptance_checks.py <deployed URL>`; field-calibrate a camera position so a camera stop can pass the evaluator; walk-test a generated hunt; decide the model.
 
+Latest changes/checks (September 29, afternoon: story design v2, branch `kyle/story-design-v2`, pull request open for review, not merged):
+
+- Implemented `docs/STORY_DESIGN.md` following its plan:
+  - the optional `schemas.py` fields (approved by Jan);
+  - the draft fields and the `evaluate_adventure_plan` schema;
+  - the new evaluator codes (plus `CLUE_OUT_OF_ORDER`), with `REAL_PERSON_IN_FICTION` and `UNSOURCED_LINK` extended;
+  - the prompt changes;
+  - story checks in the acceptance script.
+- `get_adventure_state` also returns the cast, the clues still to tell in chat, and the finale. This is a small additive edit to Jan's `state.py`, logged in `docs/SHARED_FILE_EDITS.md` for Jan to accept or drop.
+- The design's implementation notes record the choices the spec left open.
+- `find_places`: Wikipedia's search requires every word of a query. Near 96th & 2nd, "music rock historic landmark" matched 2 unrelated articles where "music" alone matched 24, and landmark records ignored the query. Each key term is now searched separately, and each candidate lists its `matched_terms`. Live near the Bowery, 'Strokes rock "music venue"' now leads with Mercury Lounge, Bowery Ballroom, Arlene's Grocery, and CBGB.
+- Tests: `uv run --frozen pytest -q` passes 310 with the network blocked (272 before). Both regression drafts fail with the listed codes, and the worked example passes.
+- Acceptance, local (Gemini 3.5 Flash-Lite, in-memory store): 26 checks, 8 of them new story checks. There were six runs, each followed by a fix:
+
+  | Run | Result | What happened, and the fix |
+  |---|---|---|
+  | 1 | 25/26, story 8/8 | Q3 got an empty model reply. OBJECT_UNEARNED had looped five times, so the rule now follows the clue chain. |
+  | 2 | 25/26, story 8/8 | Q1 planned one stop inside a budget the model chose, so only a limit the user gives now excuses fewer stops. Q3 did not re-time. |
+  | 3 | 16/22 | Q1 hit a model timeout. Q2 took 9 drafts: an architect stated as fact was rejected (now allowed), and a museum 275 m away stood in for the required corner (the messages now name the fix). The model finally moved the corner itself, which the script caught. |
+  | 4 | 25/26, story 8/8 | Q3 did not re-time. The puzzles had no `solution`, so the OBJECT_UNEARNED message now names them. |
+  | 5 | 24/26, story 8/8 | Q2 bounced between DEADLINE_EXCEEDED and TOO_FEW_STOPS, then hit the 16-round limit after saving, so the user got no briefing. The messages now say where another stop fits. Q3 finished before the destination. |
+  | 6 | 24/26, story 8/8 | Q1 and Q2 passed on the second evaluation. Q3 completed the required corner the user had not reached, then finished early. |
+
+- Deployed (still `main`, before this change): 20/26. The 6 story checks that need a v2 story fail, as expected, and Q3 waived a required stop on the user's behalf.
+- For Jan:
+  1. Review the pull request. The `schemas.py` and `state.py` edits are logged in `docs/SHARED_FILE_EDITS.md`.
+  2. Harness: after `MAX_TOOL_ROUNDS`, ask the model once more without tools for its reply. In run 5 a plan was saved, but the reply was only "Sorry, I hit my tool-call limit".
+  3. State: track arrival at the destination so `finish_adventure` refuses while the user is still on the way. Runs 5 and 6 finished early at query 3.
+  4. Model: rerun `scripts/acceptance_checks.py` once Claude is configured. Flash-Lite's query-3 guiding varies from run to run.
+
 ## Joint release work
 
 - [ ] Choose and walk-test a pilot area; calibrate at least three usable camera viewpoints.
