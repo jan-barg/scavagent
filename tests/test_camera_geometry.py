@@ -105,3 +105,18 @@ def test_a_street_is_found_under_its_alternate_name():
     assert geo._named({"name": "México-Tenochtitlan Avenue", "alt_name": "2nd Avenue"}, pattern)
     assert geo._named({"name": "Honorary Way", "official_name": "Plaza X;Second Avenue"}, pattern)
     assert not geo._named({"name": "México-Tenochtitlan Avenue", "alt_name": "22nd Avenue"}, pattern)
+
+
+def test_camera_name_suffixes_are_ignored():
+    assert geo.camera_streets("7 Ave @ 43 St - 64.186 - PTZ") == ["7th avenue", "43rd street"]
+    assert geo.camera_streets("Broadway @ 46 St- Quad North") == ["broadway", "46th street"]
+    assert geo.camera_streets("Rockefeller Plz @ 48 St (between 5 Ave and 6 Ave)") == ["rockefeller plaza", "48th street"]
+
+
+def test_the_grid_fallback_places_spots_like_the_mapped_grid():
+    center, (avenue, street) = geo.grid_streets("Broadway @ 46 St", CENTER)
+    assert center == CENTER and geo.on_grid([avenue, street])
+    pin = geo.locate(center, street, avenue, "north", "east", 30)
+    assert geo.describe(center, [avenue, street], pin)["side_of_street"] == "north side of 46th Street, about 30 m east of Broadway"
+    with pytest.raises(ValueError, match="not an avenue meeting"):
+        geo.grid_streets("E 63 St @ QBB", CENTER)
