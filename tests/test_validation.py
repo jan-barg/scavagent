@@ -319,3 +319,19 @@ def test_a_real_architect_from_the_sources_cannot_join_the_plot():
 
     assert codes(evaluate(edit(BASE.plan, plot))) == ["REAL_PERSON_IN_FICTION"]
     assert evaluate(edit(BASE.plan, fact_only)).report.ok
+
+
+def test_a_link_in_the_plan_must_be_a_claims_source_url():
+    def invented_link(data):
+        checkpoint(data, "stop_1")["activity"]["prompt"] = "Read about it at https://en.wikipedia.org/wiki/27288498 first."
+
+    def sourced_link(data):
+        url = data["places"][1]["claims"][0]["source_urls"][0]
+        checkpoint(data, "stop_2")["activity"]["prompt"] += f" Background: {url}"
+
+    def hidden(data):
+        data["story"]["beats"][0]["summary"] = "You locate the dead drop behind the stonework."
+
+    assert codes(evaluate(edit(BASE.plan, invented_link))) == ["UNSOURCED_LINK"]
+    assert evaluate(edit(BASE.plan, sourced_link)).report.ok
+    assert codes(evaluate(edit(BASE.plan, hidden))) == ["INVENTED_PROP"]

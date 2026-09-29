@@ -50,14 +50,16 @@ CameraLookup = Callable[[str], CameraCheckpoint | None]
 
 # Props a story might pretend are waiting at a real place. Fiction should arrive in chat instead.
 _PROP = (r"(?:note|envelope|chalk|mark(?:ing)?|package|parcel|key|card|letter|sticker|tape|microfilm|film|token|coin|"
-         r"capsule|briefcase|bag|box|flyer|poster|map|photo(?:graph)?|transmitter|bug|disk|drive|folder|dossier)s?")
+         r"capsule|briefcase|bag|box|flyer|poster|map|photo(?:graph)?|transmitter|bug|disk|drive|folder|dossier|"
+         r"dead drop|cache|stash)s?")
 _ON_SITE = [  # asked in an activity prompt
     re.compile(rf"\b(?:find|look for|locate|search for|retrieve|collect|pick up|grab|dig up|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
     re.compile(rf"\b(?:left|hid|hidden|stashed|placed|taped|wedged|tucked|planted|dropped)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
     re.compile(rf"\b{_PROP}\b[^.?!]{{0,40}}\b(?:left|hidden|stashed|placed|taped|wedged|tucked|planted)\b", re.I),
 ]
+_URL = re.compile(r"https?://[^\s)\]>\"']+")
 _ARCHITECTS = re.compile(r"architect/builder ([^;]+);")  # the LPC building record claims name them
-_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b"
+_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|locate|recover|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b"
                     rf"|\b(?:handed to you|hands you|gives you|passes you|slips you|falls into your hands)\b", re.I)
 
 
@@ -252,6 +254,13 @@ def evaluate_plan(
 
     # --- Places and activities ---
     claims = {claim.claim_id: (place.place_id, claim) for place in plan.places for claim in place.claims}
+    sourced = {str(url).rstrip("/") for place in plan.places for claim in place.claims for url in claim.source_urls}
+    story_text = [(b.checkpoint_id, f"{b.summary} {b.reveals or ''}") for b in plan.story.beats]
+    for checkpoint_id, text in [*((c.checkpoint_id, c.activity.prompt) for c in remaining), *story_text]:
+        for url in _URL.findall(text):
+            if url.rstrip("/.,;") not in sourced:
+                flag("UNSOURCED_LINK", f"{url} is not a source URL of any claim in the plan; link only URLs copied from "
+                                       "the claims' source_urls, or leave the link out.", checkpoint_id)
     notes = []
     for checkpoint in remaining:
         place = places.get(checkpoint.place_id)

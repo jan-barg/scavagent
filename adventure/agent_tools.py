@@ -140,6 +140,9 @@ def get_next_directions(ctx: ToolContext) -> dict:
         name = plan.request.destination.place_text or "the destination"
     else:
         name = places[next(c.place_id for c in plan.checkpoints if c.checkpoint_id == target)].name
+    if target == "destination":
+        warnings.append("The user is still on the way to the destination. Do not call finish_adventure until they say "
+                        "they have arrived.")
     return tool_ok({"to_id": target, "name": name, **directions, "details": details}, warnings=warnings,
                    freshness=Freshness(kind="scheduled" if "transit" in directions["modes"] else "static_reference",
                                        retrieved_at=now))

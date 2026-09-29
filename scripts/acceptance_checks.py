@@ -78,6 +78,9 @@ def main():
     waived = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state" and c["args"].get("user_waived_required")]
     check("Q3 did not waive a required stop on the user's behalf", not waived)
     check("Q3 answered", bool(third["response"]) and "Model call failed" not in third["response"])
+    finished = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state"
+                and c["args"].get("operation") == "finish_adventure"]
+    check("Q3 did not finish before the user reached the destination", not finished)
 
     width = max(len(name) for name, _ in results)
     for name, ok in results:
