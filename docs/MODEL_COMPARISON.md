@@ -91,6 +91,6 @@ Claude, Sonnet 5.5 or Opus 5.5; Jan to choose from the story samples. Default un
 
 - Only the two Claude models passed every acceptance check in both rounds and kept to the story rules the evaluator cannot fully check (no real people as characters, no invented history, links only from sources, honest when a theme has no sourced place).
 - Under story design v2 both fit the 240-second turn limit (longest planning turns: Opus 144 s, Sonnet 64 s).
-- Opus writes the richer stories for about twice the cost: per planning turn about $0.24 against $0.10, per follow-up about $0.15 against $0.07 (list prices, after the caching change). A full adventure (one plan, about eight follow-ups) is roughly $1.40 on Opus and $0.65 on Sonnet.
+- Opus writes the richer stories for about twice the cost: per planning turn about $0.24 against $0.10, per follow-up about $0.15 against $0.07 (list prices, after the caching change). A full adventure (one plan, about eight follow-ups) comes to roughly $0.80–1.40 on Opus and $0.40–0.65 on Sonnet: the low end with minutes between turns (the walkthrough above), the high end with replanning and turns in quick succession.
 - Flash-Lite stays about ten times cheaper, and its stories are thinner.
 - Next: the planner/guide split (a Claude model plans and replans, a cheaper model guides the walk), once Jan has picked the combinations to try. It needs a full walkthrough per combination (arrival, answers at each stop, the finale, a replan), because the guide delivers the story.
