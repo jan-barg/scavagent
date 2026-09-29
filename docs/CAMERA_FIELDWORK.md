@@ -19,6 +19,8 @@ uv run python -m scripts.calibrate_camera import-spots SPOTS_DIR --evidence EVID
 
 `EVIDENCE_DIR` is the `camera-evidence` folder in Jan's `Agents/agent-handoffs/` (the workbench's `still_file` paths are relative to it). `import-spots` gives each spot a checkpoint id such as `img_central_park_west_at_86_st_a`, dates it by the still's retrieval time, records the still's SHA-256 and the workbench spot id in `field_log`, skips spots already imported, and refuses incomplete spots rather than filling them in.
 
+**Claude drafts (September 29):** 146 cameras on the Upper East/West Side and in Midtown were drafted from their stills by vision agents; each draft was pinned with `scripts/camera_geometry.py` and shown in the workbench for approval. Jan approved 151 spots on 102 cameras, and they were imported into the catalogue. An approved draft is logged with its draft id (`field_log[].drafted_by`), so an entry that started as a Claude draft stays distinguishable from one a person marked.
+
 ## Field route
 
 ### What the candidate cameras show (checked September 29, 2026, about 1:30 PM)

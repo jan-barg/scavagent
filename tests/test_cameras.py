@@ -11,7 +11,7 @@ import pytest
 import requests
 
 from integrations import cameras as cam
-from schemas import CameraCheckpoint, PhotoAsset, ToolResult
+from schemas import CameraCheckpoint, LatLng, PhotoAsset, ToolResult
 
 STAMP = datetime(2026, 9, 28, 12, tzinfo=timezone.utc)
 POINT = {"lat": 40.785, "lng": -73.97}
@@ -91,16 +91,24 @@ def no_accidental_network(monkeypatch):
     monkeypatch.setattr(cam.requests, "get", denied)
 
 
-def test_seed_contains_only_disabled_incomplete_candidates():
+def test_committed_checkpoints_are_verified_and_backed_by_a_field_log():
     data = json.loads(cam.CATALOGUE_PATH.read_text())
-    assert len(data["candidates"]) >= 3
-    assert data["checkpoints"] == []
-    for candidate in data["candidates"]:
-        assert candidate["verification_status"] == "unverified"
-        assert candidate["enabled"] is False
+    for candidate in data["candidates"]:  # candidates stay incomplete; calibrated positions are separate records
+        assert candidate["verification_status"] == "unverified" and candidate["enabled"] is False
         assert candidate["stand_location"] is None
-        assert candidate["positioning_instructions"] is None
-    result(cam.find_camera_checkpoints(point=POINT), "NO_MATCH")
+    records = cam.load_checkpoints()
+    log = {entry["checkpoint_id"]: entry for entry in data.get("field_log", [])}
+    mounts = {c["camera_id"]: c["camera_mount_location"] for c in data["candidates"]}
+    for record in records:
+        assert record.verification_status in ("field_verified", "image_verified") and record.enabled
+        assert (record.last_image_verified_at if record.verification_status == "image_verified" else record.last_field_verified_at)
+        entry = log[record.checkpoint_id]  # every entry names its evidence and who checked it
+        assert entry["evidence_stills"] and all(len(e["sha256"]) == 64 for e in entry["evidence_stills"])
+        assert entry["verified_by"] and "TEST" not in entry["verified_by"]
+        assert not record.checkpoint_id.startswith(("candidate_", "fixture_", "test_", "rehearsal"))
+        if record.camera_id in mounts:
+            assert cam._distance(record.stand_location, LatLng(**mounts[record.camera_id])) >= 1
+    assert len({r.checkpoint_id for r in records}) == len(records)
 
 
 def test_string_offline_unknown_and_online_normalization(monkeypatch):

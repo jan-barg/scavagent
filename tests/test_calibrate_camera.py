@@ -31,7 +31,8 @@ def no_network(monkeypatch):
 def catalogue(tmp_path, monkeypatch):
     """A copy of the committed catalogue at a temporary path the app loads from."""
     path = tmp_path / "camera_catalogue.json"
-    path.write_text(cameras.CATALOGUE_PATH.read_text())
+    base = json.loads(cameras.CATALOGUE_PATH.read_text())
+    path.write_text(json.dumps({**base, "checkpoints": [], "field_log": []}))  # the helper's own work only
     monkeypatch.setattr(cameras, "CATALOGUE_PATH", path)
     return path
 
