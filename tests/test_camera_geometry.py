@@ -77,3 +77,24 @@ def test_camera_names_become_two_streets():
 def test_described_distances_stay_within_the_import_limit():
     pin = geo.locate(CENTER, STREET, AVENUE, "north", "east", 30)
     assert cameras._distance(pin, CENTER) < 250
+
+
+def test_an_overloaded_overpass_answer_falls_back_to_the_next_server(monkeypatch):
+    """An overloaded server answers 200 with an error remark and no data; that is not 'no intersection'."""
+    center = CENTER
+    def way(name, pts):
+        return {"type": "way", "tags": {"name": name}, "geometry": [{"lat": p.lat, "lon": p.lng} for p in pts]}
+    good = {"elements": [
+        {"type": "node", "lat": center.lat, "lon": center.lng},
+        way("Park Avenue", [grid_point(0, -80), grid_point(0, 80)]),
+        way("East 116th Street", [grid_point(-80, 0), grid_point(80, 0)]),
+    ]}
+    answers = {"https://busy": {"elements": [], "remark": "runtime error: Query timed out"}, "https://ok": good}
+    monkeypatch.setattr(geo, "fetch_json", lambda provider, method, url, **kw: answers[url])
+    found, streets = geo.intersection_streets("Park Ave @ E 116 Street", center, urls=["https://busy", "https://ok"])
+    assert [s.name for s in streets] == ["Park Avenue", "East 116th Street"]
+    assert cameras._distance(found, center) < 1
+
+    answers["https://ok"] = answers["https://busy"]
+    with pytest.raises(ValueError, match="did not answer"):
+        geo.intersection_streets("Park Ave @ E 116 Street", center, urls=["https://busy", "https://ok"])

@@ -123,7 +123,7 @@ def camera_streets(name):
     return out if len(out) == 2 else None
 
 
-def intersection_streets(camera_name, mount: LatLng, radius_m=250):
+def intersection_streets(camera_name, mount: LatLng, radius_m=250, urls=None):
     """(center, [Street, Street]) for a camera's intersection: one Overpass query around its mount."""
     names = camera_streets(camera_name)
     if not names:
@@ -134,12 +134,16 @@ def intersection_streets(camera_name, mount: LatLng, radius_m=250):
     query = (f'[out:json][timeout:25];way{near}["highway"]["name"~"{a}",i]->.a;'
              f'way{near}["highway"]["name"~"{b}",i]->.b;node(w.a)(w.b)->.x;.x out;.a out tags geom;.b out tags geom;')
     body, error = None, None
-    for url in geocoding.OVERPASS_URLS:
+    for url in urls or geocoding.OVERPASS_URLS:
         try:
             body = fetch_json("overpass", "POST", url, data={"data": query}, timeout=30)
-            break
         except UpstreamError as e:  # rate limits and overload are common; try the mirror
             error = e
+            continue
+        if "error" in str(body.get("remark", "")).lower():  # an overloaded server answers 200 with no data
+            body, error = None, body["remark"][:120]
+            continue
+        break
     if body is None:
         raise ValueError(f"OpenStreetMap (Overpass) did not answer: {error}")
     elements = body.get("elements", [])
