@@ -4,20 +4,18 @@ Which model should run Scavagent? Measured by Claude (Jan's agent) on September 
 
 ## Access on Vertex AI (September 29, 2026)
 
-Every model runs through `SCAVAGENT_MODEL` (LiteLLM string) and `VERTEX_LOCATION`. The Cloud Run service account's `roles/aiplatform.user` covers all of them.
+Every model runs through `SCAVAGENT_MODEL` (LiteLLM string) and `VERTEX_LOCATION`. The Cloud Run service account's `roles/aiplatform.user` covers the Vertex models; Claude runs through Anthropic's API with a key (docs/DEPLOY.md, "Claude through Anthropic's API").
 
 | Model | `SCAVAGENT_MODEL` | `VERTEX_LOCATION` | Status |
 |---|---|---|---|
-| Claude Opus 5.5 | `vertex_ai/claude-opus-5-5` | `global` | Enabled in Model Garden (Anthropic access form approved); quota 0, so every call returns 429 until the quota request is granted |
-| Claude Sonnet 5.5 | `vertex_ai/claude-sonnet-5-5` | `global` | Same as Opus 5.5 |
-| Claude Opus 5 / Sonnet 5 | `vertex_ai/claude-opus-5`, `vertex_ai/claude-sonnet-5` | `global` | Enabled; quota 0 |
+| Claude Opus 5.5 | `anthropic/claude-opus-5-5` (Anthropic's API, `ANTHROPIC_API_KEY`) | ignored | Works |
+| Claude Sonnet 5.5 | `anthropic/claude-sonnet-5-5` | ignored | Works |
+| Claude on Vertex | `vertex_ai/claude-opus-5-5`, `vertex_ai/claude-sonnet-5-5` (also `-5` versions) | `global` only (404 in every region tried) | Enabled in Model Garden, but quota 0 and none will be granted for this project's billing setup: every call returns 429 |
 | Gemini 3.5 Flash-Lite | `vertex_ai/gemini-3.5-flash-lite` | `global` | Works (current default) |
 | Gemini 3.5 Flash | `vertex_ai/gemini-3.5-flash` | `global` | Works; occasional 429 (shared capacity) |
 | Kimi K2 Thinking | `vertex_ai/moonshotai/kimi-k2-thinking-maas` | `global` | Works |
 | Qwen3 235B Instruct | `vertex_ai/qwen/qwen3-235b-a22b-instruct-2507-maas` | `global` | Works |
 | gpt-oss-120b | `vertex_ai/openai/gpt-oss-120b-maas` | `us-central1` | Works, but most calls are refused with 429 "too many concurrent requests", even one at a time |
-
-Claude quota: IAM & Admin → Quotas, "Online prediction requests per base model per minute", region `global`, base models `anthropic-claude-opus` and `anthropic-claude-sonnet`.
 
 ## Method
 
