@@ -120,3 +120,21 @@ def test_the_grid_fallback_places_spots_like_the_mapped_grid():
     assert geo.describe(center, [avenue, street], pin)["side_of_street"] == "north side of 46th Street, about 30 m east of Broadway"
     with pytest.raises(ValueError, match="not an avenue meeting"):
         geo.grid_streets("E 63 St @ QBB", CENTER)
+
+
+def test_a_three_street_camera_name_is_not_turned_into_one_invented_street():
+    assert geo.camera_streets("Broadway @ 6 Ave / 33 St") is None
+    with pytest.raises(ValueError, match="Cannot read two streets"):
+        geo.grid_streets("Broadway @ 6 Ave / 33 St", CENTER)
+
+
+def test_a_spot_on_a_wide_avenues_sidewalk_is_described_on_the_avenue():
+    """1st Avenue at 40th Street is ~70 m wide (tunnel plus service roads): its sidewalk is 35 m from its center."""
+    avenue = geo.Street("1st Avenue", (math.sin(G), math.cos(G)), 35.0)
+    street = geo.Street("40th Street", (-math.cos(G), math.sin(G)), 8.0)
+    along = geo.locate(CENTER, avenue, street, "east", "north", 30)
+    assert geo.describe(CENTER, [avenue, street], along)["side_of_street"] == \
+        "east side of 1st Avenue, about 30 m north of 40th Street"
+    near_corner = geo.locate(CENTER, avenue, street, "east", "north", 8)
+    assert geo.describe(CENTER, [avenue, street], near_corner)["side_of_street"] == \
+        "northeast corner of 1st Avenue and 40th Street"

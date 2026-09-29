@@ -934,29 +934,6 @@
       "enabled": true
     },
     {
-      "checkpoint_id": "img_broadway_at_6_ave_33_st_a",
-      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
-      "stand_location": {
-        "lat": 40.7496105,
-        "lng": -73.9887283
-      },
-      "address": "6th Avenue 33rd Street at Broadway",
-      "landmark": "AEROPOSTALE corner at 6th Avenue and West 33rd Street",
-      "side_of_street": "south side of 6th Avenue 33rd Street, about 60 m west of Broadway",
-      "positioning_instructions": "At the southwest corner of 6th Avenue and 33rd Street, below the AEROPOSTALE sign, stand on the 33rd Street sidewalk a few steps from the corner, just to the 33rd Street side of the tall pole with the blue street-name signs. Face the intersection toward 6th Avenue, where the camera is.",
-      "reference_view_notes": "Looks up 33rd Street past a wide crosswalk, with an AEROPOSTALE sign on the left corner and Bank of America and H&M signs on the right corner; both corners are crowded with pedestrians.",
-      "person_region": [
-        0.26,
-        0.55,
-        0.3,
-        0.71
-      ],
-      "verification_status": "image_verified",
-      "last_image_verified_at": "2026-09-29T19:22:15Z",
-      "visibility_notes": "Pedestrians stand here in the still and appear about 1/7 of the frame height; the street-sign pole and the metal crowd barricades to its left can hide someone standing right next to them.",
-      "enabled": true
-    },
-    {
       "checkpoint_id": "img_park_ave_at_e_116_street_a",
       "camera_id": "175cc1f1-0543-41c9-85fb-464ec29687de",
       "stand_location": {
@@ -1854,29 +1831,6 @@
       "enabled": true
     },
     {
-      "checkpoint_id": "img_broadway_at_6_ave_33_st_b",
-      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
-      "stand_location": {
-        "lat": 40.7497362,
-        "lng": -73.9886363
-      },
-      "address": "6th Avenue 33rd Street at Broadway",
-      "landmark": "Bank of America corner at 6th Avenue and West 33rd Street",
-      "side_of_street": "north side of 6th Avenue 33rd Street, about 60 m west of Broadway",
-      "positioning_instructions": "At the northwest corner of 6th Avenue and 33rd Street, stand on the 33rd Street sidewalk below the Bank of America sign, a couple of steps back from the curb where the crosswalk across 33rd Street begins. Face the intersection toward 6th Avenue and Broadway, where the camera is.",
-      "reference_view_notes": "Looks up 33rd Street past a wide crosswalk, with an AEROPOSTALE sign on the left corner and Bank of America and H&M signs on the right corner; both corners are crowded with pedestrians.",
-      "person_region": [
-        0.86,
-        0.55,
-        0.91,
-        0.71
-      ],
-      "verification_status": "image_verified",
-      "last_image_verified_at": "2026-09-29T19:22:15Z",
-      "visibility_notes": "Pedestrians stand here in the still and appear about 1/6 of the frame height; crowds waiting to cross can overlap a visitor.",
-      "enabled": true
-    },
-    {
       "checkpoint_id": "img_3_ave_at_76_st_a",
       "camera_id": "3df06012-4c10-46e1-81d0-55405342e8df",
       "stand_location": {
@@ -2242,29 +2196,6 @@
       "verification_status": "image_verified",
       "last_image_verified_at": "2026-09-29T19:23:50Z",
       "visibility_notes": "An adult here is about 1/5 of the frame tall; the sidewalk shed shades this area, so a person is somewhat dim, and the signal pole is just to the left.",
-      "enabled": true
-    },
-    {
-      "checkpoint_id": "img_1_ave_at_40_st_a",
-      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
-      "stand_location": {
-        "lat": 40.7476915,
-        "lng": -73.97026
-      },
-      "address": "1st Avenue at 40th Street",
-      "landmark": "Fence-side sidewalk on the east side of 1st Avenue north of 40th Street",
-      "side_of_street": "north side of 40th Street, about 35 m east of 1st Avenue",
-      "positioning_instructions": "On the east sidewalk of 1st Avenue north of 40th Street, walk along the tall dark fence about 30 m from the corner, past the street lamp by the fence. Stand in the middle of the sidewalk and face south toward 40th Street.",
-      "reference_view_notes": "Looks north up 1st Avenue, with the long fence and a green lot along the right sidewalk and flags on poles in the far right distance.",
-      "person_region": [
-        0.88,
-        0.65,
-        0.92,
-        0.78
-      ],
-      "verification_status": "image_verified",
-      "last_image_verified_at": "2026-09-29T19:24:09Z",
-      "visibility_notes": "A person here is about an eighth of the frame tall, like the pedestrian walking there in this still, with open sidewalk around.",
       "enabled": true
     },
     {
@@ -2771,29 +2702,6 @@
       "verification_status": "image_verified",
       "last_image_verified_at": "2026-09-29T19:21:45Z",
       "visibility_notes": "An adult here is about 12-14% of the frame height on an open, uncluttered sidewalk; the signal pole and trash can are just to the left, so stand to their right (building side). No people in the still.",
-      "enabled": true
-    },
-    {
-      "checkpoint_id": "img_1_ave_at_40_st_b",
-      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
-      "stand_location": {
-        "lat": 40.7475576,
-        "lng": -73.9703569
-      },
-      "address": "1st Avenue at 40th Street",
-      "landmark": "Signal pole on the east side of 1st Avenue at 40th Street",
-      "side_of_street": "north side of 40th Street, about 35 m east of 1st Avenue",
-      "positioning_instructions": "Stand on the east sidewalk of 1st Avenue just north of 40th Street, a step to the fence side of the corner traffic-signal pole (the one with a small red sign low on it). Face south toward 40th Street, where the camera is.",
-      "reference_view_notes": "Looks north up 1st Avenue, with a red bus lane on the right, a green protected bike lane on the left, a brick building with arched ground-floor openings at left, and a fenced green lot along the right sidewalk.",
-      "person_region": [
-        0.83,
-        0.68,
-        0.87,
-        0.86
-      ],
-      "verification_status": "image_verified",
-      "last_image_verified_at": "2026-09-29T19:24:09Z",
-      "visibility_notes": "A person here is about a sixth of the frame tall on an open sidewalk with nothing in front.",
       "enabled": true
     },
     {
@@ -3574,6 +3482,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "06wq7xuv1nky4w9vpo3e",
+      "camera_mount": {
+        "lat": 40.7441114245984,
+        "lng": -73.9956503622239
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_96_2"
@@ -3596,6 +3508,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "09t4o3ipng5cok8cfy0h",
+      "camera_mount": {
+        "lat": 40.7579183170509,
+        "lng": -73.9776717716469
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_162_1"
@@ -3618,6 +3534,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "0tx3rmie89j2g6h4k3xd",
+      "camera_mount": {
+        "lat": 40.7464005840423,
+        "lng": -73.9797313879486
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_100_2"
@@ -3640,6 +3560,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "129fw35oi2d9y9epd403",
+      "camera_mount": {
+        "lat": 40.7534920464028,
+        "lng": -73.9808970054167
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_130_1"
@@ -3662,6 +3586,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "17j7u2c4ac9h4xq50n9z",
+      "camera_mount": {
+        "lat": 40.752946,
+        "lng": -73.98548
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_127_1"
@@ -3684,6 +3612,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "18m4dndl8zr67pr986p3",
+      "camera_mount": {
+        "lat": 40.7477755134971,
+        "lng": -73.9829511142234
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_106_2"
@@ -3706,6 +3638,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "1beykw6if8fju0wfyvic",
+      "camera_mount": {
+        "lat": 40.771797,
+        "lng": -73.979217
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_244_1"
@@ -3728,6 +3664,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "1h54ne68z45dwttgcf2z",
+      "camera_mount": {
+        "lat": 40.768651,
+        "lng": -73.969814
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_234_2"
@@ -3750,6 +3690,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "1nsnuhqrsnkdqrxuijvu",
+      "camera_mount": {
+        "lat": 40.757953,
+        "lng": -73.98549
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_163_1"
@@ -3772,6 +3716,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "1vy7gf8emwqvuxuv9d1t",
+      "camera_mount": {
+        "lat": 40.779481,
+        "lng": -73.973578
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_257_1"
@@ -3794,6 +3742,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "253zezw1o08uy4bmfdd2",
+      "camera_mount": {
+        "lat": 40.758722,
+        "lng": -73.98536
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_177_1"
@@ -3816,6 +3768,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "27i91k8k22o8j7n02rxk",
+      "camera_mount": {
+        "lat": 40.7643348872061,
+        "lng": -73.9772018595711
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_222_1"
@@ -3838,6 +3794,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "2n5mez2t589cs0tfma6v",
+      "camera_mount": {
+        "lat": 40.756583,
+        "lng": -73.986156
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_150_1"
@@ -3860,6 +3820,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "2ym172t4bx2oi91u1yh8",
+      "camera_mount": {
+        "lat": 40.758741,
+        "lng": -73.985437
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_178_1"
@@ -3882,6 +3846,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "2youjuu9ul8dtkytdvze",
+      "camera_mount": {
+        "lat": 40.75907,
+        "lng": -73.97846
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_186_2"
@@ -3904,6 +3872,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "30xpri4dt89xdtef0gf6",
+      "camera_mount": {
+        "lat": 40.75973,
+        "lng": -73.97807
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_195_1"
@@ -3926,6 +3898,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "38olxh8cqip9e26eskmy",
+      "camera_mount": {
+        "lat": 40.7464005840423,
+        "lng": -73.9797313879486
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_100_1"
@@ -3948,6 +3924,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "3ia8993cwobbzq83yfns",
+      "camera_mount": {
+        "lat": 40.7477755134971,
+        "lng": -73.9829511142234
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_106_1"
@@ -3970,6 +3950,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "486ln5p6b19syi5vg94a",
+      "camera_mount": {
+        "lat": 40.75736,
+        "lng": -73.986
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_157_1"
@@ -3992,6 +3976,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "4aedsspnikbhhsnm3vf9",
+      "camera_mount": {
+        "lat": 40.771797,
+        "lng": -73.979217
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_244_2"
@@ -4014,6 +4002,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "4kcouhq3qxcl54bz9r3m",
+      "camera_mount": {
+        "lat": 40.7609271914359,
+        "lng": -73.9691468531185
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_205_1"
@@ -4036,6 +4028,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "4kju7ig6wa2937xvg7i2",
+      "camera_mount": {
+        "lat": 40.7609271914359,
+        "lng": -73.9691468531185
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_205_2"
@@ -4058,6 +4054,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "4nusddtictmn6aimtr92",
+      "camera_mount": {
+        "lat": 40.7552116061846,
+        "lng": -73.9712421172846
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_140_1"
@@ -4080,6 +4080,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "5imms7yva9m0qait7ook",
+      "camera_mount": {
+        "lat": 40.760252895987,
+        "lng": -73.967542473241
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_200_2"
@@ -4102,6 +4106,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "5lqhblgdn7bt4kjfs285",
+      "camera_mount": {
+        "lat": 40.769303,
+        "lng": -73.980882
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_237_2"
@@ -4124,6 +4132,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "5vrhmky2xfuh5ntjzlj2",
+      "camera_mount": {
+        "lat": 40.787916,
+        "lng": -73.955752
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_268_1"
@@ -4146,6 +4158,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "5zr7xcb72v5reip9697d",
+      "camera_mount": {
+        "lat": 40.784922,
+        "lng": -73.982865
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_263_2"
@@ -4168,6 +4184,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "6ew58row1ttpmb1jwo43",
+      "camera_mount": {
+        "lat": 40.757839,
+        "lng": -73.979362
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_161_2"
@@ -4190,6 +4210,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "6i4idnbjn32mvzzvh2ki",
+      "camera_mount": {
+        "lat": 40.772441,
+        "lng": -73.978751
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_246_2"
@@ -4212,6 +4236,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "6iti2zj7vf35dby3ht0l",
+      "camera_mount": {
+        "lat": 40.7786,
+        "lng": -73.9816
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_255_2"
@@ -4234,6 +4262,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "6ldu8spf3fzvm3cxq2kf",
+      "camera_mount": {
+        "lat": 40.761676,
+        "lng": -73.986581
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_210_1"
@@ -4256,6 +4288,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "6lqdlgs1ps6suh6evw5h",
+      "camera_mount": {
+        "lat": 40.759067,
+        "lng": -73.97261
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_185_1"
@@ -4278,6 +4314,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "6mjf8741sib6wmg4df0w",
+      "camera_mount": {
+        "lat": 40.77114,
+        "lng": -73.963907
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_243_1"
@@ -4300,6 +4340,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "753ol3ba14eqd4is7078",
+      "camera_mount": {
+        "lat": 40.7966,
+        "lng": -73.9408
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_277_1"
@@ -4322,6 +4366,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "7skbjhg9c359q58ymiw5",
+      "camera_mount": {
+        "lat": 40.7465085991952,
+        "lng": -74.001366842392
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_101_2"
@@ -4344,6 +4392,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "7t3fpblnbmq6kqychnp4",
+      "camera_mount": {
+        "lat": 40.758711,
+        "lng": -73.985366
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_175_2"
@@ -4366,31 +4418,13 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "7txy3jlee4reg48amssk",
+      "camera_mount": {
+        "lat": 40.759663,
+        "lng": -73.995317
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_194_2"
-      }
-    },
-    {
-      "checkpoint_id": "img_broadway_at_6_ave_33_st_a",
-      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
-      "from_candidate": null,
-      "method": "image",
-      "verified_at": "2026-09-29T19:22:15+00:00",
-      "verified_by": "JB (approved a Claude draft) (camera workbench, 2026-09-29)",
-      "stand_location_source": "Claude: read from the still (inferred: no direction overlay; the camera looks across the near avenue up a narrower cross street (vehicles on it face the camera) with an AEROPOSTALE sign on the left corner and Bank of America and H&M signs on the right corner; the AEROPOSTALE store is believed to be in the Manhattan Mall on the southwest corner of 6th Avenue and 33rd Street, and the short green bike-lane segment at bottom left fits 6th Avenue's west-side bike lane), placed with OpenStreetMap street geometry",
-      "evidence_stills": [
-        {
-          "file": "20260929T192215Z.jpg",
-          "sha256": "082872d976ac77df99e1794e05acd5777ba9707bed638c3ce5824e6442b72350",
-          "bytes": 26432
-        }
-      ],
-      "note": "Evidence stills are kept outside Git; the hashes identify them.",
-      "workbench_spot_id": "81f43x5k9bde601cq6y2",
-      "drafted_by": {
-        "by": "Claude, from the still and OpenStreetMap street geometry",
-        "draft_id": "draft_112_2"
       }
     },
     {
@@ -4410,6 +4444,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "87d10hm7d51h6g5e67wq",
+      "camera_mount": {
+        "lat": 40.799265,
+        "lng": -73.94294
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_281_2"
@@ -4432,6 +4470,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "87higcf0whv196bzxvd8",
+      "camera_mount": {
+        "lat": 40.756583,
+        "lng": -73.986156
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_150_2"
@@ -4454,6 +4496,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "87qfwwfy08xwmot2xq85",
+      "camera_mount": {
+        "lat": 40.737876,
+        "lng": -73.980926
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_87_2"
@@ -4476,6 +4522,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "8ah9x4a1p8f9pkj79xfv",
+      "camera_mount": {
+        "lat": 40.769126,
+        "lng": -73.98858
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_236_1"
@@ -4498,6 +4548,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "8cuzwo1lgi2r33lmt7ga",
+      "camera_mount": {
+        "lat": 40.74095,
+        "lng": -74.0053
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_92_2"
@@ -4520,6 +4574,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "8khbdnxe0tkwweq8xx09",
+      "camera_mount": {
+        "lat": 40.7629820055328,
+        "lng": -73.9739858644822
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_216_1"
@@ -4542,6 +4600,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "8ssh9cshaumuxuwqzvzz",
+      "camera_mount": {
+        "lat": 40.7622962700164,
+        "lng": -73.9723570534941
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_213_1"
@@ -4564,6 +4626,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "90jv3yxzode9f965c5sk",
+      "camera_mount": {
+        "lat": 40.7548488195947,
+        "lng": -73.9841249380499
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_138_2"
@@ -4586,6 +4652,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "9qz6hdpy8kbnhf90elyw",
+      "camera_mount": {
+        "lat": 40.780167,
+        "lng": -73.957114
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_259_1"
@@ -4608,6 +4678,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "a12xmahp2d160jcts1r2",
+      "camera_mount": {
+        "lat": 40.776331,
+        "lng": -73.962123
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_252_1"
@@ -4630,6 +4704,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "a2cjsq36mpvt8nfa94da",
+      "camera_mount": {
+        "lat": 40.768651,
+        "lng": -73.969814
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_234_1"
@@ -4652,6 +4730,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "a47odwnj80nkrs62n5b6",
+      "camera_mount": {
+        "lat": 40.770429,
+        "lng": -73.962214
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_240_2"
@@ -4674,6 +4756,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "a7emk4vpst9z52mepla2",
+      "camera_mount": {
+        "lat": 40.765534775125,
+        "lng": -73.9800400250842
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_226_1"
@@ -4696,6 +4782,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "afsvvwr5ofkw0ia1rkzi",
+      "camera_mount": {
+        "lat": 40.759067,
+        "lng": -73.97261
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_185_2"
@@ -4718,6 +4808,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "am3pccam9moxtsnc2z5n",
+      "camera_mount": {
+        "lat": 40.7534082474864,
+        "lng": -73.9963142012874
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_128_1"
@@ -4740,6 +4834,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "aq5vmdsokh6jm4825pfw",
+      "camera_mount": {
+        "lat": 40.75872,
+        "lng": -73.98539
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_176_1"
@@ -4762,6 +4860,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "bbpta8dr266pk0ujk3cx",
+      "camera_mount": {
+        "lat": 40.7643348872061,
+        "lng": -73.9772018595711
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_222_2"
@@ -4784,6 +4886,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "bcuhp2mfsj2gsrllvtkq",
+      "camera_mount": {
+        "lat": 40.760252895987,
+        "lng": -73.967542473241
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_200_1"
@@ -4806,6 +4912,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "bdh504ut3sn2ev83uegm",
+      "camera_mount": {
+        "lat": 40.7786,
+        "lng": -73.9816
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_255_1"
@@ -4828,6 +4938,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "bircbrl2cuxb42yuifgs",
+      "camera_mount": {
+        "lat": 40.776225,
+        "lng": -73.975974
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_251_1"
@@ -4850,6 +4964,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "bvaitob1n2accyet1nv2",
+      "camera_mount": {
+        "lat": 40.7579183170509,
+        "lng": -73.9776717716469
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_162_2"
@@ -4872,6 +4990,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "byx6gle8zfsvzcr83myt",
+      "camera_mount": {
+        "lat": 40.77297,
+        "lng": -73.981993
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_247_1"
@@ -4894,6 +5016,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "cc0ex25ni9uuvky4m1ee",
+      "camera_mount": {
+        "lat": 40.787693,
+        "lng": -73.975016
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_267_1"
@@ -4916,6 +5042,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "cfhwoxxsc40haerwh2uj",
+      "camera_mount": {
+        "lat": 40.75856,
+        "lng": -73.9772
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_172_2"
@@ -4938,6 +5068,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "crwydjfouajua69fz4r5",
+      "camera_mount": {
+        "lat": 40.7589811180163,
+        "lng": -73.9939438000961
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_181_1"
@@ -4960,6 +5094,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "cs9an6ezd47xciruadsj",
+      "camera_mount": {
+        "lat": 40.766796,
+        "lng": -73.9829
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_228_1"
@@ -4982,6 +5120,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "csjgz9igmqqbaw1v63g7",
+      "camera_mount": {
+        "lat": 40.7415700588724,
+        "lng": -73.9895780597063
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_93_1"
@@ -5004,6 +5146,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "daw60agrzifayqgdmpuw",
+      "camera_mount": {
+        "lat": 40.7441114245984,
+        "lng": -73.9956503622239
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_96_1"
@@ -5026,6 +5172,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "dbwnsa4dgmiwu3s2oepq",
+      "camera_mount": {
+        "lat": 40.7534082474864,
+        "lng": -73.9963142012874
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_128_2"
@@ -5048,6 +5198,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "dmic7efr3a8iltik967t",
+      "camera_mount": {
+        "lat": 40.756691,
+        "lng": -73.986476
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_152_1"
@@ -5070,6 +5224,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "dz4kz2trd9ijxhjwfsjo",
+      "camera_mount": {
+        "lat": 40.751512,
+        "lng": -73.993913
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_121_1"
@@ -5092,6 +5250,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "e4yunmvaa94lwqjkthni",
+      "camera_mount": {
+        "lat": 40.769126,
+        "lng": -73.98858
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_236_2"
@@ -5114,6 +5276,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "e6qigf9qldxjzrdgcsf9",
+      "camera_mount": {
+        "lat": 40.787693,
+        "lng": -73.975016
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_267_2"
@@ -5136,6 +5302,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "enayecgezy1g422a25hp",
+      "camera_mount": {
+        "lat": 40.770316,
+        "lng": -73.991381
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_239_1"
@@ -5158,6 +5328,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "er7qzdjqws4caxvywz3y",
+      "camera_mount": {
+        "lat": 40.763617,
+        "lng": -73.981436
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_217_1"
@@ -5180,6 +5354,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "f4canemq72x4rin1bcq2",
+      "camera_mount": {
+        "lat": 40.763753,
+        "lng": -73.973548
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_218_1"
@@ -5202,6 +5380,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "f5elx43sl6y26zukyb9n",
+      "camera_mount": {
+        "lat": 40.7548488195947,
+        "lng": -73.9841249380499
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_138_1"
@@ -5224,6 +5406,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "fvjqc92d7mkl5kc131dv",
+      "camera_mount": {
+        "lat": 40.7607911152618,
+        "lng": -73.9982590769288
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_203_1"
@@ -5246,31 +5432,13 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "g8xhl3bve4wee0ki9nmf",
+      "camera_mount": {
+        "lat": 40.754297,
+        "lng": -73.976936
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_135_1"
-      }
-    },
-    {
-      "checkpoint_id": "img_broadway_at_6_ave_33_st_b",
-      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
-      "from_candidate": null,
-      "method": "image",
-      "verified_at": "2026-09-29T19:22:15+00:00",
-      "verified_by": "JB (approved a Claude draft) (camera workbench, 2026-09-29)",
-      "stand_location_source": "Claude: read from the still (inferred: no direction overlay; the camera looks across the near avenue up a narrower cross street (vehicles on it face the camera) with an AEROPOSTALE sign on the left corner and Bank of America and H&M signs on the right corner; the AEROPOSTALE store is believed to be in the Manhattan Mall on the southwest corner of 6th Avenue and 33rd Street, and the short green bike-lane segment at bottom left fits 6th Avenue's west-side bike lane), placed with OpenStreetMap street geometry",
-      "evidence_stills": [
-        {
-          "file": "20260929T192215Z.jpg",
-          "sha256": "082872d976ac77df99e1794e05acd5777ba9707bed638c3ce5824e6442b72350",
-          "bytes": 26432
-        }
-      ],
-      "note": "Evidence stills are kept outside Git; the hashes identify them.",
-      "workbench_spot_id": "gua02pxzx9a3t904442s",
-      "drafted_by": {
-        "by": "Claude, from the still and OpenStreetMap street geometry",
-        "draft_id": "draft_112_1"
       }
     },
     {
@@ -5290,6 +5458,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "gvl29umqf7bze2lymf3e",
+      "camera_mount": {
+        "lat": 40.77234,
+        "lng": -73.9587
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_245_1"
@@ -5312,6 +5484,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "gw9eu3mdzthnk98k2ix4",
+      "camera_mount": {
+        "lat": 40.770429,
+        "lng": -73.962214
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_240_1"
@@ -5334,6 +5510,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "h0c6lx7owg9hj94wihps",
+      "camera_mount": {
+        "lat": 40.7552720843545,
+        "lng": -73.9948547204017
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_141_1"
@@ -5356,6 +5536,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "h5fynat3cfnkfun2zr8g",
+      "camera_mount": {
+        "lat": 40.747287,
+        "lng": -73.989615
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_103_1"
@@ -5378,6 +5562,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "hnnsp8v61mn4ts7s3gnb",
+      "camera_mount": {
+        "lat": 40.754,
+        "lng": -73.9976
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_132_1"
@@ -5400,6 +5588,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "hrgxm67g1q3sfa8yalpm",
+      "camera_mount": {
+        "lat": 40.7465085991952,
+        "lng": -74.001366842392
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_101_1"
@@ -5422,6 +5614,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "hw4drp0t8rczftyu65xs",
+      "camera_mount": {
+        "lat": 40.7484435553342,
+        "lng": -73.9845677012874
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_107_1"
@@ -5444,6 +5640,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "hy28n1hb783cvv1fvtzt",
+      "camera_mount": {
+        "lat": 40.7507631595424,
+        "lng": -73.9744615986273
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_117_1"
@@ -5466,6 +5666,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "i3ut9scp14elknezliyh",
+      "camera_mount": {
+        "lat": 40.75856,
+        "lng": -73.9772
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_172_1"
@@ -5488,6 +5692,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "iatlaggzysrbk8tgl75s",
+      "camera_mount": {
+        "lat": 40.7397525513578,
+        "lng": -74.0025212013102
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_90_1"
@@ -5510,6 +5718,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "k7q8mlaxkhpekb29q876",
+      "camera_mount": {
+        "lat": 40.763617,
+        "lng": -73.981436
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_217_2"
@@ -5532,6 +5744,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "k9u7wyne0bya3c9rha6f",
+      "camera_mount": {
+        "lat": 40.7498342023994,
+        "lng": -73.9722170340956
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_115_1"
@@ -5554,6 +5770,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "kd0h2nc5b86uxurgoqwe",
+      "camera_mount": {
+        "lat": 40.7534920464028,
+        "lng": -73.9808970054167
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_130_2"
@@ -5576,6 +5796,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "kr4yevsf211khlupgwlq",
+      "camera_mount": {
+        "lat": 40.795015,
+        "lng": -73.944542
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_276_1"
@@ -5598,6 +5822,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "kwxs9h2x4haaskj7ht0a",
+      "camera_mount": {
+        "lat": 40.758711,
+        "lng": -73.985366
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_175_1"
@@ -5620,31 +5848,13 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "kxm4l2siidl7uagolguy",
+      "camera_mount": {
+        "lat": 40.765024,
+        "lng": -73.976689
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_224_1"
-      }
-    },
-    {
-      "checkpoint_id": "img_1_ave_at_40_st_a",
-      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
-      "from_candidate": null,
-      "method": "image",
-      "verified_at": "2026-09-29T19:24:09+00:00",
-      "verified_by": "JB (approved a Claude draft) (camera workbench, 2026-09-29)",
-      "stand_location_source": "Claude: read from the still (overlay (consistent: one-way northbound 1st Ave, with the protected bike lane on the left (west) and the red bus lane on the right (east))), placed with OpenStreetMap street geometry",
-      "evidence_stills": [
-        {
-          "file": "20260929T192409Z.jpg",
-          "sha256": "323a6f97256260f6494b45f062cd630e9894da0b40801038354096da0b04224d",
-          "bytes": 25339
-        }
-      ],
-      "note": "Evidence stills are kept outside Git; the hashes identify them.",
-      "workbench_spot_id": "l4m971r4nn0z7dwma6rd",
-      "drafted_by": {
-        "by": "Claude, from the still and OpenStreetMap street geometry",
-        "draft_id": "draft_104_2"
       }
     },
     {
@@ -5664,6 +5874,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "l7qqxpd7lt2z2jgtxnzt",
+      "camera_mount": {
+        "lat": 40.795015,
+        "lng": -73.944542
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_276_2"
@@ -5686,6 +5900,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "ljwhjmvuffkdqag7pesh",
+      "camera_mount": {
+        "lat": 40.758741,
+        "lng": -73.985437
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_178_2"
@@ -5708,6 +5926,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "lxbfft80vgue7gx29r5s",
+      "camera_mount": {
+        "lat": 40.772441,
+        "lng": -73.978751
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_246_1"
@@ -5730,6 +5952,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "mbj0fjojidqiy82mts4h",
+      "camera_mount": {
+        "lat": 40.75092,
+        "lng": -73.99816
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_118_1"
@@ -5752,6 +5978,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "mg9yxdbtuf57vcarmm3b",
+      "camera_mount": {
+        "lat": 40.776331,
+        "lng": -73.962123
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_252_2"
@@ -5774,6 +6004,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "miye83dvmco6j2xplsqb",
+      "camera_mount": {
+        "lat": 40.763753,
+        "lng": -73.973548
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_218_2"
@@ -5796,6 +6030,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "mmqck18dind2oo2eyqzn",
+      "camera_mount": {
+        "lat": 40.740189,
+        "lng": -73.986363
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_91_1"
@@ -5818,6 +6056,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "n4jzktnatlth71flu8xh",
+      "camera_mount": {
+        "lat": 40.776225,
+        "lng": -73.975974
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_251_2"
@@ -5840,6 +6082,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "nvd6ztjgqz7ny7ot1obv",
+      "camera_mount": {
+        "lat": 40.7587,
+        "lng": -73.985348
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_174_1"
@@ -5862,6 +6108,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "nxd2no0b7o5td1p30o0u",
+      "camera_mount": {
+        "lat": 40.75836,
+        "lng": -73.978867
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_167_1"
@@ -5884,6 +6134,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "om2mza5egqcnhaxsf9oi",
+      "camera_mount": {
+        "lat": 40.752453,
+        "lng": -73.987123
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_125_2"
@@ -5906,6 +6160,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "os1qyqc93nejfzfisyfw",
+      "camera_mount": {
+        "lat": 40.794668,
+        "lng": -73.971788
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_275_1"
@@ -5928,6 +6186,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "otmj9fq37bxpa2m0bnpz",
+      "camera_mount": {
+        "lat": 40.750297,
+        "lng": -73.99483
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_116_1"
@@ -5950,6 +6212,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "ovmiq6q2d7f6a44zccna",
+      "camera_mount": {
+        "lat": 40.788045,
+        "lng": -73.944275
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_269_1"
@@ -5972,6 +6238,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "p3btfzcjgdd8dfb9as9u",
+      "camera_mount": {
+        "lat": 40.7558094297322,
+        "lng": -73.9864124090652
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_145_2"
@@ -5994,6 +6264,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "pars6z8ktgj0k8reftxf",
+      "camera_mount": {
+        "lat": 40.758692,
+        "lng": -73.985371
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_173_1"
@@ -6016,6 +6290,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "pfprwmhmm0dlzurix7un",
+      "camera_mount": {
+        "lat": 40.764212,
+        "lng": -73.992385
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_219_1"
@@ -6038,6 +6316,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "px4ri71dxc3q46ir9ldl",
+      "camera_mount": {
+        "lat": 40.756707,
+        "lng": -73.986442
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_153_1"
@@ -6060,6 +6342,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "q3tecm8jm82ih9c8r3n1",
+      "camera_mount": {
+        "lat": 40.7528121596316,
+        "lng": -73.9792838595713
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_126_2"
@@ -6082,6 +6368,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "q6i06j3233b2gfxbyzyf",
+      "camera_mount": {
+        "lat": 40.79688,
+        "lng": -73.937698
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_278_1"
@@ -6104,6 +6394,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "qjxy707lyivjfmnigadw",
+      "camera_mount": {
+        "lat": 40.74095,
+        "lng": -74.0053
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_92_1"
@@ -6126,31 +6420,13 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "qvrcltef2rdp7m00us3z",
+      "camera_mount": {
+        "lat": 40.784922,
+        "lng": -73.982865
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_263_1"
-      }
-    },
-    {
-      "checkpoint_id": "img_1_ave_at_40_st_b",
-      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
-      "from_candidate": null,
-      "method": "image",
-      "verified_at": "2026-09-29T19:24:09+00:00",
-      "verified_by": "JB (approved a Claude draft) (camera workbench, 2026-09-29)",
-      "stand_location_source": "Claude: read from the still (overlay (consistent: one-way northbound 1st Ave, with the protected bike lane on the left (west) and the red bus lane on the right (east))), placed with OpenStreetMap street geometry",
-      "evidence_stills": [
-        {
-          "file": "20260929T192409Z.jpg",
-          "sha256": "323a6f97256260f6494b45f062cd630e9894da0b40801038354096da0b04224d",
-          "bytes": 25339
-        }
-      ],
-      "note": "Evidence stills are kept outside Git; the hashes identify them.",
-      "workbench_spot_id": "qyik5kdzb3xdic6m0k7v",
-      "drafted_by": {
-        "by": "Claude, from the still and OpenStreetMap street geometry",
-        "draft_id": "draft_104_1"
       }
     },
     {
@@ -6170,6 +6446,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "r2k63nzpi5u1vhtx8qem",
+      "camera_mount": {
+        "lat": 40.761216,
+        "lng": -73.957815
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_207_1"
@@ -6192,6 +6472,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "rbo5csuxha1jjyuv2366",
+      "camera_mount": {
+        "lat": 40.761501,
+        "lng": -73.960542
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_208_1"
@@ -6214,6 +6498,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "re49yj44mzw43w0r60q6",
+      "camera_mount": {
+        "lat": 40.788045,
+        "lng": -73.944275
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_269_2"
@@ -6236,6 +6524,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "ribzuq0dg033vczjia4o",
+      "camera_mount": {
+        "lat": 40.7397525513578,
+        "lng": -74.0025212013102
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_90_2"
@@ -6258,6 +6550,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "rp3nfr42tdgaftz8oioa",
+      "camera_mount": {
+        "lat": 40.7572361824409,
+        "lng": -73.9760573417802
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_155_1"
@@ -6280,6 +6576,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "rww70be3fn7pn3a6glfb",
+      "camera_mount": {
+        "lat": 40.77787,
+        "lng": -73.9518
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_254_2"
@@ -6302,6 +6602,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "s0mzzew31qf6o4ordw6n",
+      "camera_mount": {
+        "lat": 40.775652,
+        "lng": -73.96035
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_250_1"
@@ -6324,6 +6628,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "s6dsd1b0jhn8578873sz",
+      "camera_mount": {
+        "lat": 40.7589811180163,
+        "lng": -73.9939438000961
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_181_2"
@@ -6346,6 +6654,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "sb13fd5sqs33pw6nfyh8",
+      "camera_mount": {
+        "lat": 40.760533,
+        "lng": -73.991205
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_202_1"
@@ -6368,6 +6680,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "sd61zsz56leat5h3ua3i",
+      "camera_mount": {
+        "lat": 40.7528121596316,
+        "lng": -73.9792838595713
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_126_1"
@@ -6390,6 +6706,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "sjlzc0zf1h50pf7pys57",
+      "camera_mount": {
+        "lat": 40.7629820055328,
+        "lng": -73.9739858644822
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_216_2"
@@ -6412,6 +6732,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "svp4s7qwuakgodhhosxl",
+      "camera_mount": {
+        "lat": 40.7395059171263,
+        "lng": -73.9847405603646
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_89_1"
@@ -6434,6 +6758,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "sxlm7pi565hwqnjzfrbh",
+      "camera_mount": {
+        "lat": 40.77787,
+        "lng": -73.9518
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_254_1"
@@ -6456,6 +6784,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "t76edmdrbwk985327h2t",
+      "camera_mount": {
+        "lat": 40.755508,
+        "lng": -73.977437
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_142_1"
@@ -6478,6 +6810,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "tbtzj8qvoq7v5adrmf4n",
+      "camera_mount": {
+        "lat": 40.791667,
+        "lng": -73.964697
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_270_1"
@@ -6500,6 +6836,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "tysv7mw6rnb4syjs06rt",
+      "camera_mount": {
+        "lat": 40.798583,
+        "lng": -73.933382
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_280_1"
@@ -6522,6 +6862,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "upv8xtb3nh64tv95ipre",
+      "camera_mount": {
+        "lat": 40.759663,
+        "lng": -73.995317
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_194_1"
@@ -6544,6 +6888,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "v3lz9y1rercze5dvv0ef",
+      "camera_mount": {
+        "lat": 40.799265,
+        "lng": -73.94294
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_281_1"
@@ -6566,6 +6914,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "veebf8ynjkn99s1hfp4r",
+      "camera_mount": {
+        "lat": 40.79688,
+        "lng": -73.937698
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_278_2"
@@ -6588,6 +6940,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "vxymdiigxn2k36ltdx90",
+      "camera_mount": {
+        "lat": 40.785793,
+        "lng": -73.951017
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_265_1"
@@ -6610,6 +6966,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "w3g3nmbl5qdx65r7nx7s",
+      "camera_mount": {
+        "lat": 40.764289,
+        "lng": -73.973023
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_221_1"
@@ -6632,6 +6992,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "wfh4rc9d7ima197m1w1a",
+      "camera_mount": {
+        "lat": 40.758044,
+        "lng": -73.960189
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_164_1"
@@ -6654,6 +7018,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "wj9yuuqy5l3guqllaqfs",
+      "camera_mount": {
+        "lat": 40.79421,
+        "lng": -73.962857
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_274_1"
@@ -6676,6 +7044,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "wkrz7y1lheswzdy3xu4z",
+      "camera_mount": {
+        "lat": 40.75907,
+        "lng": -73.97846
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_186_1"
@@ -6698,6 +7070,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "wp05dbtoabf5ttb93kwd",
+      "camera_mount": {
+        "lat": 40.737876,
+        "lng": -73.980926
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_87_1"
@@ -6720,6 +7096,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "wr530ygbykznpw5rquau",
+      "camera_mount": {
+        "lat": 40.786516,
+        "lng": -73.952456
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_266_1"
@@ -6742,6 +7122,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "wt7fxpnqknj24s8xtg2v",
+      "camera_mount": {
+        "lat": 40.7558094297322,
+        "lng": -73.9864124090652
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_145_1"
@@ -6764,6 +7148,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "xc359lnl7wcmzw3p6o4a",
+      "camera_mount": {
+        "lat": 40.757839,
+        "lng": -73.979362
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_161_1"
@@ -6786,6 +7174,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "xjke78cza0e5eflgz8z4",
+      "camera_mount": {
+        "lat": 40.766796,
+        "lng": -73.9829
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_228_2"
@@ -6808,6 +7200,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "xjzqmmqqxvjvegf7cd62",
+      "camera_mount": {
+        "lat": 40.759615,
+        "lng": -73.961967
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_193_1"
@@ -6830,6 +7226,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "y1tuc92iyuvhxadlh0r2",
+      "camera_mount": {
+        "lat": 40.77234,
+        "lng": -73.9587
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_245_2"
@@ -6852,6 +7252,10 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "ycdj17qxwkf0xuyxrnmx",
+      "camera_mount": {
+        "lat": 40.769303,
+        "lng": -73.980882
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_237_1"
@@ -6874,10 +7278,40 @@
       ],
       "note": "Evidence stills are kept outside Git; the hashes identify them.",
       "workbench_spot_id": "zfccikbzgyy712km9044",
+      "camera_mount": {
+        "lat": 40.752453,
+        "lng": -73.987123
+      },
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_125_1"
       }
+    }
+  ],
+  "excluded_workbench_spots": [
+    {
+      "workbench_spot_id": "l4m971r4nn0z7dwma6rd",
+      "checkpoint_id_before": "img_1_ave_at_40_st_a",
+      "draft_id": "draft_104_2",
+      "reason": "Pin on 40th Street contradicts the approved instructions (east sidewalk of 1st Avenue); re-drafted for review (Codex review, 2026-09-29)"
+    },
+    {
+      "workbench_spot_id": "qyik5kdzb3xdic6m0k7v",
+      "checkpoint_id_before": "img_1_ave_at_40_st_b",
+      "draft_id": "draft_104_1",
+      "reason": "Pin on 40th Street contradicts the approved instructions (east sidewalk of 1st Avenue); re-drafted for review (Codex review, 2026-09-29)"
+    },
+    {
+      "workbench_spot_id": "81f43x5k9bde601cq6y2",
+      "checkpoint_id_before": "img_broadway_at_6_ave_33_st_a",
+      "draft_id": "draft_112_2",
+      "reason": "Three-street camera name was parsed into an invented street ('6th Avenue 33rd Street'); re-drafted for review (Codex review, 2026-09-29)"
+    },
+    {
+      "workbench_spot_id": "gua02pxzx9a3t904442s",
+      "checkpoint_id_before": "img_broadway_at_6_ave_33_st_b",
+      "draft_id": "draft_112_1",
+      "reason": "Three-street camera name was parsed into an invented street ('6th Avenue 33rd Street'); re-drafted for review (Codex review, 2026-09-29)"
     }
   ]
 }

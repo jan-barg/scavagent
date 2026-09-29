@@ -99,15 +99,21 @@ def test_committed_checkpoints_are_verified_and_backed_by_a_field_log():
     records = cam.load_checkpoints()
     log = {entry["checkpoint_id"]: entry for entry in data.get("field_log", [])}
     mounts = {c["camera_id"]: c["camera_mount_location"] for c in data["candidates"]}
+    excluded = {e["workbench_spot_id"] for e in data.get("excluded_workbench_spots", [])}
     for record in records:
         assert record.verification_status in ("field_verified", "image_verified") and record.enabled
         assert (record.last_image_verified_at if record.verification_status == "image_verified" else record.last_field_verified_at)
         entry = log[record.checkpoint_id]  # every entry names its evidence and who checked it
         assert entry["evidence_stills"] and all(len(e["sha256"]) == 64 for e in entry["evidence_stills"])
-        assert entry["verified_by"] and "TEST" not in entry["verified_by"]
+        assert entry["camera_id"] == record.camera_id
+        assert {"image": "image_verified", "field": "field_verified"}[entry["method"]] == record.verification_status
+        reviewer = entry["verified_by"]
+        assert reviewer and "TEST" not in reviewer and not reviewer.lower().startswith(("claude", "workbench user none"))
+        if record.verification_status == "image_verified":
+            assert entry["workbench_spot_id"] not in excluded
         assert not record.checkpoint_id.startswith(("candidate_", "fixture_", "test_", "rehearsal"))
-        if record.camera_id in mounts:
-            assert cam._distance(record.stand_location, LatLng(**mounts[record.camera_id])) >= 1
+        mount = LatLng(**(entry.get("camera_mount") or mounts[record.camera_id]))
+        assert 1 <= cam._distance(record.stand_location, mount) <= 250, record.checkpoint_id  # not the mount, not far off
     assert len({r.checkpoint_id for r in records}) == len(records)
 
 

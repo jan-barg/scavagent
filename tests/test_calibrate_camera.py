@@ -229,6 +229,28 @@ def test_workbench_spots_import_once_as_image_verified_entries(catalogue, tmp_pa
     assert log["verified_by"] == "TB (camera workbench, 2026-09-29)"
     err = capsys.readouterr().err
     assert "positioning_instructions" in err and "not a spot a person saved" in err and "names no reviewer" in err
+    assert log["camera_mount"] == MOUNT
+
+
+def test_an_excluded_workbench_spot_is_never_imported(catalogue, tmp_path, capsys):
+    evidence = tmp_path / "evidence"
+    (evidence / "s").mkdir(parents=True)
+    (evidence / "s" / "still.jpg").write_bytes(JPEG)
+    spots = tmp_path / "spots"
+    spots.mkdir()
+    spot = {"camera_id": "8a6bc417-4877-4ebe-8052-88c1b261baf1", "camera_name": "Central Park West @ 86 St",
+            "camera_mount": MOUNT, "still_file": "s/still.jpg", "still_retrieved_at": "2026-09-29T19:22:00+00:00",
+            "stand_location": {"lat": 40.78518, "lng": -73.96990}, "stand_location_source": "TEST",
+            "address": "TEST", "landmark": "TEST", "side_of_street": "TEST", "positioning_instructions": "TEST",
+            "reference_view_notes": "TEST", "spot_in_view": True, "marked_by": "TB", "marked_at": "2026-09-29T20:00:00Z"}
+    (spots / "doc1.json").write_text(json.dumps(spot))
+    data = json.loads(catalogue.read_text())
+    data["excluded_workbench_spots"] = [{"workbench_spot_id": "doc1", "reason": "TEST: pin contradicts the instructions"}]
+    catalogue.write_text(json.dumps(data))
+
+    cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
+    assert json.loads(catalogue.read_text())["checkpoints"] == []
+    assert "excluded (TEST: pin contradicts the instructions)" in capsys.readouterr().err
 
 
 def test_blank_address_fields_are_filled_from_the_pin_and_logged():

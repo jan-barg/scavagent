@@ -18,7 +18,7 @@ from schemas import LatLng
 
 GRID_DEG = 29.0  # Manhattan's grid is rotated this far clockwise from true north
 GRID_TOLERANCE_DEG = 12.0
-CORNER_M = 20.0  # within this of both centerlines, a spot is a corner
+CORNER_SLACK_M = 8.0  # within this of both streets' sidewalk lines, a spot is a corner
 LANE_M, PARKING_M, HALF_SIDEWALK_M = 3.2, 2.4, 2.5
 CARDINALS = ("north", "east", "south", "west")
 ALT_NAME_TAGS = ("alt_name", "official_name", "old_name", "short_name")
@@ -73,13 +73,15 @@ def describe(center: LatLng, streets, point: LatLng):
     off = local_xy(center, point)
     across = {s: _dot(off, _normal(s.direction)) for s in (a, b)}
     side = {s: cardinal(tuple(math.copysign(1, across[s]) * c for c in _normal(s.direction)), grid) for s in (a, b)}
-    if abs(across[a]) <= CORNER_M and abs(across[b]) <= CORNER_M:
+    # Judge by sidewalks, not centerlines: a wide avenue's sidewalk can lie 35 m from its center, farther than a
+    # cross street's centerline, and a spot on that sidewalk is still on the avenue.
+    if all(abs(across[s]) <= s.sidewalk_m + CORNER_SLACK_M for s in (a, b)):
         ns, ew = sorted((side[a], side[b]), key=lambda w: w in ("east", "west"))
         corner = f"{ns}{ew}" if {ns, ew} & {"north", "south"} and {ns, ew} & {"east", "west"} else ns
         text = f"{corner} corner of {a.name} and {b.name}"
         return {"side_of_street": text, "on": a.name, "cross": b.name, "along_m": 0, "corner": True,
                 "stop_name": f"{a.name} and {b.name}, {corner} corner"}
-    on, cross = (a, b) if abs(across[a]) < abs(across[b]) else (b, a)
+    on, cross = sorted((a, b), key=lambda s: (abs(abs(across[s]) - s.sidewalk_m), abs(across[s])))
     along = round(abs(across[cross]) / 5) * 5
     text = f"{side[on]} side of {on.name}, about {along} m {side[cross]} of {cross.name}"
     return {"side_of_street": text, "on": on.name, "cross": cross.name, "along_m": along, "corner": False,
@@ -114,7 +116,9 @@ def locate(center: LatLng, on: Street, cross: Street, side: str, direction: str,
 def camera_streets(name):
     """The two normalized street names in a DOT camera name such as "Park Ave @ E 116 Street"."""
     name = re.sub(r"\s*\(.*?\)|\s+-\s.*$|-\s*quad\b.*$|\bupper level\b", "", name, flags=re.IGNORECASE)
-    parts = [p.strip() for p in name.split("@")[:2]]
+    parts = [p.strip() for p in name.split("@")]
+    if len(parts) != 2 or any("/" in p for p in parts):
+        return None  # three-way names ("Broadway @ 6 Ave / 33 St") must not become one invented street
     out = []
     for part in parts:
         for guess in (part, part + " avenue", part + " street"):
@@ -177,7 +181,7 @@ AVENUE_WORDS = re.compile(  # Manhattan's north-south grid avenues, not any name
     r"amsterdam avenue|columbus avenue|york avenue|west end avenue|broadway|central park west|rockefeller plaza|"
     r"lenox avenue|malcolm x boulevard|adam clayton powell jr boulevard|frederick douglass boulevard|"
     r"st nicholas avenue|saint nicholas avenue|manhattan avenue|convent avenue|edgecombe avenue)$", re.IGNORECASE)
-NUMBERED_STREET = re.compile(r"\d+(st|nd|rd|th) street|central park south", re.IGNORECASE)
+NUMBERED_STREET = re.compile(r"^((east|west) )?\d+(st|nd|rd|th) street$|^central park south$", re.IGNORECASE)
 
 
 def grid_streets(camera_name, mount: LatLng):
