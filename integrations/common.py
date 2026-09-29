@@ -62,6 +62,17 @@ def fetch_json(provider, method, url, timeout=DEFAULT_TIMEOUT_S, **kwargs):
     return body
 
 
+def fetch_bytes(provider, url, timeout=DEFAULT_TIMEOUT_S, **kwargs):
+    """Make one bounded GET and return the raw body (for binary feeds such as GTFS-realtime)."""
+    try:
+        r = _session.request("GET", url, timeout=timeout, **kwargs)
+    except requests.RequestException as e:
+        raise UpstreamError(provider, f"request failed ({type(e).__name__})") from e
+    if r.status_code >= 400:
+        raise UpstreamError(provider, f"HTTP {r.status_code}", r.status_code == 429 or r.status_code >= 500, r.status_code)
+    return r.content
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 

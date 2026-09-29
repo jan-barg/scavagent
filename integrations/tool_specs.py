@@ -5,6 +5,7 @@ the harness sends them to the model as JSON text and keeps the dict in the /chat
 """
 
 from integrations.geocoding import geocode_place
+from integrations.mta import get_transit_arrivals
 from integrations.research import find_places, research_place
 from integrations.routes import get_route, get_walking_times
 
@@ -133,10 +134,35 @@ PLACE_TOOLS = [
     },
 ]
 
+PLACE_TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "get_transit_arrivals",
+        "description": (
+            "Live next subway arrivals at one station, by direction (e.g. Uptown/Downtown), with where each train is "
+            "heading and the lines' active service alerts. Use it when the user is about to ride or asks when the next "
+            "train comes. Pass the station name from the transit directions ('86 St'), plus line or lat/lng to pick "
+            "among stations that share a name."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "station": {"type": "string", "description": "Station name as signs show it, e.g. '86 St'."},
+                "line": {"type": "string", "description": "One route, e.g. 'A' or '1'."},
+                "direction": {"type": "string", "description": "'uptown' or 'downtown' (or the sign's label)."},
+                "lat": {"type": "number", "description": "Near this point, to pick among same-named stations."},
+                "lng": {"type": "number"},
+            },
+            "required": ["station"],
+        },
+    },
+})
+
 PLACE_TOOL_MAP = {
     "geocode_place": geocode_place,
     "find_places": find_places,
     "research_place": research_place,
     "get_route": get_route,
     "get_walking_times": get_walking_times,
+    "get_transit_arrivals": get_transit_arrivals,
 }

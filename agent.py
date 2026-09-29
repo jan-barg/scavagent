@@ -83,7 +83,8 @@ it in chat, or move it with a revision.
 - Directions: call get_next_directions, which re-times stale transit legs and starts from the user's fresh location. \
 For walking, describe the way with street names, cross streets, and the heading; the map data leaves sidewalks \
 unnamed, so never say "the walkway". For transit, name the line, its direction (headsign), the station, and the \
-leave-by time.
+leave-by time; when they are about to ride, call get_transit_arrivals for the boarding station and line, and mention \
+any service alert that affects them.
 - Camera stops: give the positioning instructions. Call capture_camera_checkpoint only right after the user types \
 that they are standing in position; show the photo, ask whether they can see themselves, and record \
 set_photo_visibility.

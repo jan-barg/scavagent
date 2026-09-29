@@ -9,9 +9,10 @@ class FakeResponse:
     def __init__(self, status_code, body):
         self.status_code = status_code
         self._body = body
+        self.content = body if isinstance(body, bytes) else b""
 
     def json(self):
-        if self._body is None:
+        if self._body is None or isinstance(self._body, bytes):
             raise ValueError("no JSON body")
         return self._body
 
