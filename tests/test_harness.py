@@ -51,21 +51,31 @@ def test_later_model_failure_keeps_earlier_tool_trace(client, monkeypatch):
     assert "AIza" not in body["response"] and "AIza" not in history
 
 
-def test_a_turn_starts_no_model_call_after_its_deadline(client, monkeypatch):
+def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypatch):
     clock = [0.0]
     monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
-    timeouts = []
+    timeouts, ran = [], []
 
-    def slow_model(**kwargs):  # Each call takes 100 s and asks for another tool
+    def slow_model(**kwargs):  # Each call takes 100 s and asks for two tools
         timeouts.append(kwargs["timeout"])
         clock[0] += 100
-        return reply(FakeMessage(content=None, tool_calls=[tool_call(f"c{len(timeouts)}", "get_weather", '{"location": "NYC"}')]))
+        n = len(timeouts)
+        return reply(FakeMessage(content=None, tool_calls=[
+            tool_call(f"a{n}", "get_weather", '{"location": "NYC"}'), tool_call(f"b{n}", "get_weather", '{"location": "NYC"}')]))
+
+    def slow_tool(location):  # Each tool takes 30 s
+        ran.append(clock[0])
+        clock[0] += 30
+        return tools.tool_ok({"location": location})
 
     monkeypatch.setattr(app_module.litellm, "completion", slow_model)
+    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", slow_tool)
     body = client.post("/chat", json={"message": "walk?"}).json()
 
-    assert timeouts == [240, 140, 40]  # Each call may use only the time left; none starts after 240 s
-    assert "too long" in body["response"] and len(body["tool_calls"]) == 3
+    # Calls at 0 s and 160 s; the second returns at 260 s, past the 240 s deadline, so its tools never run.
+    assert timeouts == [240, 80] and ran == [100, 130]
+    assert [c["result"]["ok"] for c in body["tool_calls"]] == [True, True, False, False]
+    assert "too long" in body["response"]
 
 
 def test_bad_tool_calls_become_actionable_failures(client, monkeypatch):

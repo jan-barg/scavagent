@@ -91,14 +91,16 @@ class Store(Protocol):
     def load(self, session_id: str) -> SessionRecord | None: ...
     def save(self, record: SessionRecord) -> None: ...
     def delete(self, session_id: str) -> None: ...
-    def claim(self, session_id: str, message_id: str, now: datetime) -> bool: ...
-    def release(self, session_id: str, message_id: str) -> None: ...
+    def claim(self, session_id: str, message_id: str, now: datetime) -> str | None: ...
+    def release(self, session_id: str, message_id: str, token: str) -> None: ...
     def put_asset(self, asset_id: str, data: bytes, content_type: str, session_id: str) -> None: ...
     def get_asset(self, asset_id: str) -> tuple[bytes, str] | None: ...
 
 
 # Claims mark a client_message_id whose turn is running, so a resend does not start a second turn.
 # They live apart from the session record: claiming one message must not make another turn's save stale.
+# claim() returns a token, or None while a live turn holds the message. release() drops the claim only if
+# it still holds that token, so a turn that overran its claim cannot free the claim of the turn that took over.
 
 
 def _dump(record: SessionRecord) -> str:
@@ -124,7 +126,7 @@ def _claim_is_live(started_at: datetime | None, now: datetime) -> bool:
 class MemoryStore:
     def __init__(self):
         self._sessions: dict[str, str] = {}
-        self._claims: dict[tuple[str, str], datetime] = {}
+        self._claims: dict[tuple[str, str], tuple[datetime, str]] = {}  # -> (started_at, token)
         self._assets: dict[str, tuple[bytes, str]] = {}
         self._lock = threading.Lock()
 
@@ -144,14 +146,17 @@ class MemoryStore:
 
     def claim(self, session_id, message_id, now):
         with self._lock:
-            if _claim_is_live(self._claims.get((session_id, message_id)), now):
-                return False
-            self._claims[(session_id, message_id)] = now
-            return True
+            held = self._claims.get((session_id, message_id))
+            if held and _claim_is_live(held[0], now):
+                return None
+            token = uuid.uuid4().hex
+            self._claims[(session_id, message_id)] = (now, token)
+            return token
 
-    def release(self, session_id, message_id):
+    def release(self, session_id, message_id, token):
         with self._lock:
-            self._claims.pop((session_id, message_id), None)
+            if self._claims.get((session_id, message_id), (None, None))[1] == token:
+                del self._claims[(session_id, message_id)]
 
     def put_asset(self, asset_id, data, content_type, session_id):
         self._assets[asset_id] = (data, content_type)
@@ -169,7 +174,7 @@ class SqliteStore:
         self._lock = threading.Lock()
         self._db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, version INTEGER, data TEXT)")
         self._db.execute(
-            "CREATE TABLE IF NOT EXISTS claims (session_id TEXT, message_id TEXT, started_at TEXT, "
+            "CREATE TABLE IF NOT EXISTS claims (session_id TEXT, message_id TEXT, started_at TEXT, token TEXT, "
             "PRIMARY KEY (session_id, message_id))"
         )
         self._db.execute(
@@ -215,16 +220,20 @@ class SqliteStore:
                 "SELECT started_at FROM claims WHERE session_id = ? AND message_id = ?", (session_id, message_id)
             ).fetchone()
             if row and _claim_is_live(datetime.fromisoformat(row[0]), now):
-                return False
+                return None
+            token = uuid.uuid4().hex
             self._db.execute(
-                "INSERT OR REPLACE INTO claims (session_id, message_id, started_at) VALUES (?, ?, ?)",
-                (session_id, message_id, now.isoformat()),
+                "INSERT OR REPLACE INTO claims (session_id, message_id, started_at, token) VALUES (?, ?, ?, ?)",
+                (session_id, message_id, now.isoformat(), token),
             )
-            return True
+            return token
 
-    def release(self, session_id, message_id):
+    def release(self, session_id, message_id, token):
         with self._transaction():
-            self._db.execute("DELETE FROM claims WHERE session_id = ? AND message_id = ?", (session_id, message_id))
+            self._db.execute(
+                "DELETE FROM claims WHERE session_id = ? AND message_id = ? AND token = ?",
+                (session_id, message_id, token),
+            )
 
     def put_asset(self, asset_id, data, content_type, session_id):
         with self._transaction():
@@ -275,20 +284,28 @@ class FirestoreStore:
         return self._claims.document(hashlib.sha256(f"{session_id}\n{message_id}".encode()).hexdigest())
 
     def claim(self, session_id, message_id, now):
-        doc = self._claim_doc(session_id, message_id)
+        doc, token = self._claim_doc(session_id, message_id), uuid.uuid4().hex
 
         @self._firestore.transactional
         def take(transaction):
             snapshot = doc.get(transaction=transaction)
             if snapshot.exists and _claim_is_live(snapshot.get("started_at"), now):
-                return False
-            transaction.set(doc, {"session_id": session_id, "started_at": now})
-            return True
+                return None
+            transaction.set(doc, {"session_id": session_id, "started_at": now, "token": token})
+            return token
 
         return take(self._db.transaction())
 
-    def release(self, session_id, message_id):
-        self._claim_doc(session_id, message_id).delete()
+    def release(self, session_id, message_id, token):
+        doc = self._claim_doc(session_id, message_id)
+
+        @self._firestore.transactional
+        def drop(transaction):
+            snapshot = doc.get(transaction=transaction)
+            if snapshot.exists and snapshot.get("token") == token:
+                transaction.delete(doc)
+
+        drop(self._db.transaction())
 
     def put_asset(self, asset_id, data, content_type, session_id):
         blob = self._bucket.blob(f"assets/{asset_id}")

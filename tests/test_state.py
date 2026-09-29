@@ -97,6 +97,27 @@ def test_retry_while_the_first_turn_is_still_running_does_not_run_it_again(monke
     assert first["response"] == "Done once." and later == first
 
 
+def test_an_error_after_claiming_frees_the_claim(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    loads = []
+
+    def flaky_load(session_id):  # The reload right after the claim fails once
+        loads.append(session_id)
+        if len(loads) == 2:
+            raise OSError("storage unavailable")
+        return state.MemoryStore.load(store, session_id)
+
+    monkeypatch.setattr(store, "load", flaky_load)
+    client = TestClient(app_module.app)
+    body = {"message": "ready", "session_id": "flaky", "client_message_id": "m-1"}
+    with pytest.raises(OSError):
+        client.post("/chat", json=body)
+
+    script(monkeypatch, FakeMessage(content="Here now.", tool_calls=None))
+    assert client.post("/chat", json=body).json()["response"] == "Here now."  # Not a 409 for five minutes
+
+
 class InstanceDied(BaseException):
     """The Cloud Run instance stops mid-turn: nothing in the app gets to handle it."""
 
@@ -169,12 +190,15 @@ def test_concurrent_turns_cannot_overwrite_each_other(store_factory, tmp_path):
 @pytest.mark.parametrize("store_factory", [state.MemoryStore, lambda: None])
 def test_one_turn_at_a_time_can_claim_a_message(store_factory, tmp_path):
     store = store_factory() or state.SqliteStore(tmp_path / "db.sqlite")
-    assert store.claim("s", "m-1", NOW)
-    assert not store.claim("s", "m-1", NOW + timedelta(minutes=4))
+    first = store.claim("s", "m-1", NOW)
+    assert first and store.claim("s", "m-1", NOW + timedelta(minutes=4)) is None
     assert store.claim("s", "m-2", NOW)  # Other messages are independent
-    assert store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)  # An abandoned claim can be taken over
-    store.release("s", "m-1")
-    assert store.claim("s", "m-1", NOW)
+
+    takeover = store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)  # An abandoned claim can be taken over
+    store.release("s", "m-1", first)  # The overrunning first turn finishing late frees nothing
+    assert takeover and store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT) is None
+    store.release("s", "m-1", takeover)
+    assert store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)
 
 
 class ContendedFirestore:

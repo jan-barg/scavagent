@@ -33,8 +33,8 @@ SYSTEM_PROMPT = (
     "plainly instead of inventing a route."
 )
 MAX_TOOL_ROUNDS = 8
-# A turn starts no model call after this, and each call gets only the time left. Tools bound their own time.
-# Kept well under state.IN_FLIGHT_TIMEOUT, so a message whose claim has expired has no turn still working on it.
+# A turn starts no model call or tool after this, and each model call gets only the time left. Tools bound
+# their own time. Kept well under state.IN_FLIGHT_TIMEOUT, so an expired claim's turn is no longer working.
 TURN_SECONDS = 240
 CONTEXT_MESSAGES = 40  # Recent conversation sent to the model; the full plan stays in storage
 # Model choice is deferred; keep it configurable. Defaults to the starter's model.
@@ -78,7 +78,14 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
                 args = json.loads(call.function.arguments or "{}")
             except json.JSONDecodeError:
                 args = None
-            if isinstance(args, dict):
+            if monotonic() >= deadline:
+                result = tool_error(
+                    "INTERNAL_ERROR",
+                    "This turn ran out of time, so the tool was not run.",
+                    retryable=True,
+                    next_step="Tell the user it took too long and to send the message again.",
+                )
+            elif isinstance(args, dict):
                 result = run_tool(call.function.name, args, ctx)
             else:
                 result = tool_error(
@@ -150,36 +157,41 @@ def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
 
-def start_turn(session_id: str, client_message_id: str | None) -> tuple[SessionRecord, dict | None]:
-    """Load the session and claim this message, or return the reply it already got.
-
-    The claim is stored before the agent runs, so a resend that arrives mid-turn gets a 409
-    instead of running the tools, and any camera capture, a second time.
-    """
-    record = store.load(session_id)
-    if client_message_id:
-        if record and client_message_id in record.replies:
-            return record, record.replies[client_message_id]
-        if not store.claim(session_id, client_message_id, state.utc_now()):
-            raise HTTPException(409, "Still working on that message. Send it again in a moment.")
-        # The first turn may have finished between the load and the claim.
-        record = store.load(session_id)
-        if record and client_message_id in record.replies:
-            store.release(session_id, client_message_id)
-            return record, record.replies[client_message_id]
-    return record or SessionRecord.new(session_id), None
-
-
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     # Get or create the session. A client may choose its own id; the server makes one otherwise.
     session_id = session_id_or_400(request.session_id)
+    message_id = request.client_message_id
+    record = store.load(session_id)
 
-    # A retried send returns the reply already given, without running tools twice.
-    record, replay = start_turn(session_id, request.client_message_id)
-    if replay is not None:
-        return replay
+    # A resent message gets the reply already given, without running tools twice.
+    if message_id and record and message_id in record.replies:
+        return record.replies[message_id]
+    if not message_id:
+        return run_turn(record or SessionRecord.new(session_id), request)
 
+    # Claim the message before the agent runs, so a resend that arrives mid-turn gets a 409
+    # instead of a second turn (and a second camera capture).
+    claim = store.claim(session_id, message_id, state.utc_now())
+    if claim is None:
+        raise HTTPException(409, "Still working on that message. Send it again in a moment.")
+    try:
+        record = store.load(session_id)  # The first turn may have finished between the load and the claim
+        if record and message_id in record.replies:
+            reply = record.replies[message_id]
+        else:
+            reply = run_turn(record or SessionRecord.new(session_id), request)
+    except Exception:
+        store.release(session_id, message_id, claim)
+        raise
+    # Only a crash skips this; its claim then expires after state.IN_FLIGHT_TIMEOUT.
+    store.release(session_id, message_id, claim)
+    return reply
+
+
+def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
+    """Answer one user message, then store the whole turn in one save."""
+    session_id = record.session_id
     now = state.utc_now()
     if request.location:
         state.update_location(record, request.location)
@@ -219,9 +231,6 @@ def chat(request: ChatRequest):
             "Another message in this conversation was handled at the same time, so this reply wasn't saved. "
             "Anything already recorded, such as a photo, is kept. Please send your message again."
         )
-    finally:
-        if request.client_message_id:
-            store.release(session_id, request.client_message_id)
     return reply
 
 
