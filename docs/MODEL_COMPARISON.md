@@ -99,9 +99,13 @@ Stories: all three models now write briefings, casts with a handler and a channe
 - Neither model wrote a link that did not come from a tool result, cast a real person, or claimed a Strokes connection the research did not support.
 - Caching (since `f8cbf3f`): the system message is only the instructions, the per-turn server context rides with the newest message and is not stored, the context window moves in steps of 20 messages, and Claude gets one-hour breakpoints at the end of the history before the last two user messages. Round 2 has the numbers.
 
-## Recommendation
+## Decision
 
-Claude, Sonnet 5.5 or Opus 5.5; Jan to choose from the story samples. Default unchanged until then.
+Claude Sonnet 5.5 alone (Jan, September 29). Opus 5.5 is too expensive, and the Sonnet-plans/Flash-Lite-guides split saved $0.10–0.15 per adventure but delivered each stop noticeably worse (it gave away answers, jumped ahead, invented links). Live on Cloud Run since revision `scavagent-00016-z6s` (`SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5`, key from Secret Manager); acceptance checks against the deployed URL: 26/26. The code default is still Gemini 3.5 Flash-Lite, so local runs work without an Anthropic key.
+
+## Recommendation (before the decision)
+
+Claude, Sonnet 5.5 or Opus 5.5; Jan to choose from the story samples.
 
 - Only the two Claude models passed every acceptance check in both rounds and kept to the story rules the evaluator cannot fully check (no real people as characters, no invented history, links only from sources, honest when a theme has no sourced place).
 - Under story design v2 both fit the 240-second turn limit (longest planning turns: Opus 144 s, Sonnet 64 s).

@@ -97,6 +97,8 @@ gcloud run services update scavagent --region us-east1 --project agentic-ai-msds
   --update-env-vars SCAVAGENT_MODEL=anthropic/claude-opus-5-5
 ```
 
+If Claude can't answer (the account runs out of credit, the key expires or is revoked, Anthropic is unreachable or stays overloaded), the app answers that turn with `SCAVAGENT_FALLBACK_MODEL` (default `vertex_ai/gemini-3.5-flash-lite`, which the service account can already call) and skips Claude for 5 minutes; the server log says `... can't answer (...)` each time. Nothing to configure; set `SCAVAGENT_FALLBACK_MODEL=` (empty) to turn it off.
+
 Revisions deployed later by continuous deployment keep the secret reference. To rotate the key, add a new secret version (`gcloud secrets versions add anthropic-api-key --data-file=-`) and redeploy or update the service.
 
 ## Giving Kyle access
