@@ -376,7 +376,7 @@ class PhotoAsset(Record):
     asset_id: Id
     media_url: str  # App-controlled path such as /media/{asset_id}
     camera_id: str
-    checkpoint_id: Id | None = None
+    checkpoint_id: Id | None = None  # The CameraCheckpoint id; a plan stop links to it via camera_checkpoint_id
     source_url: HttpUrl | None = None
     content_type: str = "image/jpeg"
     byte_size: int = Field(ge=0)

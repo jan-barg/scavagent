@@ -25,7 +25,7 @@
       "asset_id": "fixture_photo_1",
       "media_url": "/media/fixture_photo_1",
       "camera_id": "fixture-camera-not-dot",
-      "checkpoint_id": "stop_3",
+      "checkpoint_id": "fixture_cam_cp_1",
       "content_type": "image/jpeg",
       "byte_size": 0,
       "retrieved_at": "2026-09-28T15:30:00-04:00",
