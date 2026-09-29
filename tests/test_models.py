@@ -16,6 +16,11 @@ from fakes import FakeMessage, reply, script, tool_call
 THINKING = [{"type": "thinking", "thinking": "", "signature": "sig-1"}]
 
 
+@pytest.fixture(autouse=True)
+def no_model_skipped(monkeypatch):
+    monkeypatch.setattr(app_module, "_skip_until", {})  # A model that failed in one test stays usable in the next
+
+
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tools.tool_ok({"temp_f": 70}))
@@ -180,7 +185,11 @@ def anthropic_reply(*content, stop_reason="end_turn"):
 
 @pytest.fixture
 def vertex_claude(monkeypatch):
-    """Configure Claude Opus 5.5 on Vertex; returns (queue of (status, body) replies, list of request bodies sent)."""
+    """Configure Claude Opus 5.5 on Vertex; returns (queue of (status, body) replies, list of request bodies sent).
+
+    No fallback model, so these tests see Claude's own retries and errors.
+    """
+    monkeypatch.setattr(app_module, "FALLBACK_MODEL", None)
     monkeypatch.setattr(app_module, "REASONING_EFFORT", None)
     monkeypatch.setattr(app_module, "MODEL", "vertex_ai/claude-opus-5-5")
     monkeypatch.setattr(app_module, "MODEL_OPTIONS", app_module.model_options("vertex_ai/claude-opus-5-5"))
@@ -376,3 +385,115 @@ def test_without_a_planner_one_model_does_everything(client, monkeypatch):
     body = client.post("/chat", json={"message": "plan"}).json()
     assert {c["model"] for c in calls} == {app_module.MODEL}
     assert [c["name"] for c in body["tool_calls"]] == ["evaluate_adventure_plan"]  # Runs normally
+
+
+
+# --- Falling back when Claude can't answer ---
+
+CLAUDE, GEMINI = "anthropic/claude-sonnet-5-5", "vertex_ai/gemini-3.5-flash-lite"
+
+
+def no_credit():
+    return litellm.BadRequestError(message='AnthropicException - {"type":"error","error":{"type":"invalid_request_error",'
+                                   '"message":"Your credit balance is too low to access the Anthropic API."}}',
+                                   model="claude-sonnet-5-5", llm_provider="anthropic")
+
+
+@pytest.fixture
+def claude_with_fallback(client, monkeypatch):
+    """Claude as the model with Gemini as the fallback; returns (Claude's queued outcomes, models called, kwargs)."""
+    monkeypatch.setattr(app_module, "MODEL", CLAUDE)
+    monkeypatch.setattr(app_module, "MODEL_OPTIONS", app_module.model_options(CLAUDE))
+    monkeypatch.setattr(app_module, "FALLBACK_MODEL", GEMINI)
+    monkeypatch.setattr(app_module, "sleep", lambda seconds: None)
+    outcomes, calls = [], []
+
+    def completion(**kwargs):
+        calls.append({**kwargs, "messages": json.loads(json.dumps(kwargs["messages"]))})  # As sent at the time
+        if kwargs["model"] == GEMINI:
+            return reply(FakeMessage(content="Gemini here.", tool_calls=None))
+        step = outcomes.pop(0)
+        if isinstance(step, BaseException):
+            raise step
+        return reply(step)
+
+    monkeypatch.setattr(app_module.litellm, "completion", completion)
+    return outcomes, calls
+
+
+@pytest.mark.parametrize("error", [
+    no_credit(),
+    litellm.AuthenticationError(message="invalid x-api-key", model="claude", llm_provider="anthropic"),
+    litellm.APIConnectionError(message="Connection refused", model="claude", llm_provider="anthropic"),
+])
+def test_claude_without_credit_or_a_working_key_or_connection_hands_the_turn_to_gemini(client, claude_with_fallback, error):
+    outcomes, calls = claude_with_fallback
+    outcomes += [error]
+    body = client.post("/chat", json={"message": "hi"}).json()
+
+    assert body["response"] == "Gemini here."
+    assert [c["model"] for c in calls] == [CLAUDE, GEMINI]  # No retry for these
+    assert calls[1]["messages"][0] == {"role": "system", "content": app_module.SYSTEM_PROMPT}  # Gemini's own format
+    assert "reasoning_effort" not in calls[1] and "cache_control" not in calls[1]
+
+
+def test_an_overloaded_claude_gets_one_quick_retry_before_gemini_answers(client, claude_with_fallback, monkeypatch):
+    outcomes, calls = claude_with_fallback
+    waits = []
+    monkeypatch.setattr(app_module, "sleep", waits.append)
+    overloaded = litellm.InternalServerError(message="529 overloaded_error", llm_provider="anthropic", model="claude")
+    outcomes += [overloaded, overloaded]
+    assert client.post("/chat", json={"message": "hi"}).json()["response"] == "Gemini here."
+    assert [c["model"] for c in calls] == [CLAUDE, CLAUDE, GEMINI] and waits == [2]
+
+
+def test_gemini_takes_the_next_turns_until_claude_has_had_a_rest(client, claude_with_fallback, monkeypatch):
+    outcomes, calls = claude_with_fallback
+    clock = [1000.0]
+    monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
+    outcomes += [no_credit(), FakeMessage(content="Claude is back.", tool_calls=None)]
+    session = client.post("/chat", json={"message": "one"}).json()["session_id"]
+    clock[0] += 60
+    assert client.post("/chat", json={"message": "two", "session_id": session}).json()["response"] == "Gemini here."
+    clock[0] += app_module.FALLBACK_COOLDOWN
+    assert client.post("/chat", json={"message": "three", "session_id": session}).json()["response"] == "Claude is back."
+    assert [c["model"] for c in calls] == [CLAUDE, GEMINI, GEMINI, CLAUDE]
+
+
+def test_a_mid_turn_failure_restarts_the_turn_on_gemini_and_keeps_the_trace(client, claude_with_fallback, monkeypatch):
+    outcomes, calls = claude_with_fallback
+    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tools.tool_ok({"temp_f": 70}))
+    outcomes += [FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+                 litellm.APIConnectionError(message="Connection reset", model="claude", llm_provider="anthropic")]
+    body = client.post("/chat", json={"message": "weather?"}).json()
+
+    assert body["response"] == "Gemini here." and [c["name"] for c in body["tool_calls"]] == ["get_weather"]
+    gemini_view = calls[-1]["messages"]
+    assert gemini_view[-1]["role"] == "user" and "SIG" not in json.dumps(gemini_view)  # From the user's message, no Claude reasoning
+
+
+def test_other_claude_errors_are_reported_not_hidden_by_the_fallback(client, claude_with_fallback):
+    outcomes, calls = claude_with_fallback
+    outcomes += [litellm.BadRequestError(message="messages.1.content.0: Invalid `signature` in `thinking` block",
+                                         model="claude", llm_provider="anthropic")]
+    body = client.post("/chat", json={"message": "hi"}).json()
+    assert body["response"].startswith("Model call failed (BadRequestError)") and [c["model"] for c in calls] == [CLAUDE]
+
+
+def test_a_failing_fallback_is_reported(client, claude_with_fallback, monkeypatch):
+    outcomes, calls = claude_with_fallback
+    monkeypatch.setattr(app_module, "MODEL", GEMINI)  # Gemini is the model and the fallback: nothing to fall back to
+    monkeypatch.setattr(app_module.litellm, "completion", lambda **kw: calls.append(kw) or (_ for _ in ()).throw(
+        litellm.APIConnectionError(message="down", model="gemini", llm_provider="vertex_ai")))
+    body = client.post("/chat", json={"message": "hi"}).json()
+    assert body["response"].startswith("Model call failed (APIConnectionError)") and len(calls) == 1
+
+
+def test_anthropics_real_credit_error_counts_as_claude_being_unusable(client, vertex_claude):
+    replies, sent = vertex_claude
+    replies += [(400, {"type": "error", "error": {"type": "invalid_request_error",
+                                                  "message": "Your credit balance is too low to access the Anthropic API. "
+                                                             "Please go to Plans & Billing to upgrade or purchase credits."}})]
+    with pytest.raises(Exception) as raised:
+        app_module.complete([{"role": "user", "content": "hi"}], app_module.monotonic() + 60, model=app_module.MODEL)
+    assert app_module.unusable(raised.value)
