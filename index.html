@@ -90,6 +90,8 @@ const statusLine = document.getElementById("status");
 const SESSION_KEY = "scavagent.session_id";
 const PENDING_KEY = "scavagent.pending_message.v1";
 const LOCATION_MAX_AGE = 90_000;
+const CHAT_RETRY_DELAY = 5_000;
+const CHAT_RETRY_WINDOW = 270_000; // Total time from Send, including the first request.
 let sessionId = readStored(SESSION_KEY);
 if (!sessionId || !/^[A-Za-z0-9._-]{1,128}$/.test(sessionId)) sessionId = null;
 let pending = readPending();
@@ -229,10 +231,10 @@ document.addEventListener("visibilitychange", () => {
 });
 setInterval(() => { if (document.visibilityState === "visible") refreshLocation(); }, 60_000);
 
-async function fetchWithTimeout(url, options, milliseconds) {
+async function fetchWithTimeout(url, options, milliseconds, readResponse = response => response) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), milliseconds);
-  try { return await fetch(url, { ...options, signal:controller.signal, credentials:"same-origin", cache:"no-store" }); }
+  try { return await readResponse(await fetch(url, { ...options, signal:controller.signal, credentials:"same-origin", cache:"no-store" })); }
   finally { clearTimeout(timeout); }
 }
 async function restore() {
@@ -276,32 +278,47 @@ async function send(event) {
   if (!pendingUser) pendingUser = addMessage("user", pending.message);
   if (!pendingReply) { pendingReply = addMessage("assistant", "Following the thread…"); pendingReply.classList.add("pending"); }
   statusLine.textContent = "Scavagent is working on your next step…";
-  const payload = { ...pending };
-  const location = currentLocation();
-  if (location) payload.location = location;
-  else refreshLocation(); // Never wait on location or send stale coordinates.
+  const deadline = Date.now() + CHAT_RETRY_WINDOW;
   let permanentFailure = false;
   try {
-    const response = await fetchWithTimeout("/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) }, 90_000);
-    if (!response.ok) {
-      permanentFailure = response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status);
-      throw new Error("Chat unavailable");
+    while (Date.now() < deadline) {
+      const payload = { ...pending };
+      const location = currentLocation();
+      if (location) payload.location = location;
+      else refreshLocation(); // Never wait on location or send stale coordinates.
+      try {
+        const data = await fetchWithTimeout("/chat", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) },
+          Math.min(90_000, deadline - Date.now()), async response => {
+            if (!response.ok) {
+              permanentFailure = response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status);
+              throw new Error("Chat unavailable");
+            }
+            const reply = await response.json();
+            if (typeof reply.response !== "string" || reply.session_id !== payload.session_id || !Array.isArray(reply.tool_calls)) throw new Error("Invalid reply");
+            return reply;
+          });
+        updateReply(pendingReply, data);
+        pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
+        input.placeholder = "What’s our next move?";
+        statusLine.textContent = "Ready when you are. Type your next move.";
+        return;
+      } catch {
+        if (permanentFailure) break;
+        statusLine.textContent = "Still working on your plan…";
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+        // Keep busy true during both the request and this wait. A manual Send
+        // cannot start a parallel turn; each retry reuses the persisted IDs.
+        await new Promise(resolve => setTimeout(resolve, Math.min(CHAT_RETRY_DELAY, remaining)));
+      }
     }
-    const data = await response.json();
-    if (typeof data.response !== "string" || data.session_id !== payload.session_id || !Array.isArray(data.tool_calls)) throw new Error("Invalid reply");
-    updateReply(pendingReply, data);
-    pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
-    input.placeholder = "What’s our next move?";
-    statusLine.textContent = "Ready when you are. Type your next move.";
-  } catch {
     if (pendingReply?.classList.contains("pending")) { pendingReply.remove(); pendingReply = null; }
     input.value = pending.message;
     if (permanentFailure) {
+      // A rejected message can still be edited before the user sends it again.
       pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
-      statusLine.textContent = "That message wasn’t accepted. Check the text or your session, then send again.";
-    } else {
-      statusLine.textContent = "The reply didn’t arrive. Press Send to retry the same message.";
     }
+    statusLine.textContent = "The reply didn’t arrive. Press Send to retry the same message.";
   } finally { busy = false; refreshControls(); }
 }
 document.getElementById("composer").addEventListener("submit", send);
