@@ -55,7 +55,7 @@ Original: `pyproject.toml` and `uv.lock` at the base commit had no `gtfs-realtim
 
 ## `app.py`: use the agent prompt; allow more tool rounds
 
-Why: the interim prompt said "Kyle's agent work replaces it"; `agent.py` now holds the planning, guiding, adapting, and ending instructions. Planning a researched adventure takes more rounds than the starter's 8 (geocode, find, research, evaluate, fix, evaluate, save, reply), so the limit is 12. `TURN_SECONDS` still bounds every turn.
+Why: the interim prompt said "Kyle's agent work replaces it"; `agent.py` now holds the planning, guiding, adapting, and ending instructions. Planning a researched adventure takes more rounds than the starter's 8 (geocode, find, research, evaluate, fix, evaluate, save, reply). The limit was 12 in `3f687b2`; a live grader-query-2 run then used all 12 and got the harness's "tool-call limit" reply, so it is 16 since the commit after `0115112`. `TURN_SECONDS` still bounds every turn.
 
 Original lines at the base commit:
 

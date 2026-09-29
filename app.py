@@ -21,8 +21,8 @@ from tools import TOOLS, run_tool
 # --- Config ---
 
 # The agent's instructions live in agent.py (Kyle's workstream); see docs/SHARED_FILE_EDITS.md.
-# Planning a researched adventure takes more tool rounds than the starter's 8.
-MAX_TOOL_ROUNDS = 12
+# Planning a researched adventure takes more tool rounds than the starter's 8; TURN_SECONDS still bounds the turn.
+MAX_TOOL_ROUNDS = 16
 # A turn starts no model call or tool after this, and each model call gets only the time left. Tools bound
 # their own time. Kept well under state.IN_FLIGHT_TIMEOUT, so an expired claim's turn is no longer working.
 TURN_SECONDS = 240
