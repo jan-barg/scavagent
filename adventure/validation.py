@@ -9,8 +9,9 @@ the user's request and the product rules in docs/PLAN.md:
   least the dwell the user needs; only the travel modes the user allows;
 - route data: legs that connect the visiting order, transit timings that are neither stale nor
   already missed, no synthetic fixture data in a live plan;
-- activities: a physical task only with physical-feature evidence from its own place, hints for a
-  puzzle, a camera stop only at an enabled, field-verified position near the stop;
+- activities: a physical task only with physical-feature evidence from its own place, no invented
+  object for the user to find there, hints for a puzzle, a camera stop only at an enabled,
+  field-verified position near the stop;
 - story: every optional stop moves the story, beats tied to the right stop and used once, no clue
   stranded at a skipped stop;
 - a revision: the plan it replaces, completed stops unchanged, revealed beats kept, unresolved
@@ -21,6 +22,7 @@ checks arithmetic and references; it cannot certify that a quoted source is true
 """
 
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Callable
@@ -44,6 +46,16 @@ MIN_CONTINGENCY_MINUTES = 2
 CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of travel and dwell in reserve
 
 CameraLookup = Callable[[str], CameraCheckpoint | None]
+
+# Props a story might pretend are waiting at a real place. Fiction should arrive in chat instead.
+_PROP = (r"(?:note|envelope|chalk|mark(?:ing)?|package|parcel|key|card|letter|sticker|tape|microfilm|film|token|coin|"
+         r"capsule|briefcase|bag|box|flyer|poster|map|photo(?:graph)?|transmitter|bug|disk|drive|folder|dossier)s?")
+_ON_SITE = [  # asked in an activity prompt
+    re.compile(rf"\b(?:find|look for|locate|search for|retrieve|collect|pick up|grab|dig up|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
+    re.compile(rf"\b(?:left|hid|hidden|stashed|placed|taped|wedged|tucked|planted|dropped)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
+    re.compile(rf"\b{_PROP}\b[^.?!]{{0,40}}\b(?:left|hidden|stashed|placed|taped|wedged|tucked|planted)\b", re.I),
+]
+_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I)
 
 
 @dataclass
@@ -266,6 +278,10 @@ def evaluate_plan(
     revealed = set(state.revealed_beat_ids) if state else set()
     skipped = (set(state.skipped_ids) | set(state.blocked_ids)) if state else set()
     for beat in story.beats:
+        found = _FOUND.search(f"{beat.summary} {beat.reveals or ''}")
+        if found and beat.beat_id not in (set(state.revealed_beat_ids) if state else set()):
+            flag("INVENTED_PROP", f"{beat.beat_id} says the user found a physical object ('{found.group(0)}') at a real "
+                                  "place. Tell it as something delivered in chat instead.", beat.checkpoint_id)
         if beat.checkpoint_id is not None and beat.checkpoint_id not in checkpoint_ids:
             flag("ORPHAN_BEAT", f"{beat.beat_id} is tied to {beat.checkpoint_id}, which is not in the plan; move it to "
                                 "another stop or deliver it in chat (checkpoint_id null).")
@@ -306,6 +322,12 @@ def _check_checkpoint(checkpoint: Checkpoint, place, claims, camera_lookup, allo
             elif claim.kind != "physical_feature":
                 flag("UNSUPPORTED_PHYSICAL_TASK", f"Evidence {claim_id} is a {claim.kind} claim; it does not show the "
                                                   "feature is there today. Use a user observation or chat puzzle.", cid)
+    if not activity.evidence_ids:
+        found = next((m for pattern in _ON_SITE if (m := pattern.search(activity.prompt))), None)
+        if found:
+            flag("INVENTED_PROP", f"The prompt at {cid} sends the user to find a physical object ('{found.group(0)}') "
+                                  "that nothing shows is there. Deliver props in chat (a radio message, a telegram) "
+                                  "or ask them to observe what is really there.", cid)
     if activity.type == "chat_puzzle" and not activity.hints:
         flag("MISSING_HINTS", f"The puzzle at {cid} has no hints; give at least one.", cid)
     if activity.type == "camera_capture":

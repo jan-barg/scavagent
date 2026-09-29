@@ -199,3 +199,91 @@ def test_check_retimes_the_adventure_under_way_against_a_new_deadline():
     assert [v["code"] for v in data["violations"]] == ["DEADLINE_EXCEEDED"]
     assert data["timeline"][0]["checkpoint_id"] == "stop_2"
     assert state.active_plan(ctx.record).request.deadline is None  # checking changes nothing
+
+
+def test_a_revision_can_change_the_destination_and_add_a_required_stop():
+    ctx = started_and_first_stop_done()
+    pharmacy = {"place": {"name": "Pharmacy at Broadway & 84th", "lat": 40.7865, "lng": -73.9780},
+                "required_by_user": True, "dwell_minutes": 5,
+                "activity": activity(type="user_observation", hints=[]), "move_beat_id": "beat_2"}
+    end = {"place_text": "Broadway & West 86th Street", "lat": 40.7883, "lng": -73.9765}
+    result = evaluate(ctx, {"kind": "revision", "stops": [pharmacy], "destination": end}, 6, 3)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    save_adventure_plan(ctx, result["data"]["draft_id"])
+    plan = state.active_plan(ctx.record)
+    assert plan.request.destination.place_text == "Broadway & West 86th Street"
+    assert [s.place.place_text for s in plan.request.required_stops] == ["Pharmacy at Broadway & 84th"]
+    assert [leg.to_id for leg in plan.legs] == ["stop_3", "destination"]
+
+
+def test_a_budget_the_agent_chose_is_recorded_as_a_default():
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, draft(duration_minutes=40), 5, 9)["data"]["draft_id"])
+
+    assert state.active_plan(ctx.record).request.defaulted_fields == ["duration_minutes", "theme"]
+
+
+def test_a_stop_without_an_activity_gets_a_plain_instruction():
+    bare = draft()
+    bare["stops"][0].pop("activity")
+    result = evaluate(session(), bare, 5, 9)
+
+    assert "needs an activity with type, prompt, answer_rule, and fallback" in result["error"]["message"]
+
+
+# --- Directions ---
+
+GOOGLE = "routes.googleapis.com"
+
+
+def test_directions_use_the_planned_walking_leg():
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, draft(), 5, 9)["data"]["draft_id"], start_now=True)
+    with FakeHTTP({}) as http:
+        result = agent_tools.get_next_directions(ctx)
+
+    data = result["data"]
+    assert (data["to_id"], data["name"], data["minutes"], data["refreshed"]) == ("stop_1", "The El Dorado", 5.0, False)
+    assert data["instructions"] == ["Walk north on Central Park West."]
+    assert http.calls == []
+
+
+def test_directions_start_from_the_user_when_they_have_wandered_off():
+    from schemas import LocationContext
+
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, draft(), 5, 9)["data"]["draft_id"], start_now=True)
+    away = LocationContext(point=LatLng(lat=40.7790, lng=-73.9740), source="browser", observed_at=NOW, accuracy_m=15)
+    state.update_location(ctx.record, away)
+    with FakeHTTP({VALHALLA: [walking(12)]}) as http:
+        result = agent_tools.get_next_directions(ctx)
+
+    assert result["data"]["refreshed"] and result["data"]["minutes"] == 12.0
+    route_request = http.calls[0]["json"]["locations"][0]
+    assert (route_request["lat"], route_request["lon"]) == (40.7790, -73.9740)
+
+
+def test_stale_transit_directions_are_looked_up_again(monkeypatch):
+    from fake_http import google_transit_response
+    from integrations import transit
+
+    transit.reset_for_tests()
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "test-key")
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, draft(allowed_modes=["walk", "transit"]), 5, 9)["data"]["draft_id"],
+                        start_now=True)
+    # Pretend the first leg was a subway ride looked up half an hour ago; Google needs a current time.
+    later = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(minutes=5)
+    ctx.now = lambda: later
+    plan = state.active_plan(ctx.record)
+    old_ride = plan.legs[0].model_copy(update={"actual_modes": ["walk", "transit"],
+                                               "retrieved_at": later - timedelta(minutes=30)})
+    ctx.record.plans[plan.plan_id] = plan.model_copy(update={"legs": [old_ride, *plan.legs[1:]]})
+    answers = {VALHALLA: [walking(40)], GOOGLE: [(200, google_transit_response(later))]}
+    with FakeHTTP(answers):
+        result = agent_tools.get_next_directions(ctx)
+
+    data = result["data"]
+    assert data["refreshed"] and data["modes"] == ["walk", "transit"]
+    assert any("Take the A train" in line for line in data["instructions"])

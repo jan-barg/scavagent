@@ -134,6 +134,15 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
             beats[beat_id] = _beat(beat_id, checkpoint_id, spec["beat"])
         checkpoints.append(_checkpoint(spec, checkpoint_id, place.place_id, beat_id))
 
+    added = [(c, spec) for c, spec in zip(checkpoints[len(checkpoints) - len(specs):], specs)
+             if not spec.get("keep") and c.required_by_user]
+    if added:
+        extra = [RequiredStop(stop_id=f"req_{len(request.required_stops) + n}", place=_location_of(places[c.place_id], now),
+                              dwell_minutes=c.dwell_minutes, window_start=parse_time(spec.get("window_start")),
+                              window_end=parse_time(spec.get("window_end")))
+                 for n, (c, spec) in enumerate(added, 1)]
+        request = AdventureRequest.model_validate({**request.model_dump(), "required_stops": [*request.required_stops, *extra]})
+
     # Clues waiting at stops that are gone, skipped, or blocked are delivered in chat instead.
     kept_ids = {c.checkpoint_id for c in checkpoints}
     for beat in list(beats.values()):
@@ -191,20 +200,20 @@ def _request(draft, now):
     if start is None:
         raise DraftError("start needs place_text and lat/lng; resolve it with geocode_place first.")
     stated = set(draft.get("user_stated") or [])
-    modes = draft.get("allowed_modes") or ["walk", "transit"]
-    theme = draft.get("theme") or DEFAULT_THEME
     deadline = parse_time(draft.get("deadline"))
     if deadline is not None and deadline <= now:
         raise DraftError("The deadline has already passed; ask the user for their time limit.")
+    fields = {
+        "destination": _location(draft.get("destination"), "destination", now),
+        "deadline": deadline,
+        "duration_minutes": draft.get("duration_minutes"),
+        "allowed_modes": draft.get("allowed_modes") or ["walk", "transit"],
+        "theme": draft.get("theme") or DEFAULT_THEME,
+    }
     try:
         return AdventureRequest(
-            start=start,
-            destination=_location(draft.get("destination"), "destination", now),
-            deadline=deadline,
-            duration_minutes=draft.get("duration_minutes"),
-            allowed_modes=modes,
-            theme=theme,
-            defaulted_fields=[f for f in ("allowed_modes", "theme") if f not in stated],
+            start=start, **fields,
+            defaulted_fields=[name for name, value in fields.items() if value is not None and name not in stated],
         )
     except ValidationError as e:
         raise DraftError(f"Request fields are invalid: {_errors(e)}") from e
@@ -221,6 +230,8 @@ def _revised_request(draft, old, waived, now):
         update["duration_minutes"] = draft["duration_minutes"]
     if draft.get("allowed_modes"):
         update["allowed_modes"] = draft["allowed_modes"]
+    if draft.get("destination"):
+        update["destination"] = _location(draft["destination"], "destination", now)
     if waived:
         dropped = {c.place_id for c in old.checkpoints if c.checkpoint_id in waived}
         places = {p.place_id: p for p in old.places}
@@ -275,6 +286,9 @@ def _place(spec, now, camera_lookup):
 
 
 def _checkpoint(spec, checkpoint_id, place_id, beat_id):
+    if not spec.get("activity"):
+        raise DraftError(f"Stop {checkpoint_id} needs an activity with type, prompt, answer_rule, and fallback; a "
+                         "plain arrival can be a user_observation.")
     try:
         activity = Activity.model_validate(spec.get("activity") or {})
         return Checkpoint(checkpoint_id=checkpoint_id, place_id=place_id,

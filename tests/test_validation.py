@@ -272,3 +272,18 @@ def test_a_new_plan_ignores_progress_from_an_earlier_adventure():
     evaluation = evaluate(state=earlier)
 
     assert [row["checkpoint_id"] for row in evaluation.timeline] == ["stop_1", "stop_2", "stop_3"]
+
+
+def test_an_object_the_user_must_find_at_a_real_place_is_flagged_unless_evidenced():
+    def chalk(data):
+        checkpoint(data, "stop_1")["activity"]["prompt"] = "A contact left a chalk mark on the brickwork. Describe it."
+
+    def found(data):
+        data["story"]["beats"][2]["summary"] = "You spot the microfilm tucked behind the lamppost."
+
+    def observe(data):
+        checkpoint(data, "stop_1")["activity"]["prompt"] = "Describe one detail of the stonework; it is your recognition sign."
+
+    assert codes(evaluate(edit(BASE.plan, chalk))) == ["INVENTED_PROP"]
+    assert codes(evaluate(edit(BASE.plan, found))) == ["INVENTED_PROP"]
+    assert evaluate(edit(BASE.plan, observe)).report.ok

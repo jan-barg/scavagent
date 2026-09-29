@@ -1,22 +1,29 @@
-"""The agent's planning tools: evaluate_adventure_plan and save_adventure_plan.
+"""The agent's planning tools: evaluate_adventure_plan, save_adventure_plan, and get_next_directions.
 
 evaluate_adventure_plan turns the agent's draft into a routed plan (adventure.drafts), runs the
 evaluator (adventure.validation), and keeps the evaluated plan for this session for 30 minutes.
-save_adventure_plan stores a plan that passed through state.save_plan. Both are session tools:
-the server passes the ToolContext, so the model never names a session.
+save_adventure_plan stores a plan that passed through state.save_plan. get_next_directions gives
+the way to the current stop, re-routed when transit times are stale or the user has moved. All are
+session tools: the server passes the ToolContext, so the model never names a session.
 """
 
 import os
 import time
+from datetime import timedelta
 
 import state
 from adventure.drafts import STATED_FIELDS, DraftError, build_new_plan, build_revision, parse_time
 from adventure.validation import evaluate_plan
 from integrations import cameras
+from integrations.common import distance_m
+from integrations.routes import get_route
 from schemas import AdventurePlan, Freshness, tool_error, tool_ok
 from state import ToolContext
 
 DRAFT_SECONDS = 1800
+TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
+LOCATION_FRESH = timedelta(minutes=10)
+OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from where they are
 _drafts = {}  # plan_id -> (expires at, session_id, kind, plan, waived required ids)
 
 
@@ -26,7 +33,7 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict) -> dict:
         return tool_error("INVALID_ARGUMENT", "draft must be an object.", retryable=False,
                           next_step="Pass the draft fields listed in the tool schema.")
     kind = draft.get("kind", "new")
-    now = ctx.now()
+    now = ctx.now().replace(microsecond=0)
     active, progress = state.active_plan(ctx.record), ctx.record.adventure
     lookup, dev = camera_lookup(), dev_mode()
     try:
@@ -79,6 +86,65 @@ def save_adventure_plan(ctx: ToolContext, draft_id: str, start_now: bool = False
     if result["ok"]:
         _drafts.pop(draft_id, None)
     return result
+
+
+def get_next_directions(ctx: ToolContext) -> dict:
+    """Directions to the current checkpoint, or to the destination once the stops are done."""
+    plan, progress = state.active_plan(ctx.record), ctx.record.adventure
+    if plan is None or progress.status not in ("proposed", "active"):
+        return tool_error("INVALID_ARGUMENT", "There is no adventure under way.", retryable=False,
+                          next_step="Plan an adventure first.")
+    target = progress.current_checkpoint_id or ("destination" if plan.request.destination else None)
+    if target is None:
+        return tool_ok({"remaining": False}, warnings=["No stops remain; finish the adventure."])
+    now = ctx.now().replace(microsecond=0)
+    places = {p.place_id: p for p in plan.places}
+    goal = _endpoint(plan, places, target)
+    leg = next((leg for leg in plan.legs if leg.to_id == target), None)
+
+    here = None
+    latest = progress.latest_location
+    if latest and latest.point and now - latest.observed_at <= LOCATION_FRESH and (latest.accuracy_m or 0) <= OFF_ROUTE_M:
+        here = latest.point
+    origin = _endpoint(plan, places, leg.from_id) if leg else None
+    wandered = here is not None and origin is not None and distance_m(here.lat, here.lng, origin.lat, origin.lng) > OFF_ROUTE_M
+    stale = leg is not None and "transit" in leg.actual_modes and (
+        now - leg.retrieved_at > TRANSIT_REFRESH or (leg.depart_at is not None and leg.depart_at < now - timedelta(minutes=2)))
+
+    warnings, details = [], None
+    start = here if (wandered or leg is None) and here is not None else origin
+    if (leg is None or stale or wandered) and start is not None and goal is not None:
+        result = get_route([{"id": "here", "lat": start.lat, "lng": start.lng}, {"id": target, "lat": goal.lat, "lng": goal.lng}],
+                           modes=plan.request.allowed_modes, depart_at=now.isoformat())
+        if result["ok"]:
+            leg_data, details = result["data"]["legs"][0], result["data"]["details"][0]
+            directions = {"minutes": leg_data["duration_minutes"], "modes": leg_data["actual_modes"],
+                          "instructions": leg_data["instructions"], "arrive_at": leg_data["arrive_at"], "refreshed": True}
+        else:
+            warnings.append(f"Could not refresh the route ({result['error']['message']}); these are the planned directions.")
+    if details is None:
+        if leg is None:
+            return tool_error("NO_MATCH", f"The plan has no leg to {target}.", retryable=False,
+                              next_step="Call get_route from the user's location to the stop.")
+        directions = {"minutes": leg.duration_minutes, "modes": leg.actual_modes, "instructions": leg.instructions,
+                      "arrive_at": leg.arrive_at.isoformat() if leg.arrive_at else None, "refreshed": False}
+    if target == "destination":
+        name = plan.request.destination.place_text or "the destination"
+    else:
+        name = places[next(c.place_id for c in plan.checkpoints if c.checkpoint_id == target)].name
+    return tool_ok({"to_id": target, "name": name, **directions, "details": details}, warnings=warnings,
+                   freshness=Freshness(kind="scheduled" if "transit" in directions["modes"] else "static_reference",
+                                       retrieved_at=now))
+
+
+def _endpoint(plan, places, endpoint_id):
+    """Coordinates of a leg endpoint, when the plan knows them."""
+    if endpoint_id == "start":
+        return plan.request.start.point
+    if endpoint_id == "destination":
+        return plan.request.destination.point if plan.request.destination else None
+    checkpoint = next((c for c in plan.checkpoints if c.checkpoint_id == endpoint_id), None)
+    return places[checkpoint.place_id].point if checkpoint else None  # "current_location" is not stored
 
 
 def _check_under_way(active, progress, draft, now, lookup, dev):
@@ -277,5 +343,19 @@ PLANNING_TOOLS = [
     },
 ]
 
-PLANNING_TOOL_MAP = {"evaluate_adventure_plan": evaluate_adventure_plan, "save_adventure_plan": save_adventure_plan}
+PLANNING_TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "get_next_directions",
+        "description": (
+            "Directions to the current checkpoint of the adventure under way (or to the destination after the last "
+            "stop): minutes, travel modes, and step-by-step instructions. Transit legs are looked up again when their "
+            "times are stale, and the route starts from the user's fresh location if they have moved away."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+})
+
+PLANNING_TOOL_MAP = {"evaluate_adventure_plan": evaluate_adventure_plan, "save_adventure_plan": save_adventure_plan,
+                     "get_next_directions": get_next_directions}
 PLANNING_SESSION_TOOLS = set(PLANNING_TOOL_MAP)
