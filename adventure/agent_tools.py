@@ -183,7 +183,8 @@ def overview(plan: AdventurePlan, timeline: list[dict]) -> dict:
         "premise": plan.story.premise,
         "stops": [{"checkpoint_id": c.checkpoint_id, "name": places[c.place_id].name, "place_id": c.place_id,
                    "required": c.required_by_user, "activity": c.activity.type, "dwell_minutes": c.dwell_minutes,
-                   "arrive_local": arrivals.get(c.checkpoint_id), "story_beat_id": c.story_beat_id}
+                   "arrive_local": arrivals.get(c.checkpoint_id), "story_beat_id": c.story_beat_id,
+                   "source_url": next((str(url) for claim in places[c.place_id].claims for url in claim.source_urls), None)}
                   for c in plan.checkpoints],
         "legs": [{"leg_id": leg.leg_id, "from": leg.from_id, "to": leg.to_id, "minutes": leg.duration_minutes,
                   "modes": leg.actual_modes, "first_step": leg.instructions[0] if leg.instructions else None}
