@@ -4,6 +4,7 @@ tools.py registers PLACE_TOOLS and PLACE_TOOL_MAP. The adapters return tool_ok/t
 the harness sends them to the model as JSON text and keeps the dict in the /chat trace.
 """
 
+from integrations.filming import find_filming_records
 from integrations.geocoding import geocode_place
 from integrations.mta import get_transit_arrivals
 from integrations.research import find_places, research_place
@@ -158,6 +159,29 @@ PLACE_TOOLS.append({
     },
 })
 
+PLACE_TOOLS.append({
+    "type": "function",
+    "function": {
+        "name": "find_filming_records",
+        "description": (
+            "Film permits that held parking on a street (or in a ZIP code), newest first, with the data's coverage "
+            "dates. Use it for filming-history color at a stop ('a TV series held parking on this block in June 2026'). "
+            "The records end months before today, so they never show a current set: do not promise one."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "street": {"type": "string", "description": "One street, e.g. 'Columbus Avenue'."},
+                "zip_code": {"type": "string", "description": "Five digits, e.g. '10024'."},
+                "date_from": {"type": "string", "description": "YYYY-MM-DD. Default one year before the data ends."},
+                "date_to": {"type": "string", "description": "YYYY-MM-DD. Default the data's last permit."},
+                "category": {"type": "string", "description": "e.g. 'Television', 'Film', 'Commercial'."},
+                "limit": {"type": "integer", "description": "1-10. Default 5."},
+            },
+        },
+    },
+})
+
 PLACE_TOOL_MAP = {
     "geocode_place": geocode_place,
     "find_places": find_places,
@@ -165,4 +189,5 @@ PLACE_TOOL_MAP = {
     "get_route": get_route,
     "get_walking_times": get_walking_times,
     "get_transit_arrivals": get_transit_arrivals,
+    "find_filming_records": find_filming_records,
 }

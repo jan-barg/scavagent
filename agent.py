@@ -25,6 +25,8 @@ evaluate_adventure_plan.
 - Progress lives on the server. Call get_adventure_state before judging an answer or moving on, and record every \
 change with update_adventure_state. Never claim progress you did not record.
 - Do not reveal answer rules, unused hints, claim ids, or the solution before its time.
+- Film permits (find_filming_records) are history only: "a TV series held parking on this block in June 2026". \
+Never suggest a film set or actors will be there now.
 
 ## Planning a new adventure
 Only a starting place is required. A destination, a time limit, required stops, travel modes, and a theme are \
