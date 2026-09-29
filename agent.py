@@ -40,7 +40,8 @@ otherwise geocode_place what they typed. Geocode a destination and required stop
 chapter of 2-3 stops taking roughly 20-40 minutes. For "I have 45 minutes", pass duration_minutes 45; use deadline \
 only for a clock time the user gives ("by 3:30"), written in New York time from the app context's Now. Omit \
 depart_at unless the user will start later. Timestamps in tool results that end in Z are UTC.
-3. find_places near the start, or around the midpoint toward a destination. For a real subject places are known for \
+3. find_places near the start, or, with a destination or required stops, around the midpoint and those stops: \
+choose places on the way, not behind the start. For a real subject places are known for \
 (a band, jazz, architecture, film, immigration), pass its key terms as the query, e.g. 'Strokes rock "music venue"', \
 not generic words like "historic" or "landmark"; prefer candidates whose matched_terms include the specific terms, \
 and if nothing near the start matches, search near the midpoint or the destination too. For invented genres such as \

@@ -333,6 +333,7 @@ def test_enough_stops_for_the_time():
     result = evaluate(short, 5)
     assert codes(result) == ["TOO_FEW_STOPS"]
     assert "at least 2" in messages(result)
+    assert "under 12 minutes: search find_places around Beacon Theatre (New York City) or the start" in messages(result)
     assert evaluate(asked_for_one, 5)["data"]["passes"]
     assert evaluate(short, 11)["data"]["passes"]  # an 11-minute walk there leaves no room for another stop
 

@@ -647,12 +647,17 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         needed = 2 if not limited else 3 if available >= 60 else 2 if available >= 20 else 1
         room = not limited or slack is None or slack >= ROOM_FOR_A_STOP_MINUTES
         if len(plan.checkpoints) < needed and room:
-            time = (f"{available:.0f} available minutes, {slack:.0f} unused" if limited else
-                    "no time limit from the user, so a first chapter")
-            flag("TOO_FEW_STOPS", f"{len(plan.checkpoints)} stop(s) for {time}: plan at least {needed}. Add a researched "
-                                  "stop near the route (ride transit between far-apart stops), and drop any time limit "
-                                  "the user did not give. If the user asked for fewer stops, include \"stop_count\" in "
-                                  "user_stated.")
+            if limited:
+                places_on_route = [places[c.place_id].name for c in plan.checkpoints if c.place_id in places]
+                around = " or ".join([*places_on_route[:2], "the start"])
+                fix = (f"A stop fits if its detour and dwell together take under {slack:.0f} minutes: search find_places "
+                       f"around {around} and pick a place a few minutes' walk off the route, not behind the start.")
+                time = f"{available:.0f} available minutes, {slack:.0f} unused"
+            else:
+                fix = "Add a researched stop near the route, and drop any time limit the user did not give."
+                time = "no time limit from the user, so a first chapter"
+            flag("TOO_FEW_STOPS", f"{len(plan.checkpoints)} stop(s) for {time}: plan at least {needed}. {fix} If the "
+                                  "user asked for fewer stops, include \"stop_count\" in user_stated.")
 
 
 def _cast_name(member):
@@ -774,7 +779,8 @@ def _time_savers(remaining, legs_by_pair, order):
         savings.append((checkpoint.dwell_minutes + around, checkpoint))
     savings.sort(key=lambda item: -item[0])
     return [f"Dropping optional {c.checkpoint_id} saves up to {minutes:.0f} minutes ({c.dwell_minutes} dwell plus its "
-            "legs); re-route to confirm." for minutes, c in savings[:3]] or [
+            "legs); re-route to confirm. Or swap it for a place a few minutes' walk from the route (find_places around "
+            "the stop before it) if the plan needs that many stops." for minutes, c in savings[:3]] or [
         "No optional stop is left to drop; shorten dwell times, allow transit, or ask the user which limit can change."]
 
 
