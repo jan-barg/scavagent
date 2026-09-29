@@ -50,17 +50,47 @@ Story quality (principle numbers from STORY_DESIGN.md):
 - **Qwen3:** not usable. It asked the user to restate "72 and west end" instead of geocoding it, ran out of tool rounds twice, and invented Strokes history ("demo tapes were stored here in a safe deposit box").
 - **gpt-oss-120b:** not usable on this project. Vertex refused 62 of 81 calls with 429 "too many concurrent requests" (one request at a time), so turns took 2–4 minutes, one reached the 240-second limit, and acceptance was 6/14.
 
+## Round 2: story design v2 (#13) and the caching change (September 29, evening)
+
+Same queries against `main` with Kyle's story design v2 merged. The acceptance script now has 26 checks (8 new story checks: briefing, characters introduced before they act, every stop's clue used later, theme links). "Before" is `087780b`; "after" adds the caching change `f8cbf3f`. No turn in either run hit the tool-round limit.
+
+| Model | Acceptance (before → after) | Planning turn (s, after) | Follow-up cost (before → after) | 10 turns (before → after) |
+|---|---|---|---|---|
+| Claude Opus 5.5 | 26/26 → 26/26 | 70–144 | $0.174 → $0.149 | $2.04 → $1.84 |
+| Claude Sonnet 5.5 | 26/26 → 26/26 | 32–64 | $0.055 → $0.072 | $0.82 → $0.84 |
+| Gemini 3.5 Flash-Lite | 26/26 → 24/26 | 43–62 | $0.012 → $0.013 | $0.16 → $0.18 |
+
+These runs send turns seconds apart, which flatters the old code: its server context changes only once a minute, so back-to-back turns already hit the cache. (Sonnet's "after" also spent 8 calls on the skip-a-stop turn against 2 before.) Flash-Lite's two misses were the briefing and cast checks on one query; the reply had a briefing, the saved draft did not. It passed them before, so this is probably run-to-run variance.
+
+The caching change measured with realistic spacing: Sonnet, Kyle's query, then four follow-ups 75 seconds apart.
+
+| Follow-up | Before: written / cost | After: written / cost |
+|---|---|---|
+| "Ready, let's go." | 15.8K / $0.064 | 18.7K / $0.096 |
+| "I'm here now." | 17.7K / $0.054 | 5.7K / $0.034 |
+| "Not sure. Can I get a hint?" | 17.9K / $0.048 | 3.5K / $0.031 |
+| "Okay, I think I've got it. What's next?" | 18.0K / $0.048 | 3.6K / $0.028 |
+
+Before, every follow-up re-wrote the whole history (read only the instructions); after, it reads the history and writes only the previous turn. The first follow-up after planning costs more, because the planning turn is written once at the one-hour rate. Steady follow-ups are about 40% cheaper, and the gap grows with the session, because the old cost rose with the history. Follow-up turns take about as long as before (medians within a second or two).
+
+Stories: all three models now write briefings, casts with a handler and a channel, clues, and theme links. Examples with the full chat and saved plans: https://claude.ai/artifact/6HzgH4w8MPtw76aANkpCvf (private to Jan). Findings:
+
+- Opus writes the richest stories (three stops on both new prompts, named handlers with distinct voices, clues from sourced dates and numbers). Sonnet is close, sometimes with two stops. Flash-Lite follows the format but thinly.
+- agent.py's worked example (a freelance tape tracker, Mara Quill, a stolen reel, a locker code, Roxy) is Jan's music query. Opus and Sonnet both reused Mara Quill there, and on a new jazz prompt Opus opened with "You're a freelance tape tracker" and Sonnet built an archivist, a radio, and a locker code. The example is shaping every music story; a different example scenario would fix that.
+- With v2, Opus's longest turn was 144 s, inside the 240-second limit.
+
 ## Claude notes
 
 - Claude runs through Anthropic's API (`anthropic/claude-...`), not Vertex (no quota for this project). The app sends adaptive thinking at effort `medium` (override with `SCAVAGENT_REASONING_EFFORT`), a 32K output cap, automatic prompt caching, and the instructions as a separately cached block (one hour); tool choice stays `auto`. Thinking blocks are replayed only within their own turn, as Claude 5.5's preserved-thinking rules require when the server context changes every turn.
 - Neither model wrote a link that did not come from a tool result, cast a real person, or claimed a Strokes connection the research did not support.
-- Where the money goes: each turn's first call writes the conversation so far to the cache again (about 20K tokens, roughly $0.10 on Opus, $0.05 on Sonnet), because the per-turn server context sits before the history. Moving that context after the history (into the new user message) would let later turns read the history from cache and cut follow-up turns by roughly half. Not done yet: it changes where the model sees the server context, so it needs its own before/after run.
+- Caching (since `f8cbf3f`): the system message is only the instructions, the per-turn server context rides with the newest message and is not stored, the context window moves in steps of 20 messages, and Claude gets one-hour breakpoints at the end of the history before the last two user messages. Round 2 has the numbers.
 
 ## Recommendation
 
-**Claude Sonnet 5.5 now** (`SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5`), and decide between it and Opus 5.5 after Kyle's story-design PR merges.
+Claude, Sonnet 5.5 or Opus 5.5; Jan to choose from the story samples. Default unchanged until then.
 
-- Sonnet 5.5 and Opus 5.5 are the only models that passed all 18 acceptance checks and also followed the story rules the current evaluator cannot see (no real people as characters, no invented history, links only from sources, honest when a theme has no sourced place).
-- Opus 5.5 writes the richer mysteries, but it costs about 2.2× as much and takes about 1.6× as long per planning turn (up to 124 s). The v2 design adds briefing, cast, clue, and theme-link checks, so planning turns will need more evaluator rounds; Sonnet has more room under the 240-second turn limit.
-- Against the current Flash-Lite default: Flash-Lite is about 8× cheaper than Sonnet and faster, but its stories are the thin ones STORY_DESIGN.md was written about.
-- Rerun both Claude models with Kyle's merged prompt and evaluator. If Opus's planning turns stay well under 240 s, switch to Opus 5.5 for the submission; the cost difference is a few dollars for grading.
+- Only the two Claude models passed every acceptance check in both rounds and kept to the story rules the evaluator cannot fully check (no real people as characters, no invented history, links only from sources, honest when a theme has no sourced place).
+- Under story design v2 both fit the 240-second turn limit (longest planning turns: Opus 144 s, Sonnet 64 s).
+- Opus writes the richer stories for about twice the cost: per planning turn about $0.24 against $0.10, per follow-up about $0.15 against $0.07 (list prices, after the caching change). A full adventure (one plan, about eight follow-ups) is roughly $1.40 on Opus and $0.65 on Sonnet.
+- Flash-Lite stays about ten times cheaper, and its stories are thinner.
+- Next: the planner/guide split (a Claude model plans and replans, a cheaper model guides the walk), once Jan has picked the combinations to try. It needs a full walkthrough per combination (arrival, answers at each stop, the finale, a replan), because the guide delivers the story.
