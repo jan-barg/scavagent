@@ -46,7 +46,7 @@ Story quality (principle numbers from STORY_DESIGN.md):
 - **Flash:** the best stories so far. It found the real Strokes venues (Mercury Lounge, Arlene's Grocery) and ended on a Strokes song title. Jan's got Verdi Square and the Ansonia with a puzzle built on a sourced fact. Still thin openings, observation stops that earn no clue, and a "Julian (Archivist)". Slower, about 10× Flash-Lite's cost, and one query failed on a 429.
 - **Kimi K2 Thinking:** the most story: three stops each, puzzles whose answers become clues, a finale built from them. But it casts real people as speaking characters: all five Strokes on the radio for Kyle, "Roxy" Rothafel and Steve Ostrow for Jan (6). It also invents history ("private after-hours concerts" at the Beacon in 1972). The current evaluator only catches architects in the cast, so these plans passed.
 - **Qwen3:** not usable. It asked the user to restate "72 and west end" instead of geocoding it, ran out of tool rounds twice, and invented Strokes history ("demo tapes were stored here in a safe deposit box").
-- **gpt-oss-120b:** not usable on this project: Vertex refuses most calls for concurrency, so turns crawl.
+- **gpt-oss-120b:** not usable on this project. Vertex refused 62 of 81 calls with 429 "too many concurrent requests" (one request at a time), so turns took 2–4 minutes, one reached the 240-second limit, and acceptance was 6/14.
 
 ## Claude
 
