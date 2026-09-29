@@ -107,7 +107,8 @@ def get_route(stops, modes=("walk", "transit"), depart_at=None, transit_types=("
             if ride_error:
                 warnings.append(f"Transit lookup failed for {leg_id} ({ride_error}); it is a {walk['minutes']:.0f}-minute "
                                 "walk instead.")
-            minutes, meters, instructions = walk["minutes"], walk["meters"], walk["instructions"]
+            minutes, meters = walk["minutes"], walk["meters"]
+            instructions = _readable(walk, _heading(origin, destination))
             actual, source, note = ["walk"], walk_source, WALK_NOTE
             extra = {"via_streets": walk["streets"]}
         elif ride and not ride["has_transit"]:  # Google's best transit answer is to walk
@@ -368,6 +369,16 @@ def _heading(origin, destination):
     y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlng)
     bearing = (math.degrees(math.atan2(x, y)) + 360) % 360
     return COMPASS[round(bearing / 45) % 8]
+
+
+def _readable(walk, heading):
+    """A summary line, then the turns onto named streets. OpenStreetMap maps Manhattan sidewalks as unnamed
+    ways, so steps like "Turn left onto the walkway" say nothing useful and are left out."""
+    if walk["meters"] < SAME_SPOT_M:
+        return []
+    via = f" via {', then '.join(walk['streets'])}" if walk["streets"] else ""
+    named = [step for step in walk["instructions"] if "walkway" not in step.lower()]
+    return [f"Walk about {max(1, int(walk['minutes'] + 0.5))} min heading {heading}{via}.", *named]
 
 
 def _local(moment):

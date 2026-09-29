@@ -56,7 +56,8 @@ _ON_SITE = [  # asked in an activity prompt
     re.compile(rf"\b(?:left|hid|hidden|stashed|placed|taped|wedged|tucked|planted|dropped)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
     re.compile(rf"\b{_PROP}\b[^.?!]{{0,40}}\b(?:left|hidden|stashed|placed|taped|wedged|tucked|planted)\b", re.I),
 ]
-_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I)
+_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b"
+                    rf"|\b(?:handed to you|hands you|gives you|passes you|slips you|falls into your hands)\b", re.I)
 
 
 @dataclass
@@ -285,8 +286,9 @@ def evaluate_plan(
     for beat in story.beats:
         found = _FOUND.search(f"{beat.summary} {beat.reveals or ''}")
         if found and beat.beat_id not in (set(state.revealed_beat_ids) if state else set()):
-            flag("INVENTED_PROP", f"{beat.beat_id} says the user found a physical object ('{found.group(0)}') at a real "
-                                  "place. Tell it as something delivered in chat instead.", beat.checkpoint_id)
+            flag("INVENTED_PROP", f"{beat.beat_id} says something physically reached the user ('{found.group(0)}') at a "
+                                  "real place, from an object or a person who will not be there. Tell it as something "
+                                  "delivered in chat instead.", beat.checkpoint_id)
         if beat.checkpoint_id is not None and beat.checkpoint_id not in checkpoint_ids:
             flag("ORPHAN_BEAT", f"{beat.beat_id} is tied to {beat.checkpoint_id}, which is not in the plan; move it to "
                                 "another stop or deliver it in chat (checkpoint_id null).")

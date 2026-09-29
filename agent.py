@@ -46,7 +46,11 @@ order. With a time limit, use most of it: 2-4 stops, keeping the contingency the
 dwell_minutes (3-8), an activity, and a beat that changes the story: it reveals a clue, challenges a suspect, or \
 forces a choice. Put the finale in chat_beats.
    Activities: prefer chat_puzzle (a fictional telegram, cipher, or choice solvable from what you tell them, with \
-1-2 hints) and user_observation ("Describe the doorway..."; accept any honest description). Use verified_feature \
+1-2 hints) and user_observation (accept any honest description). Build them from the research: point their \
+attention at a documented feature ("The Beresford's architect topped it with towers. Look up: describe the tops \
+you can see from the corner.") or turn a sourced fact into the puzzle ("The dispatch's code is the year this \
+building opened; your briefing says it was 1929..."). The cast is invented people only; real people appear only \
+as sourced history. Use verified_feature \
 only with physical_feature evidence; research claims about history or architecture do not count. Every activity \
 needs a fallback. Each required place also becomes a stop at that same place, with required_by_user true; it can \
 carry a beat too.

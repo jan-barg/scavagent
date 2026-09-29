@@ -61,7 +61,9 @@ def test_multi_stop_walk_becomes_one_route_leg_per_consecutive_pair():
     first, second = [RouteLeg.model_validate(leg) for leg in result["data"]["legs"]]
     assert (first.from_id, first.to_id, second.from_id, second.to_id) == ("start", "wiki:9238071", "wiki:9238071", "wiki:5667636")
     assert (first.duration_minutes, first.distance_m, first.actual_modes) == (4.5, 380, ["walk"])
-    assert first.instructions == ["Walk northeast on Central Park West.", "Turn left onto the walkway."]
+    # A summary first; the unnamed-sidewalk step "Turn left onto the walkway." is left out.
+    assert first.instructions == ["Walk about 5 min heading northeast via Central Park West.",
+                                  "Walk northeast on Central Park West."]
     assert result["data"]["details"][1]["via_streets"] == ["West 81st Street"]
     assert first.source == "valhalla-fossgis" and first.uncertainty
     assert result["data"]["travel_minutes"] == 14.0
@@ -103,8 +105,8 @@ def test_valhalla_outage_falls_back_to_osrm():
 
     leg = result["data"]["legs"][0]
     assert leg["source"] == "osrm-fossgis-foot"
-    assert leg["instructions"] == ["Walk southwest on Columbus Avenue.", "Turn right onto the walkway.",
-                                   "Turn left onto Amsterdam Avenue."]
+    assert leg["instructions"] == ["Walk about 12 min heading northeast via Columbus Avenue, then Amsterdam Avenue.",
+                                   "Walk southwest on Columbus Avenue.", "Turn left onto Amsterdam Avenue."]
 
 
 def test_disconnected_points_are_no_match_not_an_outage():

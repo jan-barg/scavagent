@@ -245,7 +245,8 @@ def test_directions_use_the_planned_walking_leg():
 
     data = result["data"]
     assert (data["to_id"], data["name"], data["minutes"], data["refreshed"]) == ("stop_1", "The El Dorado", 5.0, False)
-    assert data["instructions"] == ["Walk north on Central Park West."]
+    assert data["instructions"] == ["Walk about 5 min heading northeast via Central Park West.",
+                                    "Walk north on Central Park West."]
     assert http.calls == []
 
 

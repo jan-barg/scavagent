@@ -294,3 +294,10 @@ def test_a_stop_marked_required_must_be_at_a_place_the_user_required():
         checkpoint(data, "stop_2")["required_by_user"] = True
 
     assert codes(evaluate(edit(BASE.plan, overclaim))) == ["REQUIRED_MISMARKED"]
+
+
+def test_a_beat_where_someone_hands_the_user_something_is_flagged():
+    def handoff(data):
+        data["story"]["beats"][0]["summary"] = "At the corner, a hidden dispatch is handed to you by an anonymous source."
+
+    assert codes(evaluate(edit(BASE.plan, handoff))) == ["INVENTED_PROP"]
