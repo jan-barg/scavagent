@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Literal, Protocol
 
 from pydantic import Field
 
@@ -39,6 +39,7 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 MAX_STORED_MESSAGES = 200
 MAX_TRANSCRIPT_ENTRIES = 200
 MAX_CACHED_REPLIES = 20
+MAX_DRAFTS = 3  # Evaluated plans waiting to be saved; a plan can be tens of kB and a Firestore document is 1 MiB
 # A claim older than this belongs to a turn that has stopped: app.run_agent starts no model call after
 # its own shorter deadline. (Cloud Run's request timeout does not stop the code, so it cannot be relied on.)
 IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
@@ -46,6 +47,14 @@ IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class EvaluatedDraft(Record):
+    """A plan evaluate_adventure_plan checked in this session, waiting for save_adventure_plan."""
+
+    kind: Literal["new", "revision"]
+    plan: AdventurePlan
+    waived_required_ids: list[str] = []
 
 
 class SessionRecord(Record):
@@ -62,11 +71,19 @@ class SessionRecord(Record):
     # client_message_id -> {camera checkpoint id: asset id} for photos taken while answering a message that has
     # no stored reply yet. If that turn dies and the message runs again, the camera tool reuses the photo.
     captures: dict[str, dict[str, str]] = {}
+    # draft id -> an evaluated plan not saved yet, oldest first. Kept here rather than in process memory,
+    # so a save still finds it after a restart or on another Cloud Run instance.
+    drafts: dict[str, EvaluatedDraft] = {}
 
     @classmethod
     def new(cls, session_id: str) -> "SessionRecord":
         now = utc_now()
         return cls(session_id=session_id, created_at=now, updated_at=now)
+
+    def remember_draft(self, draft_id: str, draft: EvaluatedDraft) -> None:
+        self.drafts = {**{k: v for k, v in self.drafts.items() if k != draft_id}, draft_id: draft}
+        while len(self.drafts) > MAX_DRAFTS:
+            self.drafts.pop(next(iter(self.drafts)))
 
     def remember_reply(self, client_message_id: str, reply: dict) -> None:
         self.replies[client_message_id] = reply
@@ -555,6 +572,15 @@ def resolve_checkpoint(
             retryable=False,
             next_step="Continue with the current checkpoint.",
         )
+    if outcome == "completed" and checkpoint_id != state.current_checkpoint_id:
+        # Stops are routed in order; completing a later one would leave the route and the story out of step.
+        current = state.current_checkpoint_id
+        return tool_error(
+            "INVALID_ARGUMENT",
+            f"{checkpoint_id} is not the current checkpoint ({current or 'none'}).",
+            retryable=False,
+            next_step=f"Complete or skip {current} first." if current else "Every checkpoint is already resolved.",
+        )
     if outcome == "skipped" and checkpoint.required_by_user and not user_waived_required:
         return tool_error(
             "INVALID_ARGUMENT",
@@ -602,6 +628,10 @@ def set_status(ctx: ToolContext, status: str, *, expected_version: int | None = 
     if status == "active" and not (plan.validation and plan.validation.ok):
         return tool_error("PLAN_INFEASIBLE", "The active plan has not passed evaluation.", retryable=True,
                           next_step="Evaluate the plan and save a passing version before starting.")
+    if status == "completed" and state.current_checkpoint_id is not None:
+        return tool_error("INVALID_ARGUMENT", f"Checkpoint {state.current_checkpoint_id} and any after it are unresolved.",
+                          retryable=False,
+                          next_step="Complete or skip the remaining stops, or abandon_adventure if the user is stopping early.")
     if state.status != status:
         update = {"status": status}
         if status in ("completed", "abandoned"):

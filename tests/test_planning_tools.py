@@ -97,6 +97,19 @@ def test_a_new_draft_is_routed_checked_and_saved_as_proposed():
     assert [b.checkpoint_id for b in plan.story.beats] == ["stop_1", "stop_2", None]
 
 
+def test_a_draft_evaluated_before_a_restart_can_still_be_saved(tmp_path):
+    # Jan: drafts are stored with the session, so the next message can land on a new or different instance.
+    first = ToolContext(record=SessionRecord.new("s1"), store=state.SqliteStore(tmp_path / "db"), now=lambda: NOW)
+    draft_id = evaluate(first, draft(), 5, 9)["data"]["draft_id"]
+    first.store.save(first.record)  # The turn ends
+
+    agent_tools.reset_for_tests()  # A new process: nothing survives in memory
+    restarted = state.SqliteStore(tmp_path / "db")
+    later = ToolContext(record=restarted.load("s1"), store=restarted, now=lambda: NOW + timedelta(minutes=2))
+    assert save_adventure_plan(later, draft_id)["ok"]
+    assert draft_id in later.record.plans and later.record.drafts == {}
+
+
 def test_start_now_activates_and_a_draft_from_another_conversation_is_refused():
     ctx, other = session("s1"), session("s2")
     draft_id = evaluate(ctx, draft(), 5, 9)["data"]["draft_id"]

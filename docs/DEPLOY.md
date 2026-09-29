@@ -66,6 +66,12 @@ The assignment requires Cloud Run continuous deployment from `jan-barg/scavagent
 
 Environment variables and the service account set on the service carry over to revisions the trigger deploys.
 
+Connected September 29, 2026: a merge to `main` builds and deploys (the GitHub check on the merge commit shows the build).
+
+## Transit routing on Cloud Run
+
+Transit legs call the Google Routes API (`integrations/transit.py`). On Cloud Run the runtime service account's project pays, so `routes.googleapis.com` must be enabled in `agentic-ai-msds`, or set `SCAVAGENT_ROUTES_PROJECT` (a project the service account may bill) or `GOOGLE_MAPS_API_KEY` on the service. Without any of them, legs fall back to walking with a warning. `SCAVAGENT_ROUTES_DAILY_LIMIT` (default 500 per instance per UTC day) caps spending.
+
 ## Giving Kyle access
 
 Kyle (`kc3936@columbia.edu`) already has `roles/aiplatform.user` and `roles/serviceusage.serviceUsageConsumer`, enough to run the app locally against Vertex AI with his own `gcloud auth application-default login` and `gcloud config set project agentic-ai-msds`. His local model calls bill to this project.

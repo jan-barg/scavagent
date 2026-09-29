@@ -389,6 +389,14 @@ def test_unevaluated_plans_cannot_become_active(ctx):
     assert tools.update_adventure_state(ctx, "start_adventure")["error"]["code"] == "PLAN_INFEASIBLE"
 
 
+def test_only_the_newest_evaluated_drafts_are_kept():
+    record, plan = SessionRecord.new("s"), load_scenario("start_only").plan
+    for i in range(state.MAX_DRAFTS + 2):
+        record.remember_draft(f"d{i}", state.EvaluatedDraft(kind="new", plan=plan))
+    record.remember_draft("d2", state.EvaluatedDraft(kind="new", plan=plan))  # Evaluated again: now the newest
+    assert list(record.drafts) == ["d3", "d4", "d2"]
+
+
 def test_a_saved_plan_cannot_be_overwritten(ctx):
     plan = load_scenario("start_only").plan
     state.save_plan(ctx, plan)
@@ -441,6 +449,20 @@ def test_finishing_reveals_the_solution_only_at_the_end(active):
     assert tools.update_adventure_state(active, "finish_adventure")["data"]["status"] == "completed"
 
 
+def test_stops_are_completed_in_plan_order_and_finishing_needs_them_all_resolved(active):
+    ahead = tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_2")
+    assert "not the current checkpoint (stop_1)" in ahead["error"]["message"] and active.record.adventure.completed_ids == []
+
+    tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
+    early = tools.update_adventure_state(active, "finish_adventure")
+    assert "abandon_adventure" in early["error"]["next_step"] and active.record.adventure.status == "active"
+
+    # Skipping ahead is still allowed (for example "skip the next optional stop"), and resolves the route.
+    assert tools.update_adventure_state(active, "skip_checkpoint", checkpoint_id="stop_3")["ok"]
+    tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_2")
+    assert tools.update_adventure_state(active, "finish_adventure")["data"]["status"] == "completed"
+
+
 def test_abandoning_midway_leaves_no_stop_to_continue(active):
     tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
     assert tools.update_adventure_state(active, "abandon_adventure")["data"]["status"] == "abandoned"
@@ -480,8 +502,9 @@ def test_saved_photo_is_served_later_and_tracked_in_progress(active, monkeypatch
 
 def test_new_adventure_after_finishing_keeps_photos_but_resets_progress(active):
     photo = active.save_asset(b"x", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
-    tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
-    tools.update_adventure_state(active, "finish_adventure")
+    for stop in ("stop_1", "stop_2", "stop_3"):
+        tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id=stop)
+    assert tools.update_adventure_state(active, "finish_adventure")["ok"]
 
     state.save_plan(active, load_scenario("start_only").plan)
     after = active.record.adventure

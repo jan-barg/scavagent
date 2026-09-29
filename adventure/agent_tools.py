@@ -1,14 +1,13 @@
 """The agent's planning tools: evaluate_adventure_plan, save_adventure_plan, and get_next_directions.
 
 evaluate_adventure_plan turns the agent's draft into a routed plan (adventure.drafts), runs the
-evaluator (adventure.validation), and keeps the evaluated plan for this session for 30 minutes.
+evaluator (adventure.validation), and keeps the evaluated plan in this session's stored record.
 save_adventure_plan stores a plan that passed through state.save_plan. get_next_directions gives
 the way to the current stop, re-routed when transit times are stale or the user has moved. All are
 session tools: the server passes the ToolContext, so the model never names a session.
 """
 
 import os
-import time
 from datetime import timedelta
 
 import state
@@ -22,13 +21,11 @@ from integrations.routes import get_route
 from schemas import AdventurePlan, Freshness, tool_error, tool_ok
 from state import ToolContext
 
-DRAFT_SECONDS = 1800
 DRAFT_FRESH = timedelta(minutes=10)  # an older draft's legs and times no longer start from now
 UNUSED_MINUTES = 12  # a passing plan leaving this much of the user's time unused could add a stop
 TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
 LOCATION_FRESH = timedelta(minutes=10)
 OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from where they are
-_drafts = {}  # plan_id -> (expires at, session_id, kind, plan, waived required ids)
 
 
 def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **fields) -> dict:
@@ -66,7 +63,8 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
         # A malformed field the draft checks did not anticipate: still something the model can fix.
         return tool_error("INVALID_ARGUMENT", f"The draft is malformed: {_detail(e)}", retryable=False,
                           next_step="Send each field in the shape the tool schema describes, then evaluate again.")
-    _drafts[plan.plan_id] = (time.monotonic() + DRAFT_SECONDS, ctx.record.session_id, kind, plan, waived)
+    # Stored with the session (Jan's state.py), so saving works after a restart or on another instance.
+    ctx.record.remember_draft(plan.plan_id, state.EvaluatedDraft(kind=kind, plan=plan, waived_required_ids=waived))
     summary = evaluation.summary()
     if summary["passes"] and (summary["slack_minutes"] or 0) >= UNUSED_MINUTES:
         summary["suggestions"].append(f"{summary['slack_minutes']:.0f} of the user's minutes are unused; consider "
@@ -81,11 +79,11 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
 
 def save_adventure_plan(ctx: ToolContext, draft_id: str, start_now: bool = False) -> dict:
     """Store an evaluated plan that passed. A revision replaces the remaining route at once."""
-    entry = _drafts.get(draft_id)
-    if entry is None or entry[0] < time.monotonic() or entry[1] != ctx.record.session_id:
-        return tool_error("INVALID_ARGUMENT", "No evaluated draft with that id in this conversation (drafts last 30 minutes).",
+    entry = ctx.record.drafts.get(draft_id)
+    if entry is None:
+        return tool_error("INVALID_ARGUMENT", "No evaluated draft with that id in this conversation.",
                           retryable=False, next_step="Evaluate the draft again with evaluate_adventure_plan.")
-    _, _, kind, plan, waived = entry
+    kind, plan, waived = entry.kind, entry.plan, entry.waived_required_ids
     if not plan.validation.ok:
         return tool_error("PLAN_INFEASIBLE", "That draft did not pass evaluation.", retryable=False,
                           next_step="Fix its violations and evaluate again.")
@@ -99,7 +97,7 @@ def save_adventure_plan(ctx: ToolContext, draft_id: str, start_now: bool = False
                           next_step="Ask whether to abandon it (update_adventure_state abandon_adventure) or revise it instead.")
     result = state.save_plan(ctx, plan, activate=bool(start_now), waived_required_ids=waived)
     if result["ok"]:
-        _drafts.pop(draft_id, None)
+        ctx.record.drafts.pop(draft_id, None)
     return result
 
 
@@ -261,7 +259,7 @@ def _freshness(plan, now):
 
 
 def reset_for_tests():
-    _drafts.clear()
+    """Nothing process-wide to clear: drafts live in each session's record."""
 
 
 # --- What the model sees ---

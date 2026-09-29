@@ -4,7 +4,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
-from time import monotonic
+from time import monotonic, sleep
 from zoneinfo import ZoneInfo
 
 import litellm
@@ -26,6 +26,8 @@ MAX_TOOL_ROUNDS = 16
 # A turn starts no model call or tool after this, and each model call gets only the time left. Tools bound
 # their own time. Kept well under state.IN_FLIGHT_TIMEOUT, so an expired claim's turn is no longer working.
 TURN_SECONDS = 240
+# Waits before retrying a model call that Vertex rate-limited (429) or found unavailable (503), while the turn has time.
+RETRY_DELAYS = (2, 4, 8, 16)
 CONTEXT_MESSAGES = 40  # Recent conversation sent to the model; the full plan stays in storage
 # Model choice is deferred; keep it configurable. Defaults to the starter's model.
 MODEL = os.environ.get("SCAVAGENT_MODEL", "vertex_ai/gemini-3.5-flash-lite")
@@ -43,16 +45,9 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
     """
     deadline = monotonic() + TURN_SECONDS
     for _ in range(MAX_TOOL_ROUNDS):
-        remaining = deadline - monotonic()
-        if remaining <= 0:
+        reply = complete(messages, deadline)
+        if reply is None:
             return "That took me too long, so I stopped. Please send your message again."
-        reply = litellm.completion(
-            model=MODEL,
-            vertex_location=VERTEX_LOCATION,
-            messages=messages,
-            tools=TOOLS,
-            timeout=remaining,
-        ).choices[0].message
 
         # Append assistant's reply (text, tool calls, or both) to the context.
         # model_dump() keeps it a plain dict: the raw object carries provider-specific
@@ -60,7 +55,7 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
         messages += [reply.model_dump()]
 
         if not reply.tool_calls:
-            return reply.content or ""
+            return reply.content or "I didn't get an answer from the model. Please send that again."
 
         # The harness, not the model, runs each tool and appends the result
         for call in reply.tool_calls:
@@ -91,6 +86,34 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
             messages += [{"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)}]
 
     return "Sorry, I hit my tool-call limit before finishing."
+
+
+def complete(messages: list[dict], deadline: float):
+    """One model reply, or None once the turn is out of time.
+
+    A rate-limited (429) or unavailable (503) call is retried after each wait in RETRY_DELAYS that still
+    fits before the deadline; after that the error propagates. A reply with neither text nor a tool call
+    is asked for once more.
+    """
+    waits, asked_again = list(RETRY_DELAYS), False
+    while (remaining := deadline - monotonic()) > 0:
+        try:
+            reply = litellm.completion(
+                model=MODEL,
+                vertex_location=VERTEX_LOCATION,
+                messages=messages,
+                tools=TOOLS,
+                timeout=remaining,
+            ).choices[0].message
+        except (litellm.RateLimitError, litellm.ServiceUnavailableError):
+            if not waits or waits[0] >= deadline - monotonic():
+                raise
+            sleep(waits.pop(0))
+            continue
+        if reply.tool_calls or reply.content or asked_again:
+            return reply
+        asked_again = True
+    return None
 
 
 # --- Context for each turn ---

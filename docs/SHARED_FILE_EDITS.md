@@ -96,3 +96,9 @@ These are implementation acceptance targets, not currently supported adventure b
 ```
 
 (The three numbered examples are unchanged.)
+
+## Jan's edits to Kyle-owned files (after merging PR #6)
+
+- `adventure/agent_tools.py`: evaluated drafts moved from the module-level `_drafts` dict into the session record (`ctx.record.remember_draft(...)`, `ctx.record.drafts`, with `state.EvaluatedDraft`). Why: on Cloud Run a restart, scale-to-zero, or another instance between evaluate and save lost the draft, and expired drafts were never pruned. The per-session check is now implicit; `DRAFT_SECONDS` is gone because `DRAFT_FRESH` (10 minutes) already refuses older drafts. `reset_for_tests()` stays as a no-op for the existing fixture.
+- `tests/test_planning_tools.py`: one added test, `test_a_draft_evaluated_before_a_restart_can_still_be_saved`.
+- Kyle's items 3 and 4 from `docs/STATUS.md` are done in Jan's files: model-call retries in `app.py`; completion in plan order and finishing only with every stop resolved in `state.py`. Destination arrival itself is still not tracked in state.
