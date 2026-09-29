@@ -60,6 +60,9 @@ def main():
     check("Q2 looked for a camera stop", any(c["name"] == "find_camera_checkpoints" for c in second["tool_calls"]))
     no_camera = all(not c["result"]["ok"] for c in second["tool_calls"] if c["name"] == "find_camera_checkpoints")
     check("Q2 says when no camera stop fits", not no_camera or "camera" in second["response"].lower())
+    if not no_camera and good:
+        check("Q2 plan includes the camera stop that was found",
+              any(s["activity"] == "camera_capture" for s in good["result"]["data"]["plan"]["stops"]))
     check("Q2 plan saved", ran_ok(second, "save_adventure_plan"))
 
     # Reach the first stop and answer it, so the follow-up happens mid-adventure.
