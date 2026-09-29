@@ -125,6 +125,15 @@ def test_nearest_standing_position_wins_not_hardware(monkeypatch):
     assert all(kwargs["allow_redirects"] is False and kwargs["timeout"] == cam.TIMEOUT for _, kwargs in calls)
 
 
+def test_max_distance_filters_independently_of_default_detour(monkeypatch):
+    # Both views fit the default 1600 m detour; only the near one is within 100 m.
+    records = [checkpoint("near", "near", lat=40.7855), checkpoint("far", "far", lat=40.787)]
+    calls = http(monkeypatch, catalogue([row("near"), row("far")]), Response(), Response())
+    reply = result(cam.find_camera_checkpoints(point=POINT, checkpoints=records, max_distance_m=100))
+    assert [match["checkpoint"]["checkpoint_id"] for match in reply["data"]["checkpoints"]] == ["near"]
+    assert [url for url, _ in calls] == [cam.CATALOGUE_URL, cam.CATALOGUE_URL + "/near/image"]
+
+
 def test_corridor_distance_and_round_trip_detour(monkeypatch):
     route = [{"lat": 40.784, "lng": -73.97}, {"lat": 40.786, "lng": -73.97}]
     records = [checkpoint(lng=-73.969)]
@@ -133,6 +142,18 @@ def test_corridor_distance_and_round_trip_detour(monkeypatch):
     match = result(cam.find_camera_checkpoints(corridor=route, checkpoints=records, max_detour_m=180))["data"]["checkpoints"][0]
     assert 80 < match["distance_m"] < 90
     assert 160 < match["estimated_detour_m"] < 180
+
+
+@pytest.mark.parametrize("latitude", [40.783, 40.787], ids=["before-start", "after-end"])
+def test_corridor_distance_uses_segment_end_for_positions_beyond_it(monkeypatch, latitude):
+    route = [{"lat": 40.784, "lng": -73.97}, {"lat": 40.786, "lng": -73.97}]
+    http(monkeypatch, catalogue(), Response())
+    reply = result(cam.find_camera_checkpoints(corridor=route, checkpoints=[checkpoint(lat=latitude)]))
+    match = reply["data"]["checkpoints"][0]
+    # Each view is 0.001 degree (~111 m) beyond an endpoint, but lies on the
+    # segment's infinite extension. An unclamped projection would report zero.
+    assert 110 < match["distance_m"] < 112
+    assert 221 < match["estimated_detour_m"] < 223
 
 
 def test_degenerate_corridor_is_bounded_point_distance(monkeypatch):
@@ -220,10 +241,30 @@ def test_unknown_or_malicious_ids_never_form_a_still_url(monkeypatch):
     assert [url for url, _ in calls] == [cam.CATALOGUE_URL]
 
 
-def test_oversized_stream_and_slow_stream_are_rejected(monkeypatch):
-    monkeypatch.setattr(cam, "MAX_IMAGE_BYTES", 6)
-    http(monkeypatch, catalogue(), Response(chunks=[b"1234", b"5678"]))
-    result(cam.capture_camera_checkpoint("test_cp", lambda **kw: None, checkpoints=[checkpoint()]), "UPSTREAM_UNAVAILABLE")
+@pytest.mark.parametrize("extra_bytes", [0, 1], ids=["at-limit", "over-limit"])
+def test_image_stream_size_limit_without_content_length(monkeypatch, extra_bytes):
+    monkeypatch.setattr(cam, "MAX_IMAGE_BYTES", len(JPEG))
+    # Both bodies pass the JPEG signature check. Removing the size guard must
+    # therefore reach storage, rather than being masked by malformed image data.
+    response = Response(chunks=[JPEG[:3], b"x" * extra_bytes, JPEG[3:]])
+    assert "Content-Length" not in response.headers
+    http(monkeypatch, catalogue(), response)
+    saved = []
+    def save(**kwargs):
+        saved.append(kwargs)
+        return asset_for(kwargs)
+    reply = cam.capture_camera_checkpoint("test_cp", save, checkpoints=[checkpoint()])
+    if extra_bytes:
+        result(reply, "UPSTREAM_UNAVAILABLE")
+        assert "size limit" in reply["error"]["message"]
+        assert saved == []
+    else:
+        result(reply)
+        assert len(saved) == 1 and saved[0]["data"] == JPEG
+    assert response.closed
+
+
+def test_slow_stream_is_rejected(monkeypatch):
     tick = iter([0, 16])
     monkeypatch.setattr(cam.time, "monotonic", lambda: next(tick))
     http(monkeypatch, catalogue())
@@ -259,6 +300,7 @@ def test_capture_passes_exact_bytes_and_metadata_once(monkeypatch):
     {"byte_size": 1}, {"content_type": "image/png"}, {"retrieved_at": STAMP},
     {"frame_time": STAMP}, {"visibility": "user_confirmed_visible"}, {"provenance": "synthetic_fixture"},
     {"media_url": "https://evil.invalid/photo.jpg"}, {"media_url": "/media/%252e%252e/secrets"},
+    {"media_url": "https://evil.invalid/media/x"},
 ])
 def test_storage_cannot_substitute_capture_metadata(monkeypatch, changes):
     http(monkeypatch, catalogue(), Response())
