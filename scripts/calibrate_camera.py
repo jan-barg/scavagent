@@ -4,6 +4,7 @@
     uv run python -m scripts.calibrate_camera watch CAMERA [--every 3] [--minutes 20]
     uv run python -m scripts.calibrate_camera template CAMERA > notes.json    # field-notes form to fill in
     uv run python -m scripts.calibrate_camera entry notes.json [--write]      # check notes, print the entry, add it
+    uv run python -m scripts.calibrate_camera import-spots SPOTS_DIR --evidence DIR [--write]
 
 Run from the repository root.
 CAMERA is a DOT camera id or a candidate id from data/camera_catalogue.json (e.g. candidate_cpw_86).
@@ -21,6 +22,7 @@ missing field: coordinates and wording come only from the notes.
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -178,7 +180,26 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
            "method": method, "verified_at": verified_at.isoformat(), "verified_by": notes["verified_by"].strip(),
            "stand_location_source": notes["stand_location_source"].strip(), "evidence_stills": evidence,
            "note": "Evidence stills are kept outside Git; the hashes identify them."}
+    if notes.get("workbench_spot_id"):
+        log["workbench_spot_id"] = notes["workbench_spot_id"]
     return checkpoint, log
+
+
+def spot_notes(spot, evidence_dir, taken):
+    """A workbench spot (image method) as notes for build_entry; `taken` holds checkpoint ids already used."""
+    words = re.sub(r"[^a-z0-9]+", "_", spot["camera_name"].lower().replace("@", " at ")).strip("_")
+    base = f"img_{words}"[:100]
+    checkpoint_id = next(f"{base}_{letter}" for letter in "abcdefghijklmnopqrstuvwxyz" if f"{base}_{letter}" not in taken)
+    taken.add(checkpoint_id)
+    return {
+        "method": "image", "checkpoint_id": checkpoint_id, "camera_id": spot["camera_id"],
+        "stand_location": spot["stand_location"], "stand_location_source": spot.get("stand_location_source") or "",
+        **{k: spot.get(k) or "" for k in TEXT_FIELDS}, "visibility_notes": spot.get("visibility_notes") or "",
+        "person_region": spot.get("box"), "spot_in_view": spot.get("spot_in_view") is True,
+        "verified_at": spot.get("still_retrieved_at") or "",
+        "verified_by": f"{spot.get('marked_by') or 'teammate'} (camera workbench, {spot.get('marked_at', '')[:10]})",
+        "evidence_stills": [str(Path(evidence_dir) / spot["still_file"])] if spot.get("still_file") else [],
+    }
 
 
 def add_to_catalogue(catalogue, checkpoint, log):
@@ -230,6 +251,10 @@ def main(argv=None):
     e = sub.add_parser("entry")
     e.add_argument("notes")
     e.add_argument("--write", action="store_true", help="add the entry to data/camera_catalogue.json")
+    i = sub.add_parser("import-spots", help="workbench spot documents (one JSON file each) -> image_verified entries")
+    i.add_argument("spots_dir")
+    i.add_argument("--evidence", required=True, help="folder the workbench's still_file paths are relative to")
+    i.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
     catalogue = load_catalogue()
     client = cameras.DOTCameraClient()
@@ -251,6 +276,30 @@ def main(argv=None):
             pass
     elif args.command == "template":
         print(json.dumps(template(*resolve(args.camera, catalogue)), indent=2))
+    elif args.command == "import-spots":
+        updated, taken, failed = catalogue, {c["checkpoint_id"] for c in catalogue["checkpoints"]}, 0
+        imported = {e.get("workbench_spot_id") for e in catalogue.get("field_log", [])}
+        for path in sorted(Path(args.spots_dir).rglob("*.json")):
+            if path.stem in imported:
+                continue  # already in the catalogue; re-importing must not duplicate it
+            spot = json.loads(path.read_text())
+            spot = spot.get("data", spot)  # an exported document may wrap its fields
+            notes = dict(spot_notes(spot, args.evidence, taken), workbench_spot_id=path.stem)
+            try:
+                checkpoint, log = build_entry(notes, spot.get("camera_mount"))
+            except NotesError as error:
+                failed += 1
+                print(f"Skipped {path.name} ({spot.get('camera_name')}): {error}", file=sys.stderr)
+                continue
+            updated = add_to_catalogue(updated, checkpoint, log)
+            print(f"{checkpoint.checkpoint_id}: {spot['camera_name']} -> {checkpoint.address}")
+        if args.write:
+            try:
+                write_catalogue(updated)
+            except NotesError as error:
+                sys.exit(f"Not added: {error}")
+        print(f"{len(updated['checkpoints']) - len(catalogue['checkpoints'])} new entries, {failed} skipped"
+              + ("" if args.write else " (dry run; --write adds them)"), file=sys.stderr)
     else:
         notes = json.loads(Path(args.notes).read_text())
         _, candidate = resolve(notes.get("camera_id", ""), catalogue)

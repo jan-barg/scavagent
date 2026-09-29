@@ -193,3 +193,32 @@ def test_image_notes_become_image_verified_and_need_their_own_confirmation(notes
         cal.build_entry(notes, MOUNT, now=NOW)
     form = cal.template("cam", None, method="image")
     assert form["spot_in_view"] is None and "participant_visible" not in form
+
+
+def test_workbench_spots_import_once_as_image_verified_entries(catalogue, tmp_path, capsys):
+    evidence = tmp_path / "evidence"
+    (evidence / "stills" / "cam").mkdir(parents=True)
+    (evidence / "stills" / "cam" / "20260929T192200Z.jpg").write_bytes(JPEG)
+    spots = tmp_path / "spots"
+    spots.mkdir()
+    spot = {"camera_id": "8a6bc417-4877-4ebe-8052-88c1b261baf1", "camera_name": "Central Park West @ 86 St",
+            "camera_mount": MOUNT, "still_file": "stills/cam/20260929T192200Z.jpg",
+            "still_retrieved_at": "2026-09-29T19:22:00+00:00", "box": [0.02, 0.4, 0.08, 0.62],
+            "stand_location": {"lat": 40.78518, "lng": -73.96990}, "stand_location_source": "TEST satellite pin",
+            "address": "TEST address", "landmark": "TEST landmark", "side_of_street": "TEST side",
+            "positioning_instructions": "TEST: stand by the pole.", "reference_view_notes": "TEST view",
+            "visibility_notes": "", "spot_in_view": True, "marked_by": "TB", "marked_at": "2026-09-29T20:00:00Z"}
+    (spots / "doc1.json").write_text(json.dumps(spot))
+    (spots / "doc2.json").write_text(json.dumps(dict(spot, landmark="")))  # incomplete: skipped, not guessed
+
+    cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
+    cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
+
+    saved = json.loads(catalogue.read_text())
+    [entry] = saved["checkpoints"]
+    assert entry["checkpoint_id"] == "img_central_park_west_at_86_st_a"
+    assert entry["verification_status"] == "image_verified" and entry["last_image_verified_at"] == "2026-09-29T19:22:00Z"
+    assert entry["person_region"] == [0.02, 0.4, 0.08, 0.62]
+    [log] = saved["field_log"]
+    assert log["workbench_spot_id"] == "doc1" and log["method"] == "image" and log["evidence_stills"][0]["sha256"]
+    assert "landmark" in capsys.readouterr().err

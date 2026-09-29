@@ -1,8 +1,27 @@
 # Camera fieldwork: calibrating standing positions
 
-A camera checkpoint is only offered once someone has stood at a public pedestrian spot and seen themselves in that camera's still. This page is the protocol for that visit. `scripts/calibrate_camera.py` turns the notes into a catalogue entry.
+A camera checkpoint is offered only once a standing position is verified, in one of two ways:
 
-## What the cameras show (checked September 29, 2026, about 1:30 PM)
+- **`image_verified`** (the main route since September 29): a teammate finds a public sidewalk spot in a live still, matches it to satellite or Street View imagery, and writes the coordinates and instructions. Nobody has stood there, so the agent tells visitors so and offers a retake.
+- **`field_verified`**: someone stood at the spot and saw themselves in the still (the field protocol below). A field visit upgrades an image-verified spot.
+
+`scripts/calibrate_camera.py` turns either kind of notes into a catalogue entry.
+
+## Image route: the camera spot workbench
+
+1. All online Manhattan street cameras were pulled on September 29, 2026 (about 3:20 PM, 308 stills) into `agent-handoffs/camera-evidence/` outside Git, and screened from the stills: 259 show a usable pedestrian area (`keep` or `maybe`), 49 do not (tunnels, bridge roadways, highways, a camera aimed at the sky). The screening notes are model judgments from the images; the person marking a spot decides.
+2. The private workbench page (https://claude.ai/artifact/CiTKGvwL2hYBNcsiJVEAoc) shows each kept camera's still. Marking a spot: drag or tap where a standing person appears, paste the Google Maps coordinates of that spot, and write the address, landmark, side of street, positioning instructions and what the view shows. Spots save to the page's database.
+3. Claude exports the saved spots (`ArtifactData list spots` with `out_dir`) and imports them:
+
+```bash
+uv run python -m scripts.calibrate_camera import-spots SPOTS_DIR --evidence EVIDENCE_DIR --write
+```
+
+`EVIDENCE_DIR` is the `camera-evidence` folder in Jan's `Agents/agent-handoffs/` (the workbench's `still_file` paths are relative to it). `import-spots` gives each spot a checkpoint id such as `img_central_park_west_at_86_st_a`, dates it by the still's retrieval time, records the still's SHA-256 and the workbench spot id in `field_log`, skips spots already imported, and refuses incomplete spots rather than filling them in.
+
+## Field route
+
+### What the candidate cameras show (checked September 29, 2026, about 1:30 PM)
 
 All six cameras below were online and returned a 352×240 JPEG with the local time burned into the top of the frame. The frame changes about every 2 seconds, so a still fetched after "ready" is at most a couple of seconds old. People on the nearer sidewalks appear roughly 10–25 pixels tall: recognizable by clothing and position, not by face.
 
@@ -21,7 +40,7 @@ Tap a link to see the camera's current still; reload the page to get a new one.
 
 **Suggested walk (about 1.6 km):** 86 St (B/C) station → #1 at CPW/86 → south along CPW → #3 at 77th → #4 at 72nd → west on 72nd → #2 at Broadway (72 St 1/2/3 station). Add #5 or #6 if time allows. Daylight only.
 
-## At each camera
+### At each camera
 
 1. **Pick a spot on the sidewalk** that looks visible in the still. Never the roadway, a bike lane, a crosswalk, or private steps: participants will stand there for half a minute.
 2. **Check you are in frame.** Stand still, open the camera's still link, reload, and find yourself. Wearing something bright helps; raise an arm if unsure. A partner can instead watch the still (or run `watch`, below) and text you.
@@ -32,7 +51,7 @@ Tap a link to see the camera's current still; reload the page to get a new one.
 
 **Fallback:** if no sidewalk spot shows you clearly (camera repositioned, view blocked, you are a few pixels), note what you saw and move on to the next camera. A camera without a still showing you stays disabled.
 
-## What to send back, per spot
+### What to send back, per spot
 
 ```text
 Camera: #1 CPW @ 86 St
@@ -46,7 +65,7 @@ Problems (buses, shade, crowds, glare):
 Screenshot(s): attached
 ```
 
-## Turning notes into catalogue entries
+### Turning notes into catalogue entries
 
 Run from the repository root. Stills are saved under `.data/calibration/<camera id>/` (gitignored).
 
