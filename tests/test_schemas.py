@@ -122,10 +122,16 @@ def test_state_outcomes_are_exclusive():
         AdventureState(status="active")  # No plan to be active on
 
 
-def test_field_verified_camera_needs_a_verification_date():
+def test_verified_cameras_need_the_date_of_their_own_kind_of_check():
     camera = load_cameras().checkpoints[0].model_dump(mode="json")
+    stamp = "2026-09-29T17:00:00+00:00"
     with pytest.raises(ValidationError):
         CameraCheckpoint.model_validate({**camera, "verification_status": "field_verified"})
+    with pytest.raises(ValidationError):  # An image check is not dated by a field date, nor the reverse
+        CameraCheckpoint.model_validate({**camera, "verification_status": "image_verified", "last_field_verified_at": stamp})
+    with pytest.raises(ValidationError):
+        CameraCheckpoint.model_validate({**camera, "verification_status": "field_verified", "last_image_verified_at": stamp})
+    CameraCheckpoint.model_validate({**camera, "verification_status": "image_verified", "last_image_verified_at": stamp})
 
 
 def test_chat_request_stays_compatible_with_starter_clients():

@@ -1,5 +1,6 @@
 """evaluate_adventure_plan and save_adventure_plan against a memory store, with routing faked."""
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -552,3 +553,66 @@ def test_loosely_written_numbers_and_lists_are_understood():
 
     assert result["data"]["passes"], result["data"]["violations"]
     assert result["data"]["contingency_minutes"] == 5.0
+
+
+# --- Camera stops ---
+
+
+@pytest.fixture
+def verified_camera(tmp_path, monkeypatch):
+    """One enabled, field-verified position in the catalogue the planner reads. TEST data, not fieldwork."""
+    from integrations import cameras
+    catalogue = tmp_path / "camera_catalogue.json"
+    catalogue.write_text(json.dumps({"checkpoints": [{
+        "checkpoint_id": "test_cam", "camera_id": "test-camera", "stand_location": {"lat": 40.7852, "lng": -73.9695},
+        "address": "TEST address", "landmark": "TEST corner", "side_of_street": "TEST side",
+        "positioning_instructions": "TEST: stand by the pole.", "verification_status": "field_verified",
+        "last_field_verified_at": "2026-09-29T17:00:00+00:00", "enabled": True}]}))
+    monkeypatch.setattr(cameras, "CATALOGUE_PATH", catalogue)
+    monkeypatch.delenv("SCAVAGENT_DEV_CAMERA_FIXTURES", raising=False)
+    monkeypatch.delenv("SCAVAGENT_DEV_FIXTURES", raising=False)
+
+
+def with_camera(activity_type, dwell_minutes=3, **changes):
+    """The standard draft with the camera as a third stop whose clue the finale uses."""
+    plan = draft(**changes)
+    plan["stops"].append({"camera_checkpoint_id": "test_cam", "dwell_minutes": dwell_minutes,
+                          "activity": activity(type=activity_type, prompt="Stand by the pole and tell me when you are ready."),
+                          "beat": beat("The surveillance post.", "The camera caught a red scarf.", ["stop_2"])})
+    plan["chat_beats"] = [beat("The finale.", None, ["stop_1", "stop_2", "stop_3"], reveals="The doorman did it.")]
+    return plan
+
+
+def test_a_stop_at_a_camera_position_must_capture(verified_camera):
+    refused = evaluate(session(), with_camera("user_observation"), 5, 9, 1)
+    assert refused["error"]["code"] == "INVALID_ARGUMENT" and "camera_capture" in refused["error"]["message"]
+
+    result = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
+    assert result["ok"] and result["data"]["passes"], result
+    assert [s["activity"] for s in result["data"]["plan"]["stops"]] == ["chat_puzzle", "chat_puzzle", "camera_capture"]
+
+
+def test_when_time_runs_short_the_camera_stop_is_the_last_suggested_cut(verified_camera):
+    tight = with_camera("camera_capture", dwell_minutes=8, deadline="2026-10-01T15:30:00-04:00",
+                        user_stated=["deadline", "allowed_modes"])
+    result = evaluate(session(), tight, 1, 2, 20)  # raw savings: camera 28, Beresford 27, El Dorado 8 minutes
+
+    assert not result["data"]["passes"]
+    cuts = result["data"]["suggestions"]
+    assert [c.split()[2] for c in cuts] == ["stop_2", "stop_1", "stop_3"]
+    assert "camera stop" in cuts[2] and "camera stop" not in cuts[0]
+
+
+def test_an_image_verified_camera_can_be_planned(verified_camera):
+    from integrations import cameras
+    data = json.loads(cameras.CATALOGUE_PATH.read_text())
+    data["checkpoints"][0].update(verification_status="image_verified", last_field_verified_at=None,
+                                  last_image_verified_at="2026-09-29T17:00:00+00:00")
+    cameras.CATALOGUE_PATH.write_text(json.dumps(data))
+    result = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
+    assert result["ok"] and result["data"]["passes"], result
+
+    data["checkpoints"][0].update(verification_status="unverified")
+    cameras.CATALOGUE_PATH.write_text(json.dumps(data))
+    refused = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
+    assert "CAMERA_UNAVAILABLE" in [v["code"] for v in refused["data"]["violations"]]
