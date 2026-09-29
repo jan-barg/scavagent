@@ -9,10 +9,11 @@ several meters; the words, not the pin, are what guide a visitor.
 """
 
 import math
+import re
 from dataclasses import dataclass
 
 from integrations import geocoding
-from integrations.common import fetch_json
+from integrations.common import UpstreamError, fetch_json
 from schemas import LatLng
 
 GRID_DEG = 29.0  # Manhattan's grid is rotated this far clockwise from true north
@@ -122,34 +123,41 @@ def camera_streets(name):
     return out if len(out) == 2 else None
 
 
-def intersection_streets(camera_name, mount: LatLng):
-    """(center, [Street, Street]) for a camera's intersection, the one nearest its mount."""
+def intersection_streets(camera_name, mount: LatLng, radius_m=250):
+    """(center, [Street, Street]) for a camera's intersection: one Overpass query around its mount."""
     names = camera_streets(camera_name)
     if not names:
         raise ValueError(f"Cannot read two streets from {camera_name!r}")
-    place = geocoding._intersection(*names)
-    if not place:
-        raise ValueError(f"OpenStreetMap has no intersection for {camera_name!r}")
-    centers = [LatLng(lat=place["lat"], lng=place["lng"])] + [LatLng(**c) for c in place.get("alternatives", [])]
-    center = min(centers, key=lambda c: sum(v * v for v in local_xy(mount, c)))
-    return center, [_street(name, center) for name in names]
-
-
-def _street(name, center):
-    pattern = geocoding.street_pattern(name).replace("\\", "\\\\")
-    query = (f'[out:json][timeout:20];way(around:150,{center.lat},{center.lng})["highway"]["name"~"{pattern}",i];'
-             'out tags geom;')
-    body = None
+    patterns = [geocoding.street_pattern(n) for n in names]
+    near = f"(around:{radius_m},{mount.lat},{mount.lng})"
+    a, b = (p.replace("\\", "\\\\") for p in patterns)  # escape for the QL string
+    query = (f'[out:json][timeout:25];way{near}["highway"]["name"~"{a}",i]->.a;'
+             f'way{near}["highway"]["name"~"{b}",i]->.b;node(w.a)(w.b)->.x;.x out;.a out tags geom;.b out tags geom;')
+    body, error = None, None
     for url in geocoding.OVERPASS_URLS:
         try:
-            body = fetch_json("overpass", "POST", url, data={"data": query}, timeout=25)
+            body = fetch_json("overpass", "POST", url, data={"data": query}, timeout=30)
             break
-        except Exception:  # try the mirror
-            continue
-    ways = [w for w in (body or {}).get("elements", []) if w.get("geometry")]
-    if not ways:
-        raise ValueError(f"No OpenStreetMap geometry for {name} near the intersection")
-    return street_from_ways(geocoding._display(name), center, ways)
+        except UpstreamError as e:  # rate limits and overload are common; try the mirror
+            error = e
+    if body is None:
+        raise ValueError(f"OpenStreetMap (Overpass) did not answer: {error}")
+    elements = body.get("elements", [])
+    nodes = [LatLng(lat=e["lat"], lng=e["lon"]) for e in elements if e.get("type") == "node"]
+    if not nodes:
+        raise ValueError(f"OpenStreetMap shows no intersection for {camera_name!r} near the camera")
+    # A divided street meets another at several nodes: average those near the one closest to the mount.
+    nearest = min(nodes, key=lambda n: math.hypot(*local_xy(mount, n)))
+    group = [n for n in nodes if math.hypot(*local_xy(nearest, n)) <= 60]
+    center = LatLng(lat=sum(n.lat for n in group) / len(group), lng=sum(n.lng for n in group) / len(group))
+    ways = [e for e in elements if e.get("type") == "way" and e.get("geometry")]
+    streets = []
+    for name, pattern in zip(names, patterns):
+        mine = [w for w in ways if re.search(pattern, w.get("tags", {}).get("name", ""), re.IGNORECASE)]
+        if not mine:
+            raise ValueError(f"No OpenStreetMap geometry for {name} near the camera")
+        streets.append(street_from_ways(geocoding._display(name), center, mine))
+    return center, streets
 
 
 def street_from_ways(display, center, ways):

@@ -182,6 +182,8 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
            "note": "Evidence stills are kept outside Git; the hashes identify them."}
     if notes.get("workbench_spot_id"):
         log["workbench_spot_id"] = notes["workbench_spot_id"]
+    if notes.get("from_draft"):
+        log["drafted_by"] = {"by": "Claude, from the still and OpenStreetMap street geometry", "draft_id": notes["from_draft"]}
     if notes.get("derived_fields"):
         log["derived_from_pin"] = {"fields": notes["derived_fields"], "source": "OpenStreetMap street geometry"}
     return checkpoint, log
@@ -218,6 +220,7 @@ def spot_notes(spot, evidence_dir, taken):
         "verified_by": f"{spot.get('marked_by') or 'teammate'} (camera workbench, {spot.get('marked_at', '')[:10]})",
         "evidence_stills": [str(Path(evidence_dir) / spot["still_file"])] if spot.get("still_file") else [],
         "derived_fields": spot.get("derived_fields", []),
+        "from_draft": spot.get("from_draft"),
     }
 
 
