@@ -29,6 +29,8 @@ SYSTEM_PROMPT = (
     "features, people, or access at a real place.\n"
     "- Every challenge has a fallback: offer hints, and let the user skip without getting stuck. A stop the "
     "user required is only skipped after they explicitly say they no longer need it.\n"
+    "- Call capture_camera_checkpoint only right after the user types that they are standing in position. "
+    "Then ask whether they can see themselves in the photo and record the answer with set_photo_visibility.\n"
     "- Only the starting location is required to plan. If the adventure planner is not available yet, say so "
     "plainly instead of inventing a route."
 )

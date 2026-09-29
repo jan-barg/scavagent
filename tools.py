@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import requests
 
 import state
+from integrations import cameras
 from schemas import Freshness, tool_error, tool_ok
 from state import ToolContext
 
@@ -131,6 +132,35 @@ def load_dev_adventure(ctx: ToolContext, scenario: str) -> dict:
     )
 
 
+# --- Camera checkpoints (integrations/cameras.py) ---
+# The model sets only the arguments in each tool's schema. The camera functions' other
+# parameters (checkpoint lists, HTTP client, dev fixtures, storage) are server-side only.
+
+FINDER_ARGUMENTS = {
+    name for tool in cameras.CAMERA_TOOLS if tool["function"]["name"] == "find_camera_checkpoints"
+    for name in tool["function"]["parameters"]["properties"]
+}
+
+
+def find_camera_checkpoints(**args) -> dict:
+    """Rank field-verified pedestrian camera positions near a point or along a route."""
+    if extra := sorted(set(args) - FINDER_ARGUMENTS):
+        return tool_error("INVALID_ARGUMENT", f"find_camera_checkpoints does not take {extra}.", retryable=False,
+                          next_step=f"Use only: {', '.join(sorted(FINDER_ARGUMENTS))}.")
+    return cameras.find_camera_checkpoints(**args)
+
+
+def capture_camera_checkpoint(ctx: ToolContext, checkpoint_id: str) -> dict:
+    """Save a checkpoint's DOT still to this session, at most once per user message."""
+    photo = ctx.saved_capture(checkpoint_id)
+    if photo is not None:  # This message's earlier turn died after taking the photo
+        return tool_ok(
+            {"photo": photo.model_dump(mode="json"), "already_captured": True},
+            warnings=["This message already saved this photo before its turn was interrupted; it was reused, not retaken."],
+        )
+    return cameras.capture_camera_checkpoint(checkpoint_id, save_asset=ctx.save_asset)
+
+
 # What the model sees: the "set notes" in the screenplay.
 TOOLS = [
     {
@@ -190,6 +220,7 @@ TOOLS = [
             },
         },
     },
+    *cameras.CAMERA_TOOLS,
 ]
 
 # What the harness runs: tool name -> Python function.
@@ -197,10 +228,12 @@ TOOL_MAP = {
     "get_weather": get_weather,
     "get_adventure_state": get_adventure_state,
     "update_adventure_state": update_adventure_state,
+    "find_camera_checkpoints": find_camera_checkpoints,
+    "capture_camera_checkpoint": capture_camera_checkpoint,
 }
 
 # Tools that receive the session's ToolContext as their first argument.
-SESSION_TOOLS = {"get_adventure_state", "update_adventure_state", "load_dev_adventure"}
+SESSION_TOOLS = {"get_adventure_state", "update_adventure_state", "load_dev_adventure", "capture_camera_checkpoint"}
 
 if os.environ.get("SCAVAGENT_DEV_FIXTURES") == "1":
     TOOL_MAP["load_dev_adventure"] = load_dev_adventure
