@@ -347,7 +347,9 @@ async function send(event) {
     }
     if (pendingReply?.classList.contains("pending")) { pendingReply.remove(); pendingReply = null; }
     input.value = pending.message;
-    statusLine.textContent = "The reply didn’t arrive. Press Send to retry the same message.";
+    statusLine.textContent = permanentFailure
+      ? "That message wasn’t accepted. Edit it and send again."
+      : "The reply didn’t arrive. Press Send to retry the same message.";
   } finally { busy = false; refreshControls(); }
 }
 document.getElementById("composer").addEventListener("submit", send);
