@@ -71,7 +71,9 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
     if summary["passes"] and (summary["slack_minutes"] or 0) >= UNUSED_MINUTES:
         summary["suggestions"].append(f"{summary['slack_minutes']:.0f} of the user's minutes are unused; consider "
                                       "adding a stop near the route before saving.")
-    summary["next_step"] = ("Call save_adventure_plan with this draft_id." if summary["passes"] else
+    summary["next_step"] = ("Call save_adventure_plan with this draft_id. In your reply, also say what the user asked "
+                            "for that this plan leaves out, such as a camera stop no verified position fits."
+                            if summary["passes"] else
                             "Fix every violation (see suggestions), then evaluate again. Do not present this plan.")
     return tool_ok({"draft_id": plan.plan_id, "kind": kind, **summary, "plan": overview(plan, evaluation.timeline)},
                    warnings=warnings, freshness=_freshness(plan, now))
