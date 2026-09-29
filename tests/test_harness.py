@@ -80,14 +80,24 @@ def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypa
 
 
 def test_model_context_never_starts_with_an_orphaned_tool_result():
-    # One earlier turn used many tools, so the 40-message window would begin inside it.
+    # Fifteen short turns, then one turn with 50 tool results, so the window's cut falls among them.
+    messages = [m for i in range(15) for m in ({"role": "user", "content": f"u{i}"}, {"role": "assistant", "content": f"a{i}"})]
     call = {"role": "assistant", "content": None, "tool_calls": [{"id": "c", "type": "function"}]}
-    messages = [{"role": "user", "content": "u0"}, call, *[{"role": "tool", "tool_call_id": "c", "content": "{}"}] * 43]
-    messages += [{"role": "assistant", "content": "a0"}, {"role": "user", "content": "u1"}]
+    messages += [{"role": "user", "content": "big"}, call, *[{"role": "tool", "tool_call_id": "c", "content": "{}"}] * 50]
+    messages += [{"role": "assistant", "content": "done"}, {"role": "user", "content": "last"}]
 
     context = app_module.recent(messages)
-    assert context[0] == {"role": "user", "content": "u0"}  # Tool results keep the call they answer
-    assert context[-1] == {"role": "user", "content": "u1"}
+    assert context[0] == {"role": "user", "content": "big"}  # Tool results keep the call they answer
+    assert context[-1] == {"role": "user", "content": "last"}
+
+
+def test_the_model_context_window_starts_at_the_same_message_for_several_turns():
+    # A start that moved every turn would change the beginning of the conversation, so no cache could be reused.
+    turns = [m for i in range(40) for m in ({"role": "user", "content": f"u{i}"}, {"role": "assistant", "content": f"a{i}"})]
+    starts = [app_module.recent(turns[:n])[0]["content"] for n in range(61, 81, 2)]
+    assert starts == ["u10"] * 10
+    assert app_module.recent(turns[:81])[0]["content"] == "u20"
+    assert all(len(app_module.recent(turns[:n])) >= app_module.CONTEXT_MESSAGES for n in range(41, 81))
 
 
 def rate_limited():

@@ -7,6 +7,8 @@ import app as app_module
 
 
 class FakeMessage(SimpleNamespace):
+    """A model reply. Optional thinking_blocks / reasoning_content stand in for Claude's and Kimi's reasoning."""
+
     def model_dump(self):
         calls = None
         if self.tool_calls:
@@ -14,7 +16,8 @@ class FakeMessage(SimpleNamespace):
                 {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
                 for c in self.tool_calls
             ]
-        return {"role": "assistant", "content": self.content, "tool_calls": calls}
+        reasoning = {k: getattr(self, k) for k in ("thinking_blocks", "reasoning_content") if hasattr(self, k)}
+        return {"role": "assistant", "content": self.content, "tool_calls": calls, **reasoning}
 
 
 def tool_call(call_id, name, arguments):

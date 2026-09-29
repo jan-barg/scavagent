@@ -72,6 +72,33 @@ Connected September 29, 2026: a merge to `main` builds and deploys (the GitHub c
 
 Transit legs call the Google Routes API (`integrations/transit.py`). On Cloud Run the runtime service account's project pays, so `routes.googleapis.com` must be enabled in `agentic-ai-msds`, or set `SCAVAGENT_ROUTES_PROJECT` (a project the service account may bill) or `GOOGLE_MAPS_API_KEY` on the service. Without any of them, legs fall back to walking with a warning. `SCAVAGENT_ROUTES_DAILY_LIMIT` (default 500 per instance per UTC day) caps spending.
 
+## Changing the model
+
+The service reads `SCAVAGENT_MODEL` and `VERTEX_LOCATION` (and optionally `SCAVAGENT_REASONING_EFFORT`) at start-up. Changing them makes a new revision without a rebuild, and continuous deployment keeps them:
+
+```sh
+gcloud run services update scavagent --region us-east1 --project agentic-ai-msds \
+  --update-env-vars SCAVAGENT_MODEL=vertex_ai/claude-opus-5-5,VERTEX_LOCATION=global
+```
+
+The runtime service account already has `roles/aiplatform.user`, which covers Gemini, Claude, and the open models on Vertex. Claude on Vertex additionally needs the Anthropic model enabled in Model Garden and a non-zero "Online prediction requests per base model per minute" quota (region `global`, base model `anthropic-claude-opus` or `anthropic-claude-sonnet`); without quota every call returns 429 and the chat says "Model call failed (RateLimitError)". `agentic-ai-msds` gets no Claude quota, so Claude runs through Anthropic's API instead (below). Model strings, access status, and the comparison are in [MODEL_COMPARISON.md](MODEL_COMPARISON.md). To go back, run the same command with the previous values.
+
+### Claude through Anthropic's API
+
+`SCAVAGENT_MODEL=anthropic/claude-opus-5-5` (or `anthropic/claude-sonnet-5-5`) with `ANTHROPIC_API_KEY`. On Cloud Run the key goes into Secret Manager, never into a plain environment variable or the image. From a shell where the key is loaded (`set -a; source .env; set +a`):
+
+```sh
+gcloud services enable secretmanager.googleapis.com --project agentic-ai-msds
+printf '%s' "$ANTHROPIC_API_KEY" | gcloud secrets create anthropic-api-key --data-file=- --project agentic-ai-msds
+gcloud secrets add-iam-policy-binding anthropic-api-key --project agentic-ai-msds \
+  --member=serviceAccount:scavagent-run@agentic-ai-msds.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor
+gcloud run services update scavagent --region us-east1 --project agentic-ai-msds \
+  --update-secrets ANTHROPIC_API_KEY=anthropic-api-key:latest \
+  --update-env-vars SCAVAGENT_MODEL=anthropic/claude-opus-5-5
+```
+
+Revisions deployed later by continuous deployment keep the secret reference. To rotate the key, add a new secret version (`gcloud secrets versions add anthropic-api-key --data-file=-`) and redeploy or update the service.
+
 ## Giving Kyle access
 
 Kyle (`kc3936@columbia.edu`) already has `roles/aiplatform.user` and `roles/serviceusage.serviceUsageConsumer`, enough to run the app locally against Vertex AI with his own `gcloud auth application-default login` and `gcloud config set project agentic-ai-msds`. His local model calls bill to this project.
