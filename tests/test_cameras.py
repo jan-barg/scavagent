@@ -332,3 +332,26 @@ def test_exported_tools_exclude_server_only_arguments():
         props = tool["function"]["parameters"]["properties"]
         assert not {"save_asset", "session_id", "client", "checkpoints", "allow_synthetic", "url"}.intersection(props)
         assert tool["function"]["parameters"]["additionalProperties"] is False
+
+
+def test_image_verified_positions_are_found_captured_and_flagged(monkeypatch):
+    record = checkpoint(verification_status="image_verified", last_field_verified_at=None, last_image_verified_at=STAMP)
+    http(monkeypatch, catalogue(), Response(), catalogue(), Response())
+    found = result(cam.find_camera_checkpoints(point=POINT, checkpoints=[record]))
+    assert found["data"]["checkpoints"][0]["checkpoint"]["verification_status"] == "image_verified"
+    assert any("not tested in person" in w for w in found["warnings"])
+    field = result(cam.find_camera_checkpoints(point=POINT, checkpoints=[checkpoint()], client=FakeClient()))
+    assert not any("not tested in person" in w for w in field["warnings"])
+    reply = result(cam.capture_camera_checkpoint("test_cp", lambda **kw: asset_for(kw), checkpoints=[record]))
+    assert reply["data"]["photo"]["checkpoint_id"] == "test_cp" and reply["data"]["verification_status"] == "image_verified"
+    assert any("not tested in person" in w for w in reply["warnings"])
+    field = result(cam.capture_camera_checkpoint("test_cp", lambda **kw: asset_for(kw), checkpoints=[checkpoint()], client=FakeClient()))
+    assert not any("not tested in person" in w for w in field["warnings"])
+
+
+class FakeClient:
+    def catalogue(self):
+        return {"test-camera": {"is_online": True}}, STAMP
+
+    def still(self, camera_id, catalogue):
+        return JPEG, "image/jpeg", f"{cam.CATALOGUE_URL}/{camera_id}/image", STAMP

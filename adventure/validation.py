@@ -12,7 +12,7 @@ the user's request and the product rules in docs/PLAN.md:
   already missed, no synthetic fixture data in a live plan;
 - activities: a physical task only with physical-feature evidence from its own place, no invented
   object for the user to find there, hints for a puzzle, a camera stop only at an enabled,
-  field-verified position near the stop;
+  verified position near the stop;
 - story: every optional stop moves the story, beats tied to the right stop and used once, no clue
   stranded at a skipped stop, no real architect from the sources given a part in the plot;
 - a revision: the plan it replaces, completed stops unchanged, revealed beats kept, unresolved
@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo
 
 from schemas import (
     NYC_TIMEZONE,
+    VERIFIED_CAMERA_STATUSES,
     AdventurePlan,
     AdventureState,
     CameraCheckpoint,
@@ -363,11 +364,11 @@ def _check_checkpoint(checkpoint: Checkpoint, place, claims, camera_lookup, allo
     if activity.type == "camera_capture":
         camera = camera_lookup(checkpoint.camera_checkpoint_id) if camera_lookup else None
         usable = camera is not None and camera.enabled and (
-            camera.verification_status == "field_verified"
+            camera.verification_status in VERIFIED_CAMERA_STATUSES
             or (allow_synthetic and camera.verification_status == "synthetic_fixture"))
         if not usable:
             flag("CAMERA_UNAVAILABLE", f"Camera checkpoint {checkpoint.camera_checkpoint_id} is unknown, disabled, or "
-                                       "not field-verified; use a non-camera activity.", cid)
+                                       "not verified; use a non-camera activity.", cid)
         elif place.point is not None and _meters(camera.stand_location.lat, camera.stand_location.lng,
                                                   place.point.lat, place.point.lng) > SAME_PLACE_M:
             flag("CAMERA_ELSEWHERE", f"The standing position for {camera.checkpoint_id} is more than {SAME_PLACE_M} m "

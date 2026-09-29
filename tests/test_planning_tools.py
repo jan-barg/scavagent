@@ -587,3 +587,20 @@ def test_when_time_runs_short_the_camera_stop_is_the_last_suggested_cut(verified
     cuts = result["data"]["suggestions"]
     assert [c.split()[2] for c in cuts] == ["stop_2", "stop_3", "stop_1"]
     assert "camera stop" in cuts[2] and "camera stop" not in cuts[0]
+
+
+def test_an_image_verified_camera_can_be_planned(verified_camera):
+    from integrations import cameras
+    data = json.loads(cameras.CATALOGUE_PATH.read_text())
+    data["checkpoints"][0].update(verification_status="image_verified", last_field_verified_at=None,
+                                  last_image_verified_at="2026-09-29T17:00:00+00:00")
+    cameras.CATALOGUE_PATH.write_text(json.dumps(data))
+    plan = draft()
+    plan["stops"].insert(0, camera_stop("camera_capture"))
+    result = evaluate(session(), plan, 1, 5, 9)
+    assert result["ok"] and result["data"]["passes"], result
+
+    data["checkpoints"][0].update(verification_status="unverified")
+    cameras.CATALOGUE_PATH.write_text(json.dumps(data))
+    refused = evaluate(session(), plan, 1, 5, 9)
+    assert "CAMERA_UNAVAILABLE" in [v["code"] for v in refused["data"]["violations"]]

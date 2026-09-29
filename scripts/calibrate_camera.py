@@ -1,4 +1,4 @@
-"""Field calibration for camera checkpoints: save DOT stills and turn field notes into catalogue entries.
+"""Camera checkpoint calibration: save DOT stills and turn notes into catalogue entries.
 
     uv run python -m scripts.calibrate_camera still CAMERA...                 # save each camera's current still
     uv run python -m scripts.calibrate_camera watch CAMERA [--every 3] [--minutes 20]
@@ -11,9 +11,11 @@ Evidence paths in the notes are relative to the repository root. Stills are save
 the DOT overlay in the image shows the frame's own local time. `watch` keeps saving new frames during a
 field visit so the stills can be matched afterwards to the times the participant stood at each spot.
 
-`entry` refuses notes that lack the participant's own confirmation that they were visible, an existing
-evidence still, a verification time, or a standing position that is plausibly not the camera mount.
-It never fills in a missing field: coordinates and wording come only from the field notes.
+Notes have a method. "field": someone stood at the spot and saw themselves in a still (field_verified).
+"image": a teammate matched a sidewalk spot in a live still to map imagery without standing there
+(image_verified). `entry` refuses notes without that confirmation, an existing evidence still, a
+verification time, or a standing position that is plausibly not the camera mount. It never fills in a
+missing field: coordinates and wording come only from the notes.
 """
 
 import argparse
@@ -38,8 +40,16 @@ TEXT_FIELDS = ("address", "landmark", "side_of_street", "positioning_instruction
 NYC = ZoneInfo(NYC_TIMEZONE)
 
 
+METHODS = {  # method -> (confirmation field, what it confirms, status, date field)
+    "field": ("participant_visible", "the person who stood there saw themselves in a still",
+              "field_verified", "last_field_verified_at"),
+    "image": ("spot_in_view", "the marked spot is a public sidewalk area visible in the evidence still",
+              "image_verified", "last_image_verified_at"),
+}
+
+
 class NotesError(ValueError):
-    """The field notes cannot become a verified checkpoint; the message says what to fix."""
+    """The notes cannot become a verified checkpoint; the message says what to fix."""
 
 
 def load_catalogue(path=None):
@@ -87,9 +97,10 @@ def _write(out_dir, camera_id, data, content_type, retrieved_at):
     return path
 
 
-def template(camera_id, candidate):
+def template(camera_id, candidate, method="field"):
     """A notes form: every field starts empty, so nothing unobserved can slip into an entry."""
     return {
+        "method": method,
         "checkpoint_id": "",
         "camera_id": camera_id,
         "from_candidate": candidate["checkpoint_id"] if candidate else None,
@@ -103,7 +114,7 @@ def template(camera_id, candidate):
         "reference_view_notes": "",
         "visibility_notes": "",
         "person_region": None,
-        "participant_visible": None,
+        METHODS[method][0]: None,
         "verified_at": "",
         "verified_by": "",
         "evidence_stills": [],
@@ -112,8 +123,12 @@ def template(camera_id, candidate):
 
 
 def build_entry(notes, mount=None, now=None, base_dir=ROOT):
-    """Field notes -> (CameraCheckpoint, field-log record). Raises NotesError naming what to fix."""
+    """Notes -> (CameraCheckpoint, field-log record). Raises NotesError naming what to fix."""
     now = now or datetime.now(timezone.utc)
+    method = notes.get("method", "field")
+    if method not in METHODS:
+        raise NotesError(f"method must be one of {', '.join(METHODS)}.")
+    confirmation, confirms, status, date_field = METHODS[method]
     missing = [k for k in ("checkpoint_id", "camera_id", "stand_location_source", "verified_by", *TEXT_FIELDS)
                if not isinstance(notes.get(k), str) or not notes[k].strip()]
     if missing:
@@ -121,8 +136,8 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
     checkpoint_id = notes["checkpoint_id"]
     if checkpoint_id.startswith(("candidate_", "fixture_")):
         raise NotesError("Give the calibrated position its own checkpoint_id, not a candidate or fixture id.")
-    if notes.get("participant_visible") is not True:
-        raise NotesError("participant_visible must be true: the person who stood there saw themselves in a still.")
+    if notes.get(confirmation) is not True:
+        raise NotesError(f"{confirmation} must be true: {confirms}.")
     try:
         stand = LatLng.model_validate(notes.get("stand_location"))
         verified_at = datetime.fromisoformat(notes.get("verified_at") or "")
@@ -146,13 +161,13 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
         data = path.read_bytes()
         evidence.append({"file": path.name, "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)})
     if not evidence:
-        raise NotesError("List at least one saved still (or screenshot) showing the participant at this position.")
+        raise NotesError("List at least one saved still (or screenshot) the position was checked on.")
     fields = {k: notes[k].strip() for k in TEXT_FIELDS}
     try:
         checkpoint = CameraCheckpoint(
             checkpoint_id=checkpoint_id, camera_id=notes["camera_id"], stand_location=stand, **fields,
             person_region=notes.get("person_region"), visibility_notes=(notes.get("visibility_notes") or "").strip() or None,
-            verification_status="field_verified", last_field_verified_at=verified_at, enabled=True,
+            verification_status=status, **{date_field: verified_at}, enabled=True,
             fallback_checkpoint_id=notes.get("fallback_checkpoint_id"),
         )
     except ValueError as error:
@@ -160,9 +175,9 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
     if len(checkpoint.model_dump_json()) > 6000:
         raise NotesError("The entry's text is too long for model context; shorten the notes.")
     log = {"checkpoint_id": checkpoint_id, "camera_id": notes["camera_id"], "from_candidate": notes.get("from_candidate"),
-           "verified_at": verified_at.isoformat(), "verified_by": notes["verified_by"].strip(),
+           "method": method, "verified_at": verified_at.isoformat(), "verified_by": notes["verified_by"].strip(),
            "stand_location_source": notes["stand_location_source"].strip(), "evidence_stills": evidence,
-           "note": "Evidence stills are kept outside Git (.data/calibration); hashes identify them."}
+           "note": "Evidence stills are kept outside Git; the hashes identify them."}
     return checkpoint, log
 
 

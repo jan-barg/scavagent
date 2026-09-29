@@ -144,7 +144,7 @@ FINDER_ARGUMENTS = {
 
 
 def find_camera_checkpoints(**args) -> dict:
-    """Rank field-verified pedestrian camera positions near a point or along a route."""
+    """Rank verified pedestrian camera positions near a point or along a route."""
     if extra := sorted(set(args) - FINDER_ARGUMENTS):
         return tool_error("INVALID_ARGUMENT", f"find_camera_checkpoints does not take {extra}.", retryable=False,
                           next_step=f"Use only: {', '.join(sorted(FINDER_ARGUMENTS))}.")

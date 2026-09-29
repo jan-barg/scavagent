@@ -176,3 +176,20 @@ def test_load_checkpoints_is_the_validated_catalogue(catalogue):
     with pytest.raises(ValueError):
         cameras.load_checkpoints()
     assert agent_tools.camera_lookup()("x") is None
+
+
+def test_image_notes_become_image_verified_and_need_their_own_confirmation(notes):
+    notes.update(method="image", spot_in_view=True)
+    del notes["participant_visible"]
+    checkpoint, log = cal.build_entry(notes, MOUNT, now=NOW)
+    assert (checkpoint.verification_status, checkpoint.enabled, log["method"]) == ("image_verified", True, "image")
+    assert checkpoint.last_image_verified_at is not None and checkpoint.last_field_verified_at is None
+
+    notes.update(spot_in_view=None, participant_visible=True)  # the other method's confirmation does not count
+    with pytest.raises(cal.NotesError, match="spot_in_view"):
+        cal.build_entry(notes, MOUNT, now=NOW)
+    notes.update(method="guess")
+    with pytest.raises(cal.NotesError, match="method"):
+        cal.build_entry(notes, MOUNT, now=NOW)
+    form = cal.template("cam", None, method="image")
+    assert form["spot_in_view"] is None and "participant_visible" not in form
