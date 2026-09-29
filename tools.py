@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 import requests
 
 import state
-from integrations import cameras
+from adventure import agent_tools
+from integrations import cameras, tool_specs
 from schemas import Freshness, tool_error, tool_ok
 from state import ToolContext
 
@@ -221,6 +222,8 @@ TOOLS = [
         },
     },
     *cameras.CAMERA_TOOLS,
+    *tool_specs.PLACE_TOOLS,  # Kyle: places, research, walking and transit routes
+    *agent_tools.PLANNING_TOOLS,  # Kyle: evaluate_adventure_plan, save_adventure_plan
 ]
 
 # What the harness runs: tool name -> Python function.
@@ -230,10 +233,13 @@ TOOL_MAP = {
     "update_adventure_state": update_adventure_state,
     "find_camera_checkpoints": find_camera_checkpoints,
     "capture_camera_checkpoint": capture_camera_checkpoint,
+    **tool_specs.PLACE_TOOL_MAP,
+    **agent_tools.PLANNING_TOOL_MAP,
 }
 
 # Tools that receive the session's ToolContext as their first argument.
-SESSION_TOOLS = {"get_adventure_state", "update_adventure_state", "load_dev_adventure", "capture_camera_checkpoint"}
+SESSION_TOOLS = {"get_adventure_state", "update_adventure_state", "load_dev_adventure", "capture_camera_checkpoint",
+                 *agent_tools.PLANNING_SESSION_TOOLS}
 
 if os.environ.get("SCAVAGENT_DEV_FIXTURES") == "1":
     TOOL_MAP["load_dev_adventure"] = load_dev_adventure
