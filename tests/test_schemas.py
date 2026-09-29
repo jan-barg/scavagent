@@ -96,6 +96,24 @@ def test_plan_rejects_invented_evidence_references():
     with pytest.raises(ValidationError, match="unknown stops"):
         AdventurePlan.model_validate(bad)
 
+    bad = copy.deepcopy(plan)
+    bad["places"][1]["claims"][0]["source_urls"] = []  # "According to a source" with no source
+    with pytest.raises(ValidationError, match="cites no URL"):
+        AdventurePlan.model_validate(bad)
+
+
+def test_plan_rejects_ambiguous_stops_and_camera_stops_without_a_camera():
+    plan = load_scenario("constrained_route").plan.model_dump(mode="json")
+    bad = copy.deepcopy(plan)
+    bad["checkpoints"].append(copy.deepcopy(bad["checkpoints"][0]))
+    with pytest.raises(ValidationError, match="unique"):
+        AdventurePlan.model_validate(bad)
+
+    bad = copy.deepcopy(plan)
+    next(c for c in bad["checkpoints"] if c["activity"]["type"] == "camera_capture")["camera_checkpoint_id"] = None
+    with pytest.raises(ValidationError, match="without a camera checkpoint"):
+        AdventurePlan.model_validate(bad)
+
 
 def test_state_outcomes_are_exclusive():
     with pytest.raises(ValidationError):
