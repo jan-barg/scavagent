@@ -219,3 +219,21 @@ def test_a_rejected_claude_request_is_not_retried(client, vertex_claude):
                                                   "message": "Invalid `signature` in `thinking` block."}})] * 3
     body = client.post("/chat", json={"message": "hi"}).json()
     assert body["response"].startswith("Model call failed") and len(sent) == 1
+
+
+def test_malformed_tool_arguments_do_not_break_the_rest_of_the_conversation(client, monkeypatch):
+    # Kimi once dropped a closing brace; Vertex then refused every later request that carried it.
+    seen = script(
+        monkeypatch,
+        FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"'),
+                                              tool_call("c2", "get_weather", '["NYC"]')]),
+        FakeMessage(content="Let me retry.", tool_calls=None),
+        FakeMessage(content="Fine now.", tool_calls=None),
+    )
+    first = client.post("/chat", json={"message": "weather?"}).json()
+    client.post("/chat", json={"message": "and?", "session_id": first["session_id"]})
+
+    assert [c["args"] for c in first["tool_calls"]] == [{"_unparsed": '{"location": "NYC"'}, {"_unparsed": '["NYC"]'}]
+    for context in seen[1:]:
+        sent = [call["function"]["arguments"] for m in context for call in m.get("tool_calls") or []]
+        assert sent and all(isinstance(json.loads(a), dict) for a in sent)

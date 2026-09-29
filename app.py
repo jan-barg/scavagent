@@ -73,17 +73,22 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
         # Append assistant's reply (text, tool calls, or both) to the context.
         # model_dump() keeps it a plain dict: the raw object carries provider-specific
         # fields that trip Pydantic when LiteLLM re-serializes it next round.
-        messages += [reply.model_dump()]
+        assistant = reply.model_dump()
+        messages += [assistant]
 
         if not reply.tool_calls:
             return reply.content or "I didn't get an answer from the model. Please send that again."
 
         # The harness, not the model, runs each tool and appends the result
-        for call in reply.tool_calls:
+        for i, call in enumerate(reply.tool_calls):
             try:
                 args = json.loads(call.function.arguments or "{}")
             except json.JSONDecodeError:
                 args = None
+            if not isinstance(args, dict):
+                # Vertex's OpenAI-compatible endpoint rejects every later request of a conversation that holds
+                # malformed arguments, so the model's copy gets {} next to the error; the trace keeps what it sent.
+                assistant["tool_calls"][i]["function"]["arguments"] = "{}"
             if monotonic() >= deadline:
                 result = tool_error(
                     "INTERNAL_ERROR",
