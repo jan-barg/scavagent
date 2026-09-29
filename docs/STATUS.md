@@ -16,14 +16,14 @@ Initial handoff recorded September 28, 2026. This file records observed implemen
 
 | ID | Task | Status | Depends on |
 |---|---|---|---|
-| J1 | Shared schemas, fixture examples, tool-result convention | Not started | Review proposed contracts |
+| J1 | Shared schemas, fixture examples, tool-result convention | Done on branch `jan/j1-shared-contracts`: `schemas.py`, `fixtures/`, tools/harness on the result convention, trace kept when a later model call fails; 17 pytest checks pass; one live local `/chat` call (Vertex Gemini + Open-Meteo) returned the new trace shape | Kyle review of `docs/CONTRACTS.md` |
 | J2 | App/session persistence and compatible tool traces | Not started | J1 |
 | J3 | Camera adapter, saved images, calibrated catalogue, original finder | Not started | Camera API spike; J1 for final integration; joint field checks |
 | J4 | Chat presentation, foreground location and resume | Not started | J1; J2 for integration |
 | J5 | Cloud Run setup and GitHub continuous deployment | Not started | Cloud project/configuration access; can start alongside J1 |
 | J6 | Final photo recap, recovery checks, deployment documentation | Not started | J2–J5 |
 
-Latest changes/checks: no application work yet. Next action: implement J1 and verify J5 prerequisites; a separate isolated task can inspect the camera integration.
+Latest changes/checks: J1 landed on `jan/j1-shared-contracts` (see row). On September 28, local gcloud CLI and Application Default Credentials were reauthenticated with `agentic-ai-msds` as the configured project; a local `/chat` call then reached Vertex Gemini successfully. The project is under the Columbia organization with billing enabled and `aiplatform.googleapis.com` on; Cloud Run, Cloud Build, Artifact Registry, and Firestore APIs are not yet enabled, and nothing is deployed. Next action: J2 persistence (Claude worktree) and the camera adapter/frontend (Codex worktree, branch `jan/camera-frontend`).
 
 ## Kyle workstream
 

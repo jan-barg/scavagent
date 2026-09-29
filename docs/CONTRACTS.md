@@ -1,6 +1,18 @@
 # Shared contracts — proposal for Phase 1
 
-Status: documentation proposal, not implemented or frozen code. Jan is the suggested maintainer; both workstreams review changes. Implement the initial version as shared validated Python models plus small JSON fixtures, then update this document to match what ships.
+Status: the first version is implemented in [`schemas.py`](../schemas.py) with labeled fixtures in [`fixtures/`](../fixtures/) (J1). Jan maintains it; both workstreams review changes. Change the code and this document together.
+
+### What shipped in J1
+
+- Every record in the table below is a Pydantic model in `schemas.py`. Unknown fields are rejected, timestamps must be timezone-aware, and cross-references are checked: a plan cannot reference an unknown place, claim (evidence), story beat, or leg endpoint.
+- Progress lives only in `AdventureState` (completed/skipped/blocked ids, revealed beats, photos). A `Checkpoint` inside a plan has no status field, so a plan version stays immutable.
+- `RouteLeg.from_id`/`to_id` is a checkpoint id or one of `start`, `current_location`, `destination`. A revision routes from `current_location`.
+- `AdventureRequest.defaulted_fields` names the fields filled by app defaults rather than stated by the user.
+- `Activity` requires a non-empty `fallback`; a `verified_feature` activity requires `evidence_ids`; a `camera_capture` checkpoint requires `camera_checkpoint_id`. `Claim.basis` is `source`, `field_verified`, or `user_reported`; a `source` claim must cite a URL.
+- `CameraCheckpoint.verification_status` is `field_verified`, `unverified`, or `synthetic_fixture`; `field_verified` requires `last_field_verified_at`.
+- Tools return `tool_ok(...)`/`tool_error(...)` dicts (see "Tool result conventions"). The `/chat` trace keeps `result` as that object; the model receives it as JSON text.
+- `ChatRequest` accepts the optional `location` (`LocationContext`) and `client_message_id` fields and ignores unknown fields. J2 wires them into persistence and replay protection.
+- Fixtures: `fixtures/start_only.json`, `constrained_route.json`, `revision_after_skip.json`, and `cameras.json`, loaded with `from fixtures import load_scenario, load_cameras`. Each carries `provenance.kind = "synthetic_fixture"` and `field_verified = false`.
 
 ## Integration boundaries
 
@@ -9,7 +21,7 @@ Status: documentation proposal, not implemented or frozen code. Jan is the sugge
 - Tools receive a server-created session context. A model-generated argument never decides which user's state to access.
 - State operations validate and persist allowed changes atomically using the current version. The agent must not keep a separate mutable progress store.
 - `tools.py` stays the central registry/dispatcher initially. Put adapters in a differently named package such as `integrations/`; avoid ambiguity between `tools.py` and a `tools/` package.
-- Proposed module paths are `schemas.py`, `agent.py`, `state.py`, `integrations/cameras.py`, `integrations/research.py`, `integrations/routes.py`, `integrations/mta.py`, `integrations/filming.py`, and `adventure/validation.py`. These are future organization suggestions, not existing files.
+- `schemas.py` exists. Proposed remaining module paths are `agent.py`, `state.py`, `integrations/cameras.py`, `integrations/research.py`, `integrations/routes.py`, `integrations/mta.py`, `integrations/filming.py`, and `adventure/validation.py`. These are future organization suggestions, not existing files.
 
 ## Record shapes to agree
 
@@ -57,9 +69,9 @@ For the initial UI, render safe message text/Markdown and authorized image URLs 
 
 ## Tool result conventions
 
-Use explicit success/failure, data, warnings where useful, and an error with `code`, `message`, `retryable`, and an actionable next step. A failure is not a fabricated empty success. Data freshness and whether an answer is live, historical, scheduled, or user-reported should be visible when relevant.
+Every tool returns `{"ok", "data", "error", "warnings", "freshness"}`. `ok` is true exactly when `error` is null. An error has `code`, `message`, `retryable`, and `next_step` (what the model should do instead). `freshness.kind` is `live`, `scheduled`, `historical`, `user_reported`, `static_reference`, or `synthetic_fixture`, with optional `as_of` and `retrieved_at`. A failure is not a fabricated empty success.
 
-Suggested error cases: `INVALID_ARGUMENT`, `NO_MATCH`, `UPSTREAM_UNAVAILABLE`, `STALE_DATA`, `OUTSIDE_COVERAGE`, `PLAN_INFEASIBLE`, `MISSING_EVIDENCE`, and `STATE_VERSION_CONFLICT`. These are proposed labels to normalize, not a reason to build a large framework.
+Error codes: `INVALID_ARGUMENT`, `NO_MATCH`, `UPSTREAM_UNAVAILABLE`, `STALE_DATA`, `OUTSIDE_COVERAGE`, `PLAN_INFEASIBLE`, `MISSING_EVIDENCE`, `STATE_VERSION_CONFLICT`, plus `UNKNOWN_TOOL` and `INTERNAL_ERROR` from the dispatcher. Add a code in `schemas.ErrorCode` when a real case needs it.
 
 The evaluator checks actual route/dwell totals, required stops, allowed modes, evidence references, and activity/story dependencies. It returns concrete violations and estimates. It cannot certify arbitrary factual accuracy merely because a source URL was present.
 
@@ -73,10 +85,10 @@ Photo bytes belong in asset storage. Auth/session boundaries apply to their retr
 
 ## Phase 1 fixtures
 
-Build three small synthetic fixtures with explicit fixture provenance:
+Implemented in `fixtures/` (see above). The three synthetic scenarios are:
 
 1. A start-only request and a short adventure proposal.
 2. A route with a destination, deadline, and a required stop.
 3. A revision after skipping an optional checkpoint and reducing available time.
 
-Include a separately labeled camera adapter fixture for development. Do not describe synthetic coordinates, test images, or placeholder access notes as field-verified. Replace fixtures in the live product path with real results by Phase 2.
+`fixtures/cameras.json` is the separately labeled camera fixture. Do not describe synthetic coordinates, test images, or placeholder access notes as field-verified. Replace fixtures in the live product path with real results by Phase 2.

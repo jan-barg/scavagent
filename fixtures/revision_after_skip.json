@@ -1,0 +1,529 @@
+{
+  "provenance": {
+    "kind": "synthetic_fixture",
+    "description": "Revision of the constrained-route fixture: after completing the required stop, the user skips the next optional stop and has 15 minutes left. The optional camera stop no longer fits and is dropped; its unrevealed clue moves to a chat-delivered puzzle. All content is invented for development.",
+    "field_verified": false
+  },
+  "request": {
+    "start": {
+      "point": {
+        "lat": 40.7856,
+        "lng": -73.9695
+      },
+      "place_text": "Central Park West and West 86th Street",
+      "source": "user",
+      "observed_at": "2026-09-28T15:00:00-04:00"
+    },
+    "destination": {
+      "point": {
+        "lat": 40.7784,
+        "lng": -73.9818
+      },
+      "place_text": "West 72nd Street and Broadway",
+      "source": "user",
+      "observed_at": "2026-09-28T15:00:00-04:00"
+    },
+    "deadline": "2026-09-28T15:45:00-04:00",
+    "required_stops": [
+      {
+        "stop_id": "req_1",
+        "place": {
+          "point": {
+            "lat": 40.7835,
+            "lng": -73.9745
+          },
+          "place_text": "West 81st Street and Columbus Avenue",
+          "source": "user",
+          "observed_at": "2026-09-28T15:00:00-04:00"
+        },
+        "dwell_minutes": 5
+      }
+    ],
+    "allowed_modes": [
+      "walk"
+    ],
+    "theme": "architecture",
+    "defaulted_fields": []
+  },
+  "plan": {
+    "plan_id": "fixture_plan_constrained",
+    "version": 1,
+    "request": {
+      "start": {
+        "point": {
+          "lat": 40.7856,
+          "lng": -73.9695
+        },
+        "place_text": "Central Park West and West 86th Street",
+        "source": "user",
+        "observed_at": "2026-09-28T15:00:00-04:00"
+      },
+      "destination": {
+        "point": {
+          "lat": 40.7784,
+          "lng": -73.9818
+        },
+        "place_text": "West 72nd Street and Broadway",
+        "source": "user",
+        "observed_at": "2026-09-28T15:00:00-04:00"
+      },
+      "deadline": "2026-09-28T15:45:00-04:00",
+      "required_stops": [
+        {
+          "stop_id": "req_1",
+          "place": {
+            "point": {
+              "lat": 40.7835,
+              "lng": -73.9745
+            },
+            "place_text": "West 81st Street and Columbus Avenue",
+            "source": "user",
+            "observed_at": "2026-09-28T15:00:00-04:00"
+          },
+          "dwell_minutes": 5
+        }
+      ],
+      "allowed_modes": [
+        "walk"
+      ],
+      "theme": "architecture",
+      "defaulted_fields": []
+    },
+    "places": [
+      {
+        "place_id": "fixture_place_required",
+        "name": "West 81st Street and Columbus Avenue (user's required stop)",
+        "point": {
+          "lat": 40.7835,
+          "lng": -73.9745
+        },
+        "claims": [],
+        "checked_at": "2026-09-28T14:55:00-04:00",
+        "uncertainty": "Location stated by the user; no research performed in this fixture."
+      },
+      {
+        "place_id": "fixture_place_facade",
+        "name": "Fixture Facade (synthetic)",
+        "address": "Synthetic address near West 78th Street",
+        "point": {
+          "lat": 40.7815,
+          "lng": -73.977
+        },
+        "claims": [
+          {
+            "claim_id": "fixture_claim_1",
+            "text": "Synthetic claim: the entrance has two carved lions above the door.",
+            "kind": "physical_feature",
+            "basis": "source",
+            "source_urls": [
+              "https://example.org/fixture/facade"
+            ],
+            "checked_at": "2026-09-28T14:55:00-04:00",
+            "uncertainty": "Placeholder claim; the URL is not a real source."
+          }
+        ],
+        "checked_at": "2026-09-28T14:55:00-04:00"
+      },
+      {
+        "place_id": "fixture_place_camera",
+        "name": "Fixture camera corner (synthetic)",
+        "point": {
+          "lat": 40.78,
+          "lng": -73.9795
+        },
+        "claims": [],
+        "checked_at": "2026-09-28T14:55:00-04:00",
+        "uncertainty": "Synthetic camera stop; see fixtures/cameras.json."
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "stop_1",
+        "place_id": "fixture_place_required",
+        "required_by_user": true,
+        "activity": {
+          "type": "user_observation",
+          "prompt": "You're at your required stop. Which building on this corner looks oldest to you, and why?",
+          "answer_rule": "Accept any answer; use it as the architect's alibi in the fiction.",
+          "hints": [
+            "Compare window shapes and building materials."
+          ],
+          "fallback": "Skip the observation; the required stop still counts as visited if the user says they are there."
+        },
+        "dwell_minutes": 5,
+        "story_beat_id": "beat_1"
+      },
+      {
+        "checkpoint_id": "stop_2",
+        "place_id": "fixture_place_facade",
+        "activity": {
+          "type": "verified_feature",
+          "prompt": "Look above the entrance. How many carved animals guard the door?",
+          "physical_requirements": [
+            "Carved animals above the entrance"
+          ],
+          "evidence_ids": [
+            "fixture_claim_1"
+          ],
+          "answer_rule": "Accept 2, or 'two lions'.",
+          "hints": [
+            "They are big cats.",
+            "Count the lions."
+          ],
+          "fallback": "If the carving is missing or blocked, deliver the clue in chat and continue."
+        },
+        "dwell_minutes": 4,
+        "story_beat_id": "beat_2"
+      },
+      {
+        "checkpoint_id": "stop_3",
+        "place_id": "fixture_place_camera",
+        "activity": {
+          "type": "camera_capture",
+          "prompt": "Stand at the marked spot, face the camera, and type 'ready'.",
+          "answer_rule": "Capture after the user types ready; the user confirms whether they are visible.",
+          "hints": [
+            "Stand still for about 15 seconds before typing ready."
+          ],
+          "fallback": "If the camera is offline or the framing is wrong, skip the photo and continue."
+        },
+        "dwell_minutes": 4,
+        "story_beat_id": "beat_3",
+        "camera_checkpoint_id": "fixture_cam_cp_1"
+      }
+    ],
+    "legs": [
+      {
+        "leg_id": "leg_1",
+        "from_id": "start",
+        "to_id": "stop_1",
+        "allowed_modes": [
+          "walk"
+        ],
+        "actual_modes": [
+          "walk"
+        ],
+        "duration_minutes": 8,
+        "distance_m": 650,
+        "instructions": [
+          "Synthetic directions."
+        ],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T14:56:00-04:00"
+      },
+      {
+        "leg_id": "leg_2",
+        "from_id": "stop_1",
+        "to_id": "stop_2",
+        "allowed_modes": [
+          "walk"
+        ],
+        "actual_modes": [
+          "walk"
+        ],
+        "duration_minutes": 5,
+        "distance_m": 400,
+        "instructions": [
+          "Synthetic directions."
+        ],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T14:56:00-04:00"
+      },
+      {
+        "leg_id": "leg_3",
+        "from_id": "stop_2",
+        "to_id": "stop_3",
+        "allowed_modes": [
+          "walk"
+        ],
+        "actual_modes": [
+          "walk"
+        ],
+        "duration_minutes": 5,
+        "distance_m": 400,
+        "instructions": [
+          "Synthetic directions."
+        ],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T14:56:00-04:00"
+      },
+      {
+        "leg_id": "leg_4",
+        "from_id": "stop_3",
+        "to_id": "destination",
+        "allowed_modes": [
+          "walk"
+        ],
+        "actual_modes": [
+          "walk"
+        ],
+        "duration_minutes": 9,
+        "distance_m": 700,
+        "instructions": [
+          "Synthetic directions."
+        ],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T14:56:00-04:00"
+      }
+    ],
+    "story": {
+      "premise": "Fiction: an architect's lost blueprint is hidden along the route, and three façades hold the pieces.",
+      "cast": [
+        "The Architect (fictional)",
+        "The Rival (fictional)"
+      ],
+      "solution": "The Rival copied the blueprint; the lions' count unlocks the final page.",
+      "beats": [
+        {
+          "beat_id": "beat_1",
+          "checkpoint_id": "stop_1",
+          "summary": "The recruit judges the oldest building; it becomes the Architect's alibi.",
+          "reveals": "The Architect was here at noon."
+        },
+        {
+          "beat_id": "beat_2",
+          "checkpoint_id": "stop_2",
+          "summary": "The lions give the page number.",
+          "reveals": "The missing page is page 2."
+        },
+        {
+          "beat_id": "beat_3",
+          "checkpoint_id": "stop_3",
+          "summary": "Surveillance catches the recruit, and in the story, the Rival too.",
+          "reveals": "The Rival was photographed on this corner."
+        }
+      ]
+    },
+    "estimated_total_minutes": 40,
+    "contingency_minutes": 5,
+    "created_at": "2026-09-28T14:57:00-04:00"
+  },
+  "state": {
+    "version": 5,
+    "status": "active",
+    "active_plan_id": "fixture_plan_constrained",
+    "current_checkpoint_id": "stop_2",
+    "completed_ids": [
+      "stop_1"
+    ],
+    "revealed_beat_ids": [
+      "beat_1"
+    ],
+    "user_reports": [
+      {
+        "checkpoint_id": "stop_1",
+        "text": "The brownstone on the corner looks oldest; the stoop is worn.",
+        "reported_at": "2026-09-28T15:14:00-04:00"
+      }
+    ],
+    "latest_location": {
+      "point": {
+        "lat": 40.7833,
+        "lng": -73.975
+      },
+      "source": "browser",
+      "observed_at": "2026-09-28T15:24:40-04:00",
+      "accuracy_m": 18
+    },
+    "updated_at": "2026-09-28T15:14:00-04:00"
+  },
+  "user_message": "Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination.",
+  "revised_plan": {
+    "plan_id": "fixture_plan_constrained_v2",
+    "version": 2,
+    "request": {
+      "start": {
+        "point": {
+          "lat": 40.7856,
+          "lng": -73.9695
+        },
+        "place_text": "Central Park West and West 86th Street",
+        "source": "user",
+        "observed_at": "2026-09-28T15:00:00-04:00"
+      },
+      "destination": {
+        "point": {
+          "lat": 40.7784,
+          "lng": -73.9818
+        },
+        "place_text": "West 72nd Street and Broadway",
+        "source": "user",
+        "observed_at": "2026-09-28T15:00:00-04:00"
+      },
+      "deadline": "2026-09-28T15:40:00-04:00",
+      "required_stops": [
+        {
+          "stop_id": "req_1",
+          "place": {
+            "point": {
+              "lat": 40.7835,
+              "lng": -73.9745
+            },
+            "place_text": "West 81st Street and Columbus Avenue",
+            "source": "user",
+            "observed_at": "2026-09-28T15:00:00-04:00"
+          },
+          "dwell_minutes": 5
+        }
+      ],
+      "allowed_modes": [
+        "walk"
+      ],
+      "theme": "architecture",
+      "defaulted_fields": []
+    },
+    "places": [
+      {
+        "place_id": "fixture_place_required",
+        "name": "West 81st Street and Columbus Avenue (user's required stop)",
+        "point": {
+          "lat": 40.7835,
+          "lng": -73.9745
+        },
+        "claims": [],
+        "checked_at": "2026-09-28T14:55:00-04:00",
+        "uncertainty": "Location stated by the user; no research performed in this fixture."
+      },
+      {
+        "place_id": "fixture_place_en_route",
+        "name": "Fixture corner on the way (synthetic)",
+        "point": {
+          "lat": 40.781,
+          "lng": -73.979
+        },
+        "claims": [],
+        "checked_at": "2026-09-28T15:25:00-04:00",
+        "uncertainty": "Synthetic place; the clue is delivered in chat and needs no physical feature."
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "stop_1",
+        "place_id": "fixture_place_required",
+        "required_by_user": true,
+        "activity": {
+          "type": "user_observation",
+          "prompt": "You're at your required stop. Which building on this corner looks oldest to you, and why?",
+          "answer_rule": "Accept any answer; use it as the architect's alibi in the fiction.",
+          "hints": [
+            "Compare window shapes and building materials."
+          ],
+          "fallback": "Skip the observation; the required stop still counts as visited if the user says they are there."
+        },
+        "dwell_minutes": 5,
+        "story_beat_id": "beat_1"
+      },
+      {
+        "checkpoint_id": "stop_4",
+        "place_id": "fixture_place_en_route",
+        "activity": {
+          "type": "chat_puzzle",
+          "prompt": "A torn telegram reads: 'PAGE NUMBER = PAIRS OF EYES ON A LION.' Which page is missing?",
+          "answer_rule": "Accept 2 or 'page 2'.",
+          "hints": [
+            "How many eyes does one lion have?"
+          ],
+          "fallback": "Reveal that the missing page is page 2 and continue to the destination."
+        },
+        "dwell_minutes": 2,
+        "story_beat_id": "beat_2"
+      }
+    ],
+    "legs": [
+      {
+        "leg_id": "leg_r1",
+        "from_id": "current_location",
+        "to_id": "stop_4",
+        "allowed_modes": [
+          "walk"
+        ],
+        "actual_modes": [
+          "walk"
+        ],
+        "duration_minutes": 6,
+        "distance_m": 480,
+        "instructions": [
+          "Synthetic directions."
+        ],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T15:25:00-04:00"
+      },
+      {
+        "leg_id": "leg_r2",
+        "from_id": "stop_4",
+        "to_id": "destination",
+        "allowed_modes": [
+          "walk"
+        ],
+        "actual_modes": [
+          "walk"
+        ],
+        "duration_minutes": 5,
+        "distance_m": 400,
+        "instructions": [
+          "Synthetic directions."
+        ],
+        "source": "synthetic_fixture",
+        "retrieved_at": "2026-09-28T15:25:00-04:00"
+      }
+    ],
+    "story": {
+      "premise": "Fiction: an architect's lost blueprint is hidden along the route, and three façades hold the pieces.",
+      "cast": [
+        "The Architect (fictional)",
+        "The Rival (fictional)"
+      ],
+      "solution": "The Rival copied the blueprint; the page number from the telegram unlocks the final page.",
+      "beats": [
+        {
+          "beat_id": "beat_1",
+          "checkpoint_id": "stop_1",
+          "summary": "The recruit judges the oldest building; it becomes the Architect's alibi.",
+          "reveals": "The Architect was here at noon."
+        },
+        {
+          "beat_id": "beat_2",
+          "checkpoint_id": "stop_4",
+          "summary": "The lions give the page number.",
+          "reveals": "The missing page is page 2."
+        }
+      ]
+    },
+    "estimated_total_minutes": 13,
+    "contingency_minutes": 2,
+    "created_at": "2026-09-28T15:25:10-04:00",
+    "supersedes_plan_id": "fixture_plan_constrained"
+  },
+  "revised_state": {
+    "version": 6,
+    "status": "active",
+    "active_plan_id": "fixture_plan_constrained_v2",
+    "current_checkpoint_id": "stop_4",
+    "completed_ids": [
+      "stop_1"
+    ],
+    "skipped_ids": [
+      "stop_2"
+    ],
+    "revealed_beat_ids": [
+      "beat_1"
+    ],
+    "user_reports": [
+      {
+        "checkpoint_id": "stop_1",
+        "text": "The brownstone on the corner looks oldest; the stoop is worn.",
+        "reported_at": "2026-09-28T15:14:00-04:00"
+      }
+    ],
+    "latest_location": {
+      "point": {
+        "lat": 40.7833,
+        "lng": -73.975
+      },
+      "source": "browser",
+      "observed_at": "2026-09-28T15:24:40-04:00",
+      "accuracy_m": 18
+    },
+    "updated_at": "2026-09-28T15:25:10-04:00"
+  }
+}
