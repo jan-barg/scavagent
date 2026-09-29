@@ -604,9 +604,19 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         built = beat is not None and (beat.beat_id in solved or any(solved.get(ref, end + 1) <= at for ref in beat.uses))
         for found in _EARNED_OBJECT.finditer(text):
             if not built and not any(p <= at and _object_kind(found.group(0)) in kinds for p, kinds in named):
+                # Most often the puzzles are there but lack their answer: name them.
+                sources = [beats[ref] for ref in (beat.uses if beat is not None else []) if ref in beats]
+                if beat is not None and beat.checkpoint_id in order:
+                    sources.append(beat)
+                unsolved = [b.checkpoint_id for b in sources if b.checkpoint_id in by_id
+                            and by_id[b.checkpoint_id].activity.type == "chat_puzzle" and b.beat_id not in solved]
+                each = "each " if len(unsolved) > 1 else ""
+                fix = (f"Give {' and '.join(unsolved)} {each}its puzzle's exact answer as activity.solution, and state "
+                       "that answer in the stop's clue." if unsolved else
+                       "List in its uses the stops whose chat_puzzle answers make it up (each with activity.solution, "
+                       "stated in its beat's clue), or leave it out.")
                 flag("OBJECT_UNEARNED", f"{label} mentions \"{found.group(0)}\", but it builds on no puzzle the user "
-                                        "solves. List in its uses the stops whose chat_puzzle answers make it up (each "
-                                        "with activity.solution, stated in its beat's clue), or leave it out.",
+                                        f"solves. {fix}",
                      beat.checkpoint_id if beat is not None and label != "The solution" else None)
                 break
 

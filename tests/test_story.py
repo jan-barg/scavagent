@@ -242,11 +242,19 @@ def test_a_code_must_come_from_a_solved_puzzle():
     def built_from_clues(d):  # the finale builds on both solved puzzles, so it can call them a code
         d["chat_beats"][0]["summary"] = "Mara: \"Roxy's code is locker 1021. We have the reel.\""
 
+    def answers_left_out(d):  # a live run: puzzles with clues but no solution, and a finale "vault combination"
+        built_from_clues(d)
+        for stop in d["stops"]:
+            stop["activity"].pop("solution")
+
     for change, word in [(observed_not_solved, '"code"'), (slipped_in_chat, '"combination"')]:
         result = evaluate(changed(change), 5, 6)
         assert codes(result) == ["OBJECT_UNEARNED"], change.__name__
         assert word in messages(result)
     assert evaluate(changed(built_from_clues), 5, 6)["data"]["passes"]
+    unsolved = evaluate(changed(answers_left_out), 5, 6)
+    assert codes(unsolved) == ["OBJECT_UNEARNED"]
+    assert "Give stop_1 and stop_2 each its puzzle's exact answer as activity.solution" in messages(unsolved)
 
 
 def test_ordinary_senses_of_code_and_key_are_not_objects():
