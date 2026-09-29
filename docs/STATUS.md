@@ -29,7 +29,7 @@ Latest changes/checks: J1, J2, and J3/J4 (PR #3) are merged. Camera tools are re
 
 | ID | Task | Status | Depends on |
 |---|---|---|---|
-| K1 | Research/geocoding/routing API spikes and fixture outputs | Done on `kyle/workstream` (not merged or pushed): geocoding, places and research, walking and subway/bus routes, live-checked September 29 | Provider/configuration choice; independent of J1 implementation |
+| K1 | Research/geocoding/routing API spikes and fixture outputs | Done on `kyle/workstream` (pushed, not merged): geocoding, places and research, walking and subway/bus routes, live-checked September 29 | Provider/configuration choice; independent of J1 implementation |
 | K2 | Agent progression and dynamic planner | Implemented on `kyle/workstream`: `agent.py` instructions; the model plans with the tools and can save only a plan that passed the evaluator; `get_next_directions` guides each leg. All three grader queries ran end to end locally | J1 and K1, both in the branch |
 | K3 | Original adventure evaluator | Implemented: `adventure/validation.py` behind `evaluate_adventure_plan`, about 30 violation codes, tests that break one rule at a time | — |
 | K4 | Grounded story, activities, hints, coherent replanning | Implemented through the instructions, the revision builder (`adventure/drafts.py`), and the evaluator: completed stops and revealed clues kept, stranded clues moved to chat, waivers only from the user, time limits re-checked. Story quality varies with the model | K2/K3 |
@@ -38,7 +38,7 @@ Latest changes/checks: J1, J2, and J3/J4 (PR #3) are merged. Camera tools are re
 
 Latest changes/checks (September 29, overnight):
 
-- Branch `kyle/workstream` holds everything: Kyle's K1 commit, a merge of `main` at `9b54995` (J1–J5), then Kyle's work. It is not pushed, because the Claude Code permission settings on Kyle's machine blocked `git push`; push it with `git push -u origin kyle/workstream`. Nothing new was on `main` at the last fetch (about 2:20 AM).
+- Branch `kyle/workstream` holds everything: Kyle's K1 commit, a merge of `main` at `9b54995` (J1–J5), then Kyle's work. It is pushed to GitHub as `kyle/workstream` (a push earlier in the night was blocked by local Claude Code permissions; the final one went through). Nothing new was on `main` at the last fetch (about 2:20 AM).
 - Built:
   - Adapters on the shared schemas: `geocode_place`, `find_places`, `research_place` (claims pinned to Wikipedia revisions and LPC records), `get_route`, `get_walking_times`.
   - Transit: `integrations/transit.py` asks Google Routes for each leg, counts the wait for the train in door-to-door time, and caps and caches lookups. A leg rides only when that saves at least 4 minutes over a walk longer than 12. The Routes API is enabled on Kyle's project `kc3936-ieor4570-p1` (Kyle approved), and local runs bill it through `SCAVAGENT_ROUTES_PROJECT`.
