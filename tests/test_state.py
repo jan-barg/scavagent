@@ -84,36 +84,40 @@ def test_retry_while_the_first_turn_is_still_running_does_not_run_it_again(monke
     body = {"message": "ready", "session_id": "in-flight", "client_message_id": "m-1"}
     retries = []
 
+    model_calls = []
+
     def completion(**kwargs):
-        # The browser gave up waiting and sent the same message again while the model was thinking.
-        retries.append(client.post("/chat", json=body).status_code)
+        model_calls.append(1)
+        if not retries:  # The browser gave up waiting and sent the same message again while the model was thinking
+            retries.append(client.post("/chat", json=body).status_code)
         return reply(FakeMessage(content="Done once.", tool_calls=None))
 
     monkeypatch.setattr(app_module.litellm, "completion", completion)
     first = client.post("/chat", json=body).json()
     later = client.post("/chat", json=body).json()
 
-    assert retries == [409]  # The model ran once; the mid-turn retry did not start a second turn
+    assert retries == [409] and len(model_calls) == 1  # The mid-turn resend did not start a second turn
     assert first["response"] == "Done once." and later == first
 
 
 def test_an_error_after_claiming_frees_the_claim(monkeypatch):
     store = state.MemoryStore()
     monkeypatch.setattr(app_module, "store", store)
-    loads = []
+    real_load, claimed = store.load, []
 
-    def flaky_load(session_id):  # The reload right after the claim fails once
-        loads.append(session_id)
-        if len(loads) == 2:
+    def load(session_id):  # Storage reads fail from the moment the message is claimed
+        if claimed:
             raise OSError("storage unavailable")
-        return state.MemoryStore.load(store, session_id)
+        return real_load(session_id)
 
-    monkeypatch.setattr(store, "load", flaky_load)
+    monkeypatch.setattr(store, "claim", lambda *args: claimed.append(args) or state.MemoryStore.claim(store, *args))
+    monkeypatch.setattr(store, "load", load)
     client = TestClient(app_module.app)
     body = {"message": "ready", "session_id": "flaky", "client_message_id": "m-1"}
     with pytest.raises(OSError):
         client.post("/chat", json=body)
 
+    monkeypatch.setattr(store, "load", real_load)  # Storage recovers
     script(monkeypatch, FakeMessage(content="Here now.", tool_calls=None))
     assert client.post("/chat", json=body).json()["response"] == "Here now."  # Not a 409 for five minutes
 
@@ -153,6 +157,53 @@ def test_photo_from_a_turn_that_died_is_kept_and_its_message_runs_again_later(mo
     assert len(after.photos) == 1  # The frame from the turn that died
 
 
+def test_a_turn_that_lost_its_save_says_so_and_the_message_can_be_sent_again(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    client = TestClient(app_module.app)
+    mine = {"message": "ready", "session_id": "race", "client_message_id": "m-1"}
+    other = {"message": "also this", "session_id": "race", "client_message_id": "m-2"}
+    answers, raced = iter(["Answer to m-2.", "Answer to m-1.", "Answer to m-1, again."]), []
+
+    def completion(**kwargs):
+        if not raced:  # A second tab sends another message, which finishes while this turn is running
+            raced.append(True)
+            client.post("/chat", json=other)
+        return reply(FakeMessage(content=next(answers), tool_calls=None))
+
+    monkeypatch.setattr(app_module.litellm, "completion", completion)
+    lost = client.post("/chat", json=mine).json()["response"]
+    resent = client.post("/chat", json=mine)
+
+    assert "wasn't saved" in lost  # The user is told, rather than shown a reply that was never stored
+    assert resent.status_code == 200 and resent.json()["response"] == "Answer to m-1, again."
+    texts = [m["text"] for m in store.load("race").transcript]
+    assert texts == ["also this", "Answer to m-2.", "ready", "Answer to m-1, again."]
+
+
+def test_a_long_conversation_stays_bounded_in_storage(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    record = SessionRecord.new("long")
+    for i in range(120):  # Every earlier turn used a tool, so a cut can land inside a tool exchange
+        call = {"role": "assistant", "content": None, "tool_calls": [{"id": f"c{i}", "type": "function"}]}
+        record.messages += [{"role": "user", "content": f"u{i}"}, call,
+                            {"role": "tool", "tool_call_id": f"c{i}", "content": "{}"}, {"role": "assistant", "content": f"a{i}"}]
+    record.transcript = [{"role": "user", "text": f"t{i}", "at": NOW.isoformat()} for i in range(250)]
+    for i in range(state.MAX_CACHED_REPLIES):
+        record.remember_reply(f"old-{i}", {"response": f"old {i}", "session_id": "long", "tool_calls": []})
+    store.save(record)
+    script(monkeypatch, FakeMessage(content="Still here.", tool_calls=None))
+
+    TestClient(app_module.app).post("/chat", json={"message": "hi", "session_id": "long", "client_message_id": "new"})
+
+    saved = store.load("long")
+    assert len(saved.messages) <= state.MAX_STORED_MESSAGES
+    assert saved.messages[0]["role"] == "user" and saved.messages[-1]["content"] == "Still here."
+    assert len(saved.transcript) <= state.MAX_TRANSCRIPT_ENTRIES and saved.transcript[-1]["text"] == "Still here."
+    assert len(saved.replies) <= state.MAX_CACHED_REPLIES and "new" in saved.replies and "old-0" not in saved.replies
+
+
 def test_unknown_history_and_malformed_session_ids_are_rejected(monkeypatch):
     monkeypatch.setattr(app_module, "store", state.MemoryStore())
     client = TestClient(app_module.app)
@@ -174,36 +225,9 @@ def test_client_location_is_saved_and_older_fixes_do_not_replace_newer(monkeypat
     assert latest.observed_at.minute == 10
 
 
-@pytest.mark.parametrize("store_factory", [state.MemoryStore, lambda: None])
-def test_concurrent_turns_cannot_overwrite_each_other(store_factory, tmp_path):
-    store = store_factory() or state.SqliteStore(tmp_path / "db.sqlite")
-    store.save(SessionRecord.new("s"))
-    first, second = store.load("s"), store.load("s")
-    first.messages.append({"role": "user", "content": "first"})
-    store.save(first)
-    second.messages.append({"role": "user", "content": "second"})
-    with pytest.raises(state.VersionConflict):
-        store.save(second)
-    assert store.load("s").messages == [{"role": "user", "content": "first"}]
-
-
-@pytest.mark.parametrize("store_factory", [state.MemoryStore, lambda: None])
-def test_one_turn_at_a_time_can_claim_a_message(store_factory, tmp_path):
-    store = store_factory() or state.SqliteStore(tmp_path / "db.sqlite")
-    first = store.claim("s", "m-1", NOW)
-    assert first and store.claim("s", "m-1", NOW + timedelta(minutes=4)) is None
-    assert store.claim("s", "m-2", NOW)  # Other messages are independent
-
-    takeover = store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)  # An abandoned claim can be taken over
-    store.release("s", "m-1", first)  # The overrunning first turn finishing late frees nothing
-    assert takeover and store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT) is None
-    store.release("s", "m-1", takeover)
-    assert store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)
-
-
 class ContendedFirestore:
-    """Just enough of google.cloud.firestore for FirestoreStore.save. When `rival` is set, another
-    writer commits during our first attempt, so our commit is rejected and the transaction reruns."""
+    """Just enough of google.cloud.firestore for FirestoreStore's sessions and claims. When `rival` is set,
+    another writer commits during our first attempt, so our commit is rejected and the transaction reruns."""
 
     def __init__(self):
         self.docs, self.rival = {}, None
@@ -211,7 +235,7 @@ class ContendedFirestore:
     def document(self, doc_id):
         data = lambda: self.docs.get(doc_id)
         snapshot = lambda transaction=None: SimpleNamespace(exists=data() is not None, get=lambda key: data()[key])
-        return SimpleNamespace(id=doc_id, get=snapshot)
+        return SimpleNamespace(id=doc_id, get=snapshot, delete=lambda: self.docs.pop(doc_id, None))
 
     def transactional(self, fn):
         def run(transaction):
@@ -221,7 +245,8 @@ class ContendedFirestore:
                 if attempt == 1 and self.rival:
                     self.docs.update([self.rival])  # The rival wins; our first attempt is discarded
                     continue
-                self.docs.update((doc.id, data) for doc, data in transaction.writes)
+                for doc, data in transaction.writes:
+                    self.docs.pop(doc.id) if data is None else self.docs.update({doc.id: data})
                 return result
         return run
 
@@ -233,11 +258,52 @@ class FakeTransaction:
     def set(self, doc, data):
         self.writes.append((doc, data))
 
+    def delete(self, doc):
+        self.writes.append((doc, None))
+
+
+def fake_firestore_store(fake=None):
+    store = object.__new__(state.FirestoreStore)
+    store._firestore = store._sessions = store._claims = fake or ContendedFirestore()
+    store._db = SimpleNamespace(transaction=FakeTransaction)
+    return store
+
+
+def make_store(kind, tmp_path):
+    return {"memory": state.MemoryStore, "sqlite": lambda: state.SqliteStore(tmp_path / "db.sqlite"),
+            "firestore": fake_firestore_store}[kind]()
+
+
+@pytest.mark.parametrize("kind", ["memory", "sqlite", "firestore"])
+def test_concurrent_turns_cannot_overwrite_each_other(kind, tmp_path):
+    store = make_store(kind, tmp_path)
+    store.save(SessionRecord.new("s"))
+    first, second = store.load("s"), store.load("s")
+    first.messages.append({"role": "user", "content": "first"})
+    store.save(first)
+    second.messages.append({"role": "user", "content": "second"})
+    with pytest.raises(state.VersionConflict):
+        store.save(second)
+    assert store.load("s").messages == [{"role": "user", "content": "first"}]
+
+
+@pytest.mark.parametrize("kind", ["memory", "sqlite", "firestore"])
+def test_one_turn_at_a_time_can_claim_a_message(kind, tmp_path):
+    store = make_store(kind, tmp_path)
+    first = store.claim("s", "m-1", NOW)
+    assert first and store.claim("s", "m-1", NOW + timedelta(minutes=4)) is None
+    assert store.claim("s", "m-2", NOW)  # Other messages are independent
+
+    takeover = store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)  # An abandoned claim can be taken over
+    store.release("s", "m-1", first)  # The overrunning first turn finishing late frees nothing
+    assert takeover and store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT) is None
+    store.release("s", "m-1", takeover)
+    assert store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)
+
 
 def test_firestore_save_rerun_after_a_lost_race_does_not_overwrite_the_winner():
     fake = ContendedFirestore()
-    store = object.__new__(state.FirestoreStore)
-    store._firestore, store._sessions, store._db = fake, fake, SimpleNamespace(transaction=FakeTransaction)
+    store = fake_firestore_store(fake)
 
     store.save(SessionRecord.new("s"))
     mine, rival = store.load("s"), store.load("s")
@@ -287,6 +353,18 @@ def test_completion_advances_and_repeats_are_harmless(active):
     assert active.record.adventure.version == version
     assert active.record.adventure.user_reports[0].text == "the brownstone"
 
+    # A finished stop can't also be recorded as blocked, and a call without a stop says what's missing.
+    blocked = tools.update_adventure_state(active, "block_checkpoint", checkpoint_id="stop_1")
+    assert "different outcome" in blocked["error"]["message"] and active.record.adventure.blocked_ids == []
+    assert "checkpoint_id" in tools.update_adventure_state(active, "complete_checkpoint")["error"]["message"]
+
+
+def test_only_beats_from_the_plan_can_be_revealed(active):
+    invented = tools.update_adventure_state(active, "reveal_beat", beat_id="beat_the_model_made_up")
+    assert invented["error"]["code"] == "INVALID_ARGUMENT"
+    assert tools.update_adventure_state(active, "reveal_beat", beat_id="beat_1")["ok"]
+    assert active.record.adventure.revealed_beat_ids == ["beat_1"]
+
 
 def test_required_stop_needs_an_explicit_waiver_to_skip(active):
     refused = tools.update_adventure_state(active, "skip_checkpoint", checkpoint_id="stop_1")
@@ -311,6 +389,14 @@ def test_unevaluated_plans_cannot_become_active(ctx):
     assert tools.update_adventure_state(ctx, "start_adventure")["error"]["code"] == "PLAN_INFEASIBLE"
 
 
+def test_a_saved_plan_cannot_be_overwritten(ctx):
+    plan = load_scenario("start_only").plan
+    state.save_plan(ctx, plan)
+    changed = plan.model_copy(update={"estimated_total_minutes": plan.estimated_total_minutes + 60})
+    assert "immutable" in state.save_plan(ctx, changed)["error"]["message"]
+    assert ctx.record.plans[plan.plan_id] == plan
+
+
 def test_revision_keeps_history_and_required_stops(active):
     fixture = load_scenario("revision_after_skip")
     tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
@@ -319,6 +405,9 @@ def test_revision_keeps_history_and_required_stops(active):
     revised = passing(fixture.revised_plan)
 
     assert state.save_plan(active, fixture.revised_plan)["error"]["code"] == "PLAN_INFEASIBLE"
+
+    unlinked = revised.model_copy(update={"plan_id": "bad_0", "supersedes_plan_id": None})
+    assert "supersedes_plan_id" in state.save_plan(active, unlinked)["error"]["message"]
 
     rewritten = revised.model_copy(update={"plan_id": "bad_1", "checkpoints": revised.checkpoints[1:]})
     assert "Completed checkpoint stop_1" in state.save_plan(active, rewritten)["error"]["message"]
@@ -352,6 +441,14 @@ def test_finishing_reveals_the_solution_only_at_the_end(active):
     assert tools.update_adventure_state(active, "finish_adventure")["data"]["status"] == "completed"
 
 
+def test_abandoning_midway_leaves_no_stop_to_continue(active):
+    tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
+    assert tools.update_adventure_state(active, "abandon_adventure")["data"]["status"] == "abandoned"
+    assert active.record.adventure.current_checkpoint_id is None
+    assert "no adventure in progress" in tools.update_adventure_state(
+        active, "complete_checkpoint", checkpoint_id="stop_2")["error"]["message"]
+
+
 # --- Photos ---
 
 
@@ -366,6 +463,14 @@ def test_saved_photo_is_served_later_and_tracked_in_progress(active, monkeypatch
     assert served.content == b"\xff\xd8jpeg-bytes" and served.headers["content-type"] == "image/jpeg"
     assert active.record.adventure.photo_asset_ids == [photo.asset_id]
     assert photo.visibility == "unconfirmed" and photo.frame_time is None
+
+    # An invented visibility value or photo id is refused, so nothing unloadable is stored.
+    invented_value = tools.update_adventure_state(active, "set_photo_visibility", asset_id=photo.asset_id,
+                                                  visibility="probably")
+    invented_photo = tools.update_adventure_state(active, "set_photo_visibility", asset_id="not-a-photo",
+                                                  visibility="user_confirmed_visible")
+    assert invented_value["error"]["code"] == invented_photo["error"]["code"] == "INVALID_ARGUMENT"
+    assert active.record.photos[photo.asset_id].visibility == "unconfirmed"
 
     tools.update_adventure_state(active, "set_photo_visibility", asset_id=photo.asset_id,
                                  visibility="user_confirmed_visible")

@@ -78,6 +78,17 @@ def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypa
     assert "too long" in body["response"]
 
 
+def test_model_context_never_starts_with_an_orphaned_tool_result():
+    # One earlier turn used many tools, so the 40-message window would begin inside it.
+    call = {"role": "assistant", "content": None, "tool_calls": [{"id": "c", "type": "function"}]}
+    messages = [{"role": "user", "content": "u0"}, call, *[{"role": "tool", "tool_call_id": "c", "content": "{}"}] * 43]
+    messages += [{"role": "assistant", "content": "a0"}, {"role": "user", "content": "u1"}]
+
+    context = app_module.recent(messages)
+    assert context[0] == {"role": "user", "content": "u0"}  # Tool results keep the call they answer
+    assert context[-1] == {"role": "user", "content": "u1"}
+
+
 def test_bad_tool_calls_become_actionable_failures(client, monkeypatch):
     script(
         monkeypatch,
