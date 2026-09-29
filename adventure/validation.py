@@ -14,7 +14,7 @@ the user's request and the product rules in docs/PLAN.md:
   object for the user to find there, hints for a puzzle, a camera stop only at an enabled,
   field-verified position near the stop;
 - story: every optional stop moves the story, beats tied to the right stop and used once, no clue
-  stranded at a skipped stop;
+  stranded at a skipped stop, no real architect from the sources given a part in the plot;
 - a revision: the plan it replaces, completed stops unchanged, revealed beats kept, unresolved
   required stops kept unless the user waived them.
 
@@ -56,6 +56,7 @@ _ON_SITE = [  # asked in an activity prompt
     re.compile(rf"\b(?:left|hid|hidden|stashed|placed|taped|wedged|tucked|planted|dropped)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
     re.compile(rf"\b{_PROP}\b[^.?!]{{0,40}}\b(?:left|hidden|stashed|placed|taped|wedged|tucked|planted)\b", re.I),
 ]
+_ARCHITECTS = re.compile(r"architect/builder ([^;]+);")  # the LPC building record claims name them
 _FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b"
                     rf"|\b(?:handed to you|hands you|gives you|passes you|slips you|falls into your hands)\b", re.I)
 
@@ -283,6 +284,13 @@ def evaluate_plan(
         used[beat.beat_id] = checkpoint.checkpoint_id
     revealed = set(state.revealed_beat_ids) if state else set()
     skipped = (set(state.skipped_ids) | set(state.blocked_ids)) if state else set()
+    # A revision inherits its premise, cast, and solution; only its unrevealed beats are new text.
+    fiction = [] if previous is not None else [story.premise, story.solution, *story.cast]
+    fiction += [f"{b.summary} {b.reveals or ''}" for b in story.beats if b.beat_id not in revealed]
+    for name in sorted(_real_people(plan)):
+        if any(name.lower() in text.lower() for text in fiction):
+            flag("REAL_PERSON_IN_FICTION", f"The story gives {name}, a real architect named in the sources, a part in "
+                                           "the plot. State real people only as sourced facts; invent the cast.")
     for beat in story.beats:
         found = _FOUND.search(f"{beat.summary} {beat.reveals or ''}")
         if found and beat.beat_id not in (set(state.revealed_beat_ids) if state else set()):
@@ -374,6 +382,18 @@ def _check_revision(plan, previous, state, waived, flag):
         elif beat_id in old_beats and (new_beats[beat_id].summary, new_beats[beat_id].reveals) != (
                 old_beats[beat_id].summary, old_beats[beat_id].reveals):
             flag("REVEALED_BEAT_CHANGED", f"Revealed beat {beat_id} changed; the user was already told it.")
+
+
+def _real_people(plan):
+    """Architects and builders the plan's LPC building records name."""
+    names = set()
+    for place in plan.places:
+        for claim in place.claims:
+            found = _ARCHITECTS.search(claim.text)
+            for name in re.split(r"\s+and\s+|,\s*", found.group(1)) if found else []:
+                if len(name.strip()) >= 5 and name.strip().lower() not in ("not recorded", "not determined"):
+                    names.add(name.strip())
+    return names
 
 
 def _time_savers(remaining, legs_by_pair, order):

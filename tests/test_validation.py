@@ -301,3 +301,21 @@ def test_a_beat_where_someone_hands_the_user_something_is_flagged():
         data["story"]["beats"][0]["summary"] = "At the corner, a hidden dispatch is handed to you by an anonymous source."
 
     assert codes(evaluate(edit(BASE.plan, handoff))) == ["INVENTED_PROP"]
+
+
+def test_a_real_architect_from_the_sources_cannot_join_the_plot():
+    lpc_claim = {"claim_id": "fixture_claim_lpc", "kind": "architectural", "basis": "source",
+                 "text": "The LPC building database lists 1 Fixture Street: architect/builder Margon & Holder and Emery Roth; "
+                         "primary style Art Deco; date 1929 - 1931.",
+                 "source_urls": ["https://data.cityofnewyork.us/d/gpmc-yuvp"], "checked_at": ON_TIME.isoformat(),
+                 "uncertainty": None}
+
+    def plot(data):
+        data["places"][1]["claims"].append(lpc_claim)
+        data["story"]["beats"][1]["summary"] = "Emery Roth's ghost signals from the tower."
+
+    def fact_only(data):
+        data["places"][1]["claims"].append(lpc_claim)  # stating the fact elsewhere is fine
+
+    assert codes(evaluate(edit(BASE.plan, plot))) == ["REAL_PERSON_IN_FICTION"]
+    assert evaluate(edit(BASE.plan, fact_only)).report.ok
