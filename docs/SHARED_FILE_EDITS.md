@@ -103,3 +103,15 @@ These are implementation acceptance targets, not currently supported adventure b
 - `adventure/agent_tools.py`: `evaluate_adventure_plan` now answers `INVALID_ARGUMENT` ("too large to keep") when `remember_draft` refuses a plan over `state.MAX_DRAFT_BYTES`.
 - `tests/test_planning_tools.py`: two added tests (`test_a_draft_evaluated_before_a_restart_can_still_be_saved`, `test_a_plan_too_large_to_store_is_refused_with_a_fix`), and `test_minutes_left_mid_adventure_count_from_now` now fakes the routing call of its final "check" (it reached the live Valhalla server; the suite now passes with the network blocked).
 - Kyle's items 3 and 4 from `docs/STATUS.md` are done in Jan's files: model-call retries in `app.py`; completion in plan order and finishing only with every stop resolved in `state.py`. Destination arrival itself is still not tracked in state.
+
+# Jan's camera session: edits to Kyle's files (September 29)
+
+Made on `claude/camera-calibration` so a field-verified camera position reaches the plan. Each is small and in its own commit; revert the commit to undo it.
+
+| File | Commit | Change | Revert |
+|---|---|---|---|
+| `adventure/agent_tools.py` | `016ca8e` | `camera_lookup` reads `cameras.load_checkpoints(allow_synthetic=dev_mode())` instead of the private `cameras._checkpoints` (Kyle's request) | `git revert 016ca8e` (also removes the accessor) |
+| `scripts/acceptance_checks.py` | `977017a` | New check: when the finder returns a camera for query 2, the passing plan includes a `camera_capture` stop | `git revert 977017a` |
+| `agent.py`, `adventure/drafts.py`, `adventure/validation.py`, `tests/test_planning_tools.py` | `76c6103` | The prompt says how to add a found camera stop; a draft refuses a stop with `camera_checkpoint_id` whose activity is not `camera_capture`; the evaluator lists a camera stop last among cuts | `git revert 76c6103` |
+
+Why `76c6103`: in local live runs of query 2 with a camera position 5 m from the start, Flash-Lite dropped the camera in 5 of 5 runs and said no position fit. It either put the camera at the start with a `user_observation` activity (the plan passed but would never capture) or followed the first cut suggestion, which named the camera stop ("saves up to 16 minutes" for a stop 0.6 minutes from the start). With the three changes, 2 of 2 runs kept it.
