@@ -2,7 +2,7 @@
   "fixture": {
     "label": "LIVE CAPTURE for development: real provider responses on the capture date, in the /chat tool-call shape. Not field-verified and not an adventure plan.",
     "scenario": "Fixture 2: destination, deadline, required stop, walking only, architecture theme.",
-    "captured_at": "2026-09-29T04:34:26+00:00",
+    "captured_at": "2026-09-29T05:44:13+00:00",
     "generator": "scripts/capture_integration_fixtures.py",
     "notes": [
       "Grader example 2: 45 minutes, walking only, must pass Columbus Avenue & West 81st Street, finish at Broadway & West 72nd Street, architecture theme.",
@@ -32,7 +32,7 @@
             },
             "place_text": "Central Park West & West 86th Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:12.321494Z",
+            "observed_at": "2026-09-29T05:43:53.163910Z",
             "accuracy_m": null
           },
           "query": "Central Park West and West 86th Street",
@@ -46,7 +46,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:12.321597Z"
+          "retrieved_at": "2026-09-29T05:43:53.163953Z"
         }
       }
     },
@@ -65,7 +65,7 @@
             },
             "place_text": "Columbus Avenue & West 81st Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:18.985152Z",
+            "observed_at": "2026-09-29T05:44:07.038986Z",
             "accuracy_m": null
           },
           "query": "Columbus Avenue and West 81st Street",
@@ -79,7 +79,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:18.985336Z"
+          "retrieved_at": "2026-09-29T05:44:07.039066Z"
         }
       }
     },
@@ -98,7 +98,7 @@
             },
             "place_text": "Broadway & West 72nd Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:25.609490Z",
+            "observed_at": "2026-09-29T05:44:12.650707Z",
             "accuracy_m": null
           },
           "query": "Broadway and West 72nd Street",
@@ -112,7 +112,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:25.609656Z"
+          "retrieved_at": "2026-09-29T05:44:12.650873Z"
         }
       }
     },
@@ -154,19 +154,17 @@
               "actual_modes": [
                 "walk"
               ],
-              "depart_at": "2026-09-29T04:34:25.609851Z",
-              "arrive_at": "2026-09-29T04:42:07.609851Z",
+              "depart_at": "2026-09-29T05:44:12Z",
+              "arrive_at": "2026-09-29T05:51:54Z",
               "duration_minutes": 7.7,
               "distance_m": 684.0,
               "instructions": [
+                "Walk about 8 min heading southwest via Central Park West, then Columbus Avenue.",
                 "Walk southwest on Central Park West.",
-                "Turn right onto the walkway.",
-                "Turn left onto the walkway.",
-                "Turn right onto the walkway.",
                 "Turn left onto Columbus Avenue."
               ],
               "source": "valhalla-fossgis",
-              "retrieved_at": "2026-09-29T04:34:25.735378Z",
+              "retrieved_at": "2026-09-29T05:44:12.779400Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             },
             {
@@ -179,22 +177,18 @@
               "actual_modes": [
                 "walk"
               ],
-              "depart_at": "2026-09-29T04:42:07.609851Z",
-              "arrive_at": "2026-09-29T04:54:19.609851Z",
+              "depart_at": "2026-09-29T05:51:54Z",
+              "arrive_at": "2026-09-29T06:04:06Z",
               "duration_minutes": 12.2,
               "distance_m": 1052.0,
               "instructions": [
+                "Walk about 12 min heading southwest via Columbus Avenue, then Amsterdam Avenue, then West 72nd Street.",
                 "Walk southwest on Columbus Avenue.",
-                "Turn right onto the walkway.",
-                "Turn left onto the walkway.",
-                "Turn right onto the walkway.",
-                "Turn left onto the walkway.",
-                "Turn right onto the walkway.",
                 "Turn left onto Amsterdam Avenue.",
                 "Turn right onto West 72nd Street."
               ],
               "source": "valhalla-fossgis",
-              "retrieved_at": "2026-09-29T04:34:25.735378Z",
+              "retrieved_at": "2026-09-29T05:44:12.779400Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             }
           ],
@@ -222,15 +216,15 @@
             }
           ],
           "travel_minutes": 19.9,
-          "arrive_at": "2026-09-29T04:54:19.609851Z",
-          "arrive_local": "12:54 AM"
+          "arrive_at": "2026-09-29T06:04:06Z",
+          "arrive_local": "2:04 AM"
         },
         "error": null,
         "warnings": [],
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:25.735771Z"
+          "retrieved_at": "2026-09-29T05:44:12.779517Z"
         }
       }
     },
@@ -586,7 +580,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:26.152247Z"
+          "retrieved_at": "2026-09-29T05:44:13.109099Z"
         }
       }
     },
@@ -616,7 +610,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1344721508"
                 ],
-                "checked_at": "2026-09-29T04:34:26.263348Z",
+                "checked_at": "2026-09-29T05:44:13.172402Z",
                 "uncertainty": "Quoted from Wikipedia revision 1344721508 (edited 2026-03-22). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -627,7 +621,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1344721508"
                 ],
-                "checked_at": "2026-09-29T04:34:26.263348Z",
+                "checked_at": "2026-09-29T05:44:13.172402Z",
                 "uncertainty": "Quoted from Wikipedia revision 1344721508 (edited 2026-03-22). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -638,12 +632,12 @@
                 "source_urls": [
                   "https://data.cityofnewyork.us/d/gpmc-yuvp"
                 ],
-                "checked_at": "2026-09-29T04:34:26.263348Z",
+                "checked_at": "2026-09-29T05:44:13.172402Z",
                 "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
               }
             ],
             "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
-            "checked_at": "2026-09-29T04:34:26.263348Z",
+            "checked_at": "2026-09-29T05:44:13.172402Z",
             "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
           },
           "description": "Luxury hotel in Manhattan, New York"
@@ -655,7 +649,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:26.519474Z"
+          "retrieved_at": "2026-09-29T05:44:13.788779Z"
         }
       }
     }

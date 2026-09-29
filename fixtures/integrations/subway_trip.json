@@ -2,11 +2,11 @@
   "fixture": {
     "label": "LIVE CAPTURE for development: real provider responses on the capture date, in the /chat tool-call shape. Not field-verified and not an adventure plan.",
     "scenario": "Fixture 4: a leg long enough that the subway beats walking (Upper West Side to Washington Square).",
-    "captured_at": "2026-09-29T04:34:29+00:00",
+    "captured_at": "2026-09-29T05:44:16+00:00",
     "generator": "scripts/capture_integration_fixtures.py",
     "notes": [
       "Transit check: start at Central Park West & West 86th Street, finish at Washington Square Park.",
-      "Captured leg mode: transit; door to door 39.8 min against a 80.0 min walk."
+      "Captured leg mode: transit; door to door 30.0 min against a 80.0 min walk."
     ],
     "attribution": [
       "Wikipedia text is CC BY-SA 4.0; each claim links to the revision it was quoted from.",
@@ -32,7 +32,7 @@
             },
             "place_text": "Central Park West & West 86th Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:28.476313Z",
+            "observed_at": "2026-09-29T05:44:15.713817Z",
             "accuracy_m": null
           },
           "query": "Central Park West and West 86th Street",
@@ -46,7 +46,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:28.476341Z"
+          "retrieved_at": "2026-09-29T05:44:15.713833Z"
         }
       }
     },
@@ -65,7 +65,7 @@
             },
             "place_text": "Washington Square Park",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:28.761683Z",
+            "observed_at": "2026-09-29T05:44:16.038173Z",
             "accuracy_m": null
           },
           "query": "Washington Square Park",
@@ -81,7 +81,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:28.761772Z"
+          "retrieved_at": "2026-09-29T05:44:16.038204Z"
         }
       }
     },
@@ -121,17 +121,17 @@
                 "walk",
                 "transit"
               ],
-              "depart_at": "2026-09-29T04:34:28.761905Z",
-              "arrive_at": "2026-09-29T05:14:16.761905Z",
-              "duration_minutes": 39.8,
+              "depart_at": "2026-09-29T05:44:16Z",
+              "arrive_at": "2026-09-29T06:14:16Z",
+              "duration_minutes": 30.0,
               "distance_m": 7307.0,
               "instructions": [
                 "Walk 2 min to 86 St (Take entrance Central Park West & 86th St at NW corner).",
-                "Take the A train toward Far Rockaway-Mott Av from 86 St at 12:53 AM; ride 9 stops to W 4 St-Wash Sq (arrives 1:08 AM).",
+                "Take the A train toward Far Rockaway-Mott Av from 86 St at 1:53 AM; ride 9 stops to W 4 St-Wash Sq (arrives 2:08 AM).",
                 "Walk 6 min to the destination (Take exit West 8 St-Waverly Pl & Avenue of the Americas)."
               ],
               "source": "google-routes",
-              "retrieved_at": "2026-09-29T04:34:29.005022Z",
+              "retrieved_at": "2026-09-29T05:44:16.297220Z",
               "uncertainty": "Google transit schedule, with live data where Google has it; the time includes the wait for the first vehicle. Refresh this leg shortly before the user leaves."
             }
           ],
@@ -142,8 +142,8 @@
               "heading": "south",
               "walking_minutes": 80.0,
               "transit": {
-                "leave_by": "2026-09-29T04:50:50+00:00",
-                "wait_minutes": 16.4,
+                "leave_by": "2026-09-29T05:50:50+00:00",
+                "wait_minutes": 6.6,
                 "segments": [
                   {
                     "mode": "walk",
@@ -161,12 +161,12 @@
                     "headsign": "Far Rockaway-Mott Av",
                     "from_stop": "86 St",
                     "to_stop": "W 4 St-Wash Sq",
-                    "depart_at": "2026-09-29T04:53:00+00:00",
-                    "arrive_at": "2026-09-29T05:08:30+00:00",
-                    "depart_local": "12:53 AM",
-                    "arrive_local": "1:08 AM",
+                    "depart_at": "2026-09-29T05:53:00+00:00",
+                    "arrive_at": "2026-09-29T06:08:30+00:00",
+                    "depart_local": "1:53 AM",
+                    "arrive_local": "2:08 AM",
                     "stops": 9,
-                    "headway_minutes": 20
+                    "headway_minutes": 0
                   },
                   {
                     "mode": "walk",
@@ -181,16 +181,16 @@
               }
             }
           ],
-          "travel_minutes": 39.8,
-          "arrive_at": "2026-09-29T05:14:16.761905Z",
-          "arrive_local": "1:14 AM"
+          "travel_minutes": 30.0,
+          "arrive_at": "2026-09-29T06:14:16Z",
+          "arrive_local": "2:14 AM"
         },
         "error": null,
         "warnings": [],
         "freshness": {
           "kind": "scheduled",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:29.005022Z"
+          "retrieved_at": "2026-09-29T05:44:16.297220Z"
         }
       }
     }

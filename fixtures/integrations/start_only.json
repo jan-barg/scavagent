@@ -2,11 +2,11 @@
   "fixture": {
     "label": "LIVE CAPTURE for development: real provider responses on the capture date, in the /chat tool-call shape. Not field-verified and not an adventure plan.",
     "scenario": "Fixture 1: only a starting place; discover nearby candidates and route a short chapter.",
-    "captured_at": "2026-09-29T04:34:05+00:00",
+    "captured_at": "2026-09-29T05:43:53+00:00",
     "generator": "scripts/capture_integration_fixtures.py",
     "notes": [
       "Start-only request (grader example 1): Central Park West & West 86th Street.",
-      "Arithmetic on the captured route only (not evaluator output): walking start -> The Beresford -> The El Dorado takes 14.6 min of travel, with 5 minutes at the first stop before the second leg."
+      "Arithmetic on the captured route only (not evaluator output): walking start -> The El Dorado -> The Beresford takes 14.0 min of travel, with 5 minutes at the first stop before the second leg."
     ],
     "attribution": [
       "Wikipedia text is CC BY-SA 4.0; each claim links to the revision it was quoted from.",
@@ -27,68 +27,46 @@
         "data": {
           "location": {
             "point": {
-              "lat": 40.7851403,
-              "lng": -73.9695763
+              "lat": 40.7852965,
+              "lng": -73.9693444
             },
             "place_text": "Central Park West & West 86th Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:03.530156Z",
+            "observed_at": "2026-09-29T05:43:51.237138Z",
             "accuracy_m": null
           },
           "query": "Central Park West and West 86th Street",
           "label": "Central Park West & West 86th Street",
-          "match_type": "place",
-          "provider": "openstreetmap-nominatim",
-          "provider_ref": "osm:node/3269834165"
+          "match_type": "intersection",
+          "provider": "openstreetmap-overpass",
+          "provider_ref": "osm:node/7106818626"
         },
         "error": null,
-        "warnings": [
-          "Matched 'Central Park West & West 86th Street' by name because the street lookup found no shared corner; confirm it is the intended intersection.",
-          "Fell back after a provider failed: overpass: request failed (ReadTimeout)"
-        ],
+        "warnings": [],
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:03.531639Z"
+          "retrieved_at": "2026-09-29T05:43:51.237206Z"
         }
       }
     },
     {
       "name": "find_places",
       "args": {
-        "lat": 40.7851403,
-        "lng": -73.9695763,
+        "lat": 40.7852965,
+        "lng": -73.9693444,
         "radius_m": 700
       },
       "result": {
         "ok": true,
         "data": {
           "center": {
-            "lat": 40.7851403,
-            "lng": -73.9695763
+            "lat": 40.7852965,
+            "lng": -73.9693444
           },
           "radius_m": 700,
           "query": null,
           "candidates": [
-            {
-              "place_id": "wiki:34263144",
-              "name": "257 Central Park West",
-              "description": "Co-op apartment building in Manhattan, New York",
-              "point": {
-                "lat": 40.785,
-                "lng": -73.96972222
-              },
-              "distance_m": 20,
-              "address": null,
-              "designation": null,
-              "related_ids": [],
-              "sources": [
-                {
-                  "title": "Wikipedia: 257 Central Park West",
-                  "url": "https://en.wikipedia.org/wiki/257_Central_Park_West"
-                }
-              ]
-            },
             {
               "place_id": "wiki:1678923",
               "name": "86th Street station (IND Eighth Avenue Line)",
@@ -97,7 +75,7 @@
                 "lat": 40.785286,
                 "lng": -73.969316
               },
-              "distance_m": 27,
+              "distance_m": 3,
               "address": null,
               "designation": null,
               "related_ids": [],
@@ -109,40 +87,21 @@
               ]
             },
             {
-              "place_id": "wiki:34528939",
-              "name": "Rossleigh Court",
-              "description": "Apartment building in Manhattan, New York",
+              "place_id": "wiki:34263144",
+              "name": "257 Central Park West",
+              "description": "Co-op apartment building in Manhattan, New York",
               "point": {
-                "lat": 40.78472222,
-                "lng": -73.97
+                "lat": 40.785,
+                "lng": -73.96972222
               },
-              "distance_m": 59,
+              "distance_m": 46,
               "address": null,
               "designation": null,
               "related_ids": [],
               "sources": [
                 {
-                  "title": "Wikipedia: Rossleigh Court",
-                  "url": "https://en.wikipedia.org/wiki/Rossleigh_Court"
-                }
-              ]
-            },
-            {
-              "place_id": "wiki:10418168",
-              "name": "Central Park West Historic District",
-              "description": "Historic district in Manhattan, New York",
-              "point": {
-                "lat": 40.78444444,
-                "lng": -73.96944444
-              },
-              "distance_m": 78,
-              "address": null,
-              "designation": null,
-              "related_ids": [],
-              "sources": [
-                {
-                  "title": "Wikipedia: Central Park West Historic District",
-                  "url": "https://en.wikipedia.org/wiki/Central_Park_West_Historic_District"
+                  "title": "Wikipedia: 257 Central Park West",
+                  "url": "https://en.wikipedia.org/wiki/257_Central_Park_West"
                 }
               ]
             },
@@ -154,7 +113,7 @@
                 "lat": 40.7858,
                 "lng": -73.97
               },
-              "distance_m": 82,
+              "distance_m": 79,
               "address": null,
               "designation": null,
               "related_ids": [],
@@ -162,6 +121,25 @@
                 {
                   "title": "Wikipedia: City Congregation for Humanistic Judaism",
                   "url": "https://en.wikipedia.org/wiki/City_Congregation_for_Humanistic_Judaism"
+                }
+              ]
+            },
+            {
+              "place_id": "wiki:34528939",
+              "name": "Rossleigh Court",
+              "description": "Apartment building in Manhattan, New York",
+              "point": {
+                "lat": 40.78472222,
+                "lng": -73.97
+              },
+              "distance_m": 84,
+              "address": null,
+              "designation": null,
+              "related_ids": [],
+              "sources": [
+                {
+                  "title": "Wikipedia: Rossleigh Court",
+                  "url": "https://en.wikipedia.org/wiki/Rossleigh_Court"
                 }
               ]
             },
@@ -185,6 +163,25 @@
               ]
             },
             {
+              "place_id": "wiki:10418168",
+              "name": "Central Park West Historic District",
+              "description": "Historic district in Manhattan, New York",
+              "point": {
+                "lat": 40.78444444,
+                "lng": -73.96944444
+              },
+              "distance_m": 95,
+              "address": null,
+              "designation": null,
+              "related_ids": [],
+              "sources": [
+                {
+                  "title": "Wikipedia: Central Park West Historic District",
+                  "url": "https://en.wikipedia.org/wiki/Central_Park_West_Historic_District"
+                }
+              ]
+            },
+            {
               "place_id": "wiki:2430996",
               "name": "Seneca Village",
               "description": "Former settlement in Manhattan, New York",
@@ -192,7 +189,7 @@
                 "lat": 40.784002,
                 "lng": -73.968892
               },
-              "distance_m": 139,
+              "distance_m": 149,
               "address": null,
               "designation": null,
               "related_ids": [],
@@ -211,7 +208,7 @@
                 "lat": 40.78583333,
                 "lng": -73.97127778
               },
-              "distance_m": 163,
+              "distance_m": 173,
               "address": null,
               "designation": null,
               "related_ids": [],
@@ -223,37 +220,6 @@
               ]
             },
             {
-              "place_id": "wiki:5667636",
-              "name": "The Beresford",
-              "description": "Residential skyscraper in Manhattan, New York",
-              "point": {
-                "lat": 40.7825,
-                "lng": -73.97194444
-              },
-              "distance_m": 355,
-              "address": "211 Central Park West",
-              "designation": {
-                "body": "NYC Landmarks Preservation Commission",
-                "type": "Individual Landmark",
-                "designated_on": "1987-09-15",
-                "lp_number": "LP-01520",
-                "report_url": null
-              },
-              "related_ids": [
-                "lpc:LP-01520"
-              ],
-              "sources": [
-                {
-                  "title": "Wikipedia: The Beresford",
-                  "url": "https://en.wikipedia.org/wiki/The_Beresford"
-                },
-                {
-                  "title": "NYC LPC: Individual Landmark Sites (NYC Open Data)",
-                  "url": "https://data.cityofnewyork.us/d/buis-pvji"
-                }
-              ]
-            },
-            {
               "place_id": "wiki:9238071",
               "name": "The El Dorado",
               "description": "Residential skyscraper in Manhattan, New York",
@@ -261,7 +227,7 @@
                 "lat": 40.78833333,
                 "lng": -73.9675
               },
-              "distance_m": 396,
+              "distance_m": 372,
               "address": "300 Central Park West",
               "designation": {
                 "body": "NYC Landmarks Preservation Commission",
@@ -285,6 +251,37 @@
               ]
             },
             {
+              "place_id": "wiki:5667636",
+              "name": "The Beresford",
+              "description": "Residential skyscraper in Manhattan, New York",
+              "point": {
+                "lat": 40.7825,
+                "lng": -73.97194444
+              },
+              "distance_m": 380,
+              "address": "211 Central Park West",
+              "designation": {
+                "body": "NYC Landmarks Preservation Commission",
+                "type": "Individual Landmark",
+                "designated_on": "1987-09-15",
+                "lp_number": "LP-01520",
+                "report_url": null
+              },
+              "related_ids": [
+                "lpc:LP-01520"
+              ],
+              "sources": [
+                {
+                  "title": "Wikipedia: The Beresford",
+                  "url": "https://en.wikipedia.org/wiki/The_Beresford"
+                },
+                {
+                  "title": "NYC LPC: Individual Landmark Sites (NYC Open Data)",
+                  "url": "https://data.cityofnewyork.us/d/buis-pvji"
+                }
+              ]
+            },
+            {
               "place_id": "wiki:22416057",
               "name": "PS 166 (Manhattan)",
               "description": "School in Manhattan, NY",
@@ -292,7 +289,7 @@
                 "lat": 40.78899722,
                 "lng": -73.97253611
               },
-              "distance_m": 496,
+              "distance_m": 491,
               "address": "132 West 89th Street",
               "designation": {
                 "body": "NYC Landmarks Preservation Commission",
@@ -323,7 +320,7 @@
                 "lat": 40.78777778,
                 "lng": -73.97472222
               },
-              "distance_m": 523,
+              "distance_m": 530,
               "address": "165 West 86th Street",
               "designation": {
                 "body": "NYC Landmarks Preservation Commission",
@@ -347,20 +344,20 @@
               ]
             },
             {
-              "place_id": "lpc:LP-00282",
-              "name": "American Museum of Natural History",
+              "place_id": "lpc:LP-01658",
+              "name": "Claremont Stables",
               "description": "Designated New York City landmark",
               "point": {
-                "lat": 40.7813533,
-                "lng": -73.9740596
+                "lat": 40.7895598,
+                "lng": -73.972908
               },
-              "distance_m": 566,
-              "address": "Central Park West at West 77th Street",
+              "distance_m": 561,
+              "address": "175 West 89th Street",
               "designation": {
                 "body": "NYC Landmarks Preservation Commission",
                 "type": "Individual Landmark",
-                "designated_on": "1967-08-24",
-                "lp_number": "LP-00282",
+                "designated_on": "1990-08-14",
+                "lp_number": "LP-01658",
                 "report_url": null
               },
               "related_ids": [],
@@ -372,20 +369,20 @@
               ]
             },
             {
-              "place_id": "lpc:LP-01658",
-              "name": "Claremont Stables",
+              "place_id": "lpc:LP-00282",
+              "name": "American Museum of Natural History",
               "description": "Designated New York City landmark",
               "point": {
-                "lat": 40.7895598,
-                "lng": -73.972908
+                "lat": 40.7813533,
+                "lng": -73.9740596
               },
-              "distance_m": 566,
-              "address": "175 West 89th Street",
+              "distance_m": 591,
+              "address": "Central Park West at West 77th Street",
               "designation": {
                 "body": "NYC Landmarks Preservation Commission",
                 "type": "Individual Landmark",
-                "designated_on": "1990-08-14",
-                "lp_number": "LP-01658",
+                "designated_on": "1967-08-24",
+                "lp_number": "LP-00282",
                 "report_url": null
               },
               "related_ids": [],
@@ -404,7 +401,7 @@
                 "lat": 40.7883362,
                 "lng": -73.9754436
               },
-              "distance_m": 609,
+              "distance_m": 615,
               "address": "201-225 West 86th Street",
               "designation": {
                 "body": "NYC Landmarks Preservation Commission",
@@ -430,7 +427,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:04.111139Z"
+          "retrieved_at": "2026-09-29T05:43:52.010404Z"
         }
       }
     },
@@ -439,29 +436,19 @@
       "args": {
         "origin": {
           "id": "start",
-          "lat": 40.7851403,
-          "lng": -73.9695763
+          "lat": 40.7852965,
+          "lng": -73.9693444
         },
         "destinations": [
-          {
-            "id": "wiki:34263144",
-            "lat": 40.785,
-            "lng": -73.96972222
-          },
           {
             "id": "wiki:1678923",
             "lat": 40.785286,
             "lng": -73.969316
           },
           {
-            "id": "wiki:34528939",
-            "lat": 40.78472222,
-            "lng": -73.97
-          },
-          {
-            "id": "wiki:10418168",
-            "lat": 40.78444444,
-            "lng": -73.96944444
+            "id": "wiki:34263144",
+            "lat": 40.785,
+            "lng": -73.96972222
           },
           {
             "id": "wiki:8204625",
@@ -469,9 +456,19 @@
             "lng": -73.97
           },
           {
+            "id": "wiki:34528939",
+            "lat": 40.78472222,
+            "lng": -73.97
+          },
+          {
             "id": "wiki:4395446",
             "lat": 40.785798,
             "lng": -73.970121
+          },
+          {
+            "id": "wiki:10418168",
+            "lat": 40.78444444,
+            "lng": -73.96944444
           },
           {
             "id": "wiki:2430996",
@@ -484,14 +481,14 @@
             "lng": -73.97127778
           },
           {
-            "id": "wiki:5667636",
-            "lat": 40.7825,
-            "lng": -73.97194444
-          },
-          {
             "id": "wiki:9238071",
             "lat": 40.78833333,
             "lng": -73.9675
+          },
+          {
+            "id": "wiki:5667636",
+            "lat": 40.7825,
+            "lng": -73.97194444
           },
           {
             "id": "wiki:22416057",
@@ -512,64 +509,64 @@
           "mode": "walk",
           "times": [
             {
-              "to_id": "wiki:34263144",
-              "duration_minutes": 0.2,
-              "distance_m": 19
-            },
-            {
               "to_id": "wiki:1678923",
-              "duration_minutes": 0.4,
-              "distance_m": 36
+              "duration_minutes": 0.0,
+              "distance_m": 0
             },
             {
-              "to_id": "wiki:34528939",
+              "to_id": "wiki:34263144",
               "duration_minutes": 0.7,
-              "distance_m": 59
-            },
-            {
-              "to_id": "wiki:10418168",
-              "duration_minutes": 1.4,
-              "distance_m": 112
+              "distance_m": 56
             },
             {
               "to_id": "wiki:8204625",
-              "duration_minutes": 1.2,
-              "distance_m": 100
+              "duration_minutes": 1.0,
+              "distance_m": 87
+            },
+            {
+              "to_id": "wiki:34528939",
+              "duration_minutes": 1.1,
+              "distance_m": 96
             },
             {
               "to_id": "wiki:4395446",
-              "duration_minutes": 1.3,
-              "distance_m": 109
+              "duration_minutes": 1.1,
+              "distance_m": 96
+            },
+            {
+              "to_id": "wiki:10418168",
+              "duration_minutes": 1.5,
+              "distance_m": 126
             },
             {
               "to_id": "wiki:2430996",
-              "duration_minutes": 2.5,
-              "distance_m": 201
+              "duration_minutes": 2.6,
+              "distance_m": 214
             },
             {
               "to_id": "wiki:1100245",
-              "duration_minutes": 1.9,
-              "distance_m": 171
-            },
-            {
-              "to_id": "wiki:5667636",
-              "duration_minutes": 4.7,
-              "distance_m": 406
+              "duration_minutes": 2.0,
+              "distance_m": 183
             },
             {
               "to_id": "wiki:9238071",
-              "duration_minutes": 4.8,
-              "distance_m": 394
+              "duration_minutes": 4.5,
+              "distance_m": 380
+            },
+            {
+              "to_id": "wiki:5667636",
+              "duration_minutes": 5.0,
+              "distance_m": 441
             },
             {
               "to_id": "wiki:22416057",
-              "duration_minutes": 7.9,
-              "distance_m": 682
+              "duration_minutes": 7.6,
+              "distance_m": 670
             },
             {
               "to_id": "wiki:26332603",
-              "duration_minutes": 6.6,
-              "distance_m": 566
+              "duration_minutes": 6.4,
+              "distance_m": 557
             }
           ],
           "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
@@ -579,184 +576,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:04.572930Z"
-        }
-      }
-    },
-    {
-      "name": "research_place",
-      "args": {
-        "place_id": "wiki:5667636",
-        "focus": "history"
-      },
-      "result": {
-        "ok": true,
-        "data": {
-          "evidence": {
-            "place_id": "wiki:5667636",
-            "name": "The Beresford",
-            "address": "211 Central Park West (aka 1-9 West 81st Street; 2-12 West 82nd Street)",
-            "point": {
-              "lat": 40.7825,
-              "lng": -73.97194444
-            },
-            "claims": [
-              {
-                "claim_id": "wiki:5667636#e80fceba",
-                "text": "The Beresford is a cooperative apartment building at 211 Central Park West, between 81st and 82nd Streets, on the Upper West Side of Manhattan in New York City, United States.",
-                "kind": "historical",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#fbae1421",
-                "text": "It was constructed in 1929 and was designed by architect Emery Roth.",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#d33fcd70",
-                "text": "The Beresford is 22 stories tall and is topped by octagonal towers on its northeast, southwest, and southeast corners.",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#de698dc9",
-                "text": "The building is a contributing property to the Central Park West Historic District, a National Register of Historic Places–listed district, and is a New York City designated landmark.",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#0a99a333",
-                "text": "By the late 1920s, high-rise apartment buildings were being developed on Central Park West in anticipation of the completion of the New York City Subway's Eighth Avenue Line, which opened in 1932.",
-                "kind": "historical",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#a75cb120",
-                "text": "Central Park West was concurrently widened from 48 to 63 feet (15 to 19 m).",
-                "kind": "historical",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#667f51e7",
-                "text": "Under the Multiple Dwelling Act of 1929, this allowed the construction of proportionally taller buildings on the avenue.",
-                "kind": "historical",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#7965d30e",
-                "text": "The Beresford, with its three relatively short towers, had been designed just before the passage of the act.",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#a8e8d5ba",
-                "text": "It contrasted with the multi-story twin towers of the Century, the Majestic, the San Remo, and the El Dorado, which were all built one to two years after the Beresford was completed.",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#7512c9a7",
-                "text": "As Christopher Gray of The New York Times wrote: \"Had the Beresford been designed a year later, its three towers would have sprouted up like Jack's beanstalk.\"",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#342b2993",
-                "text": "The Beresford Central Park West Corporation, headed by Bennett Gordon, acquired the old Hotel Beresford from Frederick Brown in March 1925.",
-                "kind": "historical",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#757882d6",
-                "text": "Sugarman and Berger filed plans the next year for a high-rise apartment building to replace the hotel.",
-                "kind": "historical",
-                "basis": "source",
-                "source_urls": [
-                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
-              },
-              {
-                "claim_id": "wiki:5667636#ebfc652d",
-                "text": "The LPC building database lists 211 Central Park West (aka 1-9 West 81st Street; 2-12 West 82nd Street) (The Beresford): architect/builder Emery Roth; primary style neo-Renaissance; date 1928 - 1929; historic district Upper West Side / Central Park West Historic District.",
-                "kind": "architectural",
-                "basis": "source",
-                "source_urls": [
-                  "https://data.cityofnewyork.us/d/gpmc-yuvp"
-                ],
-                "checked_at": "2026-09-29T04:34:04.666650Z",
-                "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
-              }
-            ],
-            "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
-            "checked_at": "2026-09-29T04:34:04.666650Z",
-            "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
-          },
-          "description": "Residential skyscraper in Manhattan, New York"
-        },
-        "error": null,
-        "warnings": [],
-        "freshness": {
-          "kind": "static_reference",
-          "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:04.838378Z"
+          "retrieved_at": "2026-09-29T05:43:52.371888Z"
         }
       }
     },
@@ -786,7 +606,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -797,7 +617,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -808,7 +628,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -819,7 +639,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -830,7 +650,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -841,7 +661,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -852,7 +672,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -863,7 +683,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -874,7 +694,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -885,7 +705,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -896,7 +716,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -907,7 +727,7 @@
                 "source_urls": [
                   "https://en.wikipedia.org/w/index.php?oldid=1373447224#History"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Quoted from Wikipedia revision 1373447224 (edited 2026-09-06). Claims are quoted or transcribed from the cited source; they are not independently verified."
               },
               {
@@ -918,12 +738,12 @@
                 "source_urls": [
                   "https://data.cityofnewyork.us/d/gpmc-yuvp"
                 ],
-                "checked_at": "2026-09-29T04:34:04.901970Z",
+                "checked_at": "2026-09-29T05:43:52.446472Z",
                 "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
               }
             ],
             "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
-            "checked_at": "2026-09-29T04:34:04.901970Z",
+            "checked_at": "2026-09-29T05:43:52.446472Z",
             "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
           },
           "description": "Residential skyscraper in Manhattan, New York"
@@ -933,7 +753,184 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:05.106046Z"
+          "retrieved_at": "2026-09-29T05:43:52.704880Z"
+        }
+      }
+    },
+    {
+      "name": "research_place",
+      "args": {
+        "place_id": "wiki:5667636",
+        "focus": "history"
+      },
+      "result": {
+        "ok": true,
+        "data": {
+          "evidence": {
+            "place_id": "wiki:5667636",
+            "name": "The Beresford",
+            "address": "211 Central Park West (aka 1-9 West 81st Street; 2-12 West 82nd Street)",
+            "point": {
+              "lat": 40.7825,
+              "lng": -73.97194444
+            },
+            "claims": [
+              {
+                "claim_id": "wiki:5667636#e80fceba",
+                "text": "The Beresford is a cooperative apartment building at 211 Central Park West, between 81st and 82nd Streets, on the Upper West Side of Manhattan in New York City, United States.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#fbae1421",
+                "text": "It was constructed in 1929 and was designed by architect Emery Roth.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#d33fcd70",
+                "text": "The Beresford is 22 stories tall and is topped by octagonal towers on its northeast, southwest, and southeast corners.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#de698dc9",
+                "text": "The building is a contributing property to the Central Park West Historic District, a National Register of Historic Places–listed district, and is a New York City designated landmark.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#0a99a333",
+                "text": "By the late 1920s, high-rise apartment buildings were being developed on Central Park West in anticipation of the completion of the New York City Subway's Eighth Avenue Line, which opened in 1932.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#a75cb120",
+                "text": "Central Park West was concurrently widened from 48 to 63 feet (15 to 19 m).",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#667f51e7",
+                "text": "Under the Multiple Dwelling Act of 1929, this allowed the construction of proportionally taller buildings on the avenue.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#7965d30e",
+                "text": "The Beresford, with its three relatively short towers, had been designed just before the passage of the act.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#a8e8d5ba",
+                "text": "It contrasted with the multi-story twin towers of the Century, the Majestic, the San Remo, and the El Dorado, which were all built one to two years after the Beresford was completed.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#7512c9a7",
+                "text": "As Christopher Gray of The New York Times wrote: \"Had the Beresford been designed a year later, its three towers would have sprouted up like Jack's beanstalk.\"",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#342b2993",
+                "text": "The Beresford Central Park West Corporation, headed by Bennett Gordon, acquired the old Hotel Beresford from Frederick Brown in March 1925.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#757882d6",
+                "text": "Sugarman and Berger filed plans the next year for a high-rise apartment building to replace the hotel.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1370202541#History"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Quoted from Wikipedia revision 1370202541 (edited 2026-08-19). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:5667636#ebfc652d",
+                "text": "The LPC building database lists 211 Central Park West (aka 1-9 West 81st Street; 2-12 West 82nd Street) (The Beresford): architect/builder Emery Roth; primary style neo-Renaissance; date 1928 - 1929; historic district Upper West Side / Central Park West Historic District.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://data.cityofnewyork.us/d/gpmc-yuvp"
+                ],
+                "checked_at": "2026-09-29T05:43:52.836433Z",
+                "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+              }
+            ],
+            "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+            "checked_at": "2026-09-29T05:43:52.836433Z",
+            "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+          },
+          "description": "Residential skyscraper in Manhattan, New York"
+        },
+        "error": null,
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T05:43:53.034793Z"
         }
       }
     },
@@ -943,19 +940,19 @@
         "stops": [
           {
             "id": "start",
-            "lat": 40.7851403,
-            "lng": -73.9695763
-          },
-          {
-            "id": "wiki:5667636",
-            "lat": 40.7825,
-            "lng": -73.97194444,
-            "dwell_minutes": 5
+            "lat": 40.7852965,
+            "lng": -73.9693444
           },
           {
             "id": "wiki:9238071",
             "lat": 40.78833333,
             "lng": -73.9675,
+            "dwell_minutes": 5
+          },
+          {
+            "id": "wiki:5667636",
+            "lat": 40.7825,
+            "lng": -73.97194444,
             "dwell_minutes": 5
           }
         ]
@@ -967,29 +964,6 @@
             {
               "leg_id": "leg_1",
               "from_id": "start",
-              "to_id": "wiki:5667636",
-              "allowed_modes": [
-                "transit",
-                "walk"
-              ],
-              "actual_modes": [
-                "walk"
-              ],
-              "depart_at": "2026-09-29T04:34:05.106598Z",
-              "arrive_at": "2026-09-29T04:38:47.106598Z",
-              "duration_minutes": 4.7,
-              "distance_m": 406.0,
-              "instructions": [
-                "Walk southwest on the walkway.",
-                "Turn right onto the walkway."
-              ],
-              "source": "valhalla-fossgis",
-              "retrieved_at": "2026-09-29T04:34:05.229488Z",
-              "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
-            },
-            {
-              "leg_id": "leg_2",
-              "from_id": "wiki:5667636",
               "to_id": "wiki:9238071",
               "allowed_modes": [
                 "transit",
@@ -998,16 +972,38 @@
               "actual_modes": [
                 "walk"
               ],
-              "depart_at": "2026-09-29T04:43:47.106598Z",
-              "arrive_at": "2026-09-29T04:53:41.106598Z",
-              "duration_minutes": 9.9,
-              "distance_m": 802.0,
+              "depart_at": "2026-09-29T05:43:53Z",
+              "arrive_at": "2026-09-29T05:48:23Z",
+              "duration_minutes": 4.5,
+              "distance_m": 380.0,
               "instructions": [
-                "Walk southeast on the walkway.",
-                "Turn left onto the walkway."
+                "Walk about 5 min heading northeast via Central Park West.",
+                "Walk northeast on Central Park West."
               ],
               "source": "valhalla-fossgis",
-              "retrieved_at": "2026-09-29T04:34:05.229488Z",
+              "retrieved_at": "2026-09-29T05:43:53.157838Z",
+              "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
+            },
+            {
+              "leg_id": "leg_2",
+              "from_id": "wiki:9238071",
+              "to_id": "wiki:5667636",
+              "allowed_modes": [
+                "transit",
+                "walk"
+              ],
+              "actual_modes": [
+                "walk"
+              ],
+              "depart_at": "2026-09-29T05:53:23Z",
+              "arrive_at": "2026-09-29T06:02:53Z",
+              "duration_minutes": 9.5,
+              "distance_m": 802.0,
+              "instructions": [
+                "Walk about 10 min heading southwest."
+              ],
+              "source": "valhalla-fossgis",
+              "retrieved_at": "2026-09-29T05:43:53.157838Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             }
           ],
@@ -1015,28 +1011,30 @@
             {
               "leg_id": "leg_1",
               "mode": "walk",
-              "heading": "southwest",
-              "walking_minutes": 4.7,
-              "via_streets": []
+              "heading": "northeast",
+              "walking_minutes": 4.5,
+              "via_streets": [
+                "Central Park West"
+              ]
             },
             {
               "leg_id": "leg_2",
               "mode": "walk",
-              "heading": "northeast",
-              "walking_minutes": 9.9,
+              "heading": "southwest",
+              "walking_minutes": 9.5,
               "via_streets": []
             }
           ],
-          "travel_minutes": 14.6,
-          "arrive_at": "2026-09-29T04:53:41.106598Z",
-          "arrive_local": "12:53 AM"
+          "travel_minutes": 14.0,
+          "arrive_at": "2026-09-29T06:02:53Z",
+          "arrive_local": "2:02 AM"
         },
         "error": null,
         "warnings": [],
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:05.229859Z"
+          "retrieved_at": "2026-09-29T05:43:53.158410Z"
         }
       }
     }

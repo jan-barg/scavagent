@@ -2,7 +2,7 @@
   "fixture": {
     "label": "LIVE CAPTURE for development: real provider responses on the capture date, in the /chat tool-call shape. Not field-verified and not an adventure plan.",
     "scenario": "Fixture 3: mid-adventure revision after a skip, with 15 minutes left and a fixed destination.",
-    "captured_at": "2026-09-29T04:34:28+00:00",
+    "captured_at": "2026-09-29T05:44:15+00:00",
     "generator": "scripts/capture_integration_fixtures.py",
     "notes": [
       "Follow-up (grader example 3): the user is at the required stop, skipped the next optional stop, has 15 minutes left, and must still reach the destination.",
@@ -32,7 +32,7 @@
             },
             "place_text": "Columbus Avenue & West 81st Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:26.524181Z",
+            "observed_at": "2026-09-29T05:44:13.789781Z",
             "accuracy_m": null
           },
           "query": "Columbus Avenue and West 81st Street",
@@ -46,7 +46,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:26.524254Z"
+          "retrieved_at": "2026-09-29T05:44:13.789795Z"
         }
       }
     },
@@ -65,7 +65,7 @@
             },
             "place_text": "Broadway & West 72nd Street",
             "source": "geocoded",
-            "observed_at": "2026-09-29T04:34:26.524327Z",
+            "observed_at": "2026-09-29T05:44:13.789831Z",
             "accuracy_m": null
           },
           "query": "Broadway and West 72nd Street",
@@ -79,7 +79,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:26.524336Z"
+          "retrieved_at": "2026-09-29T05:44:13.789837Z"
         }
       }
     },
@@ -114,22 +114,18 @@
               "actual_modes": [
                 "walk"
               ],
-              "depart_at": "2026-09-29T04:34:26.524376Z",
-              "arrive_at": "2026-09-29T04:46:38.524376Z",
+              "depart_at": "2026-09-29T05:44:13Z",
+              "arrive_at": "2026-09-29T05:56:25Z",
               "duration_minutes": 12.2,
               "distance_m": 1052.0,
               "instructions": [
+                "Walk about 12 min heading southwest via Columbus Avenue, then Amsterdam Avenue, then West 72nd Street.",
                 "Walk southwest on Columbus Avenue.",
-                "Turn right onto the walkway.",
-                "Turn left onto the walkway.",
-                "Turn right onto the walkway.",
-                "Turn left onto the walkway.",
-                "Turn right onto the walkway.",
                 "Turn left onto Amsterdam Avenue.",
                 "Turn right onto West 72nd Street."
               ],
               "source": "valhalla-fossgis",
-              "retrieved_at": "2026-09-29T04:34:26.642050Z",
+              "retrieved_at": "2026-09-29T05:44:13.910798Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             }
           ],
@@ -147,15 +143,15 @@
             }
           ],
           "travel_minutes": 12.2,
-          "arrive_at": "2026-09-29T04:46:38.524376Z",
-          "arrive_local": "12:46 AM"
+          "arrive_at": "2026-09-29T05:56:25Z",
+          "arrive_local": "1:56 AM"
         },
         "error": null,
         "warnings": [],
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:27.922346Z"
+          "retrieved_at": "2026-09-29T05:44:15.208700Z"
         }
       }
     },
@@ -492,7 +488,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:28.355964Z"
+          "retrieved_at": "2026-09-29T05:44:15.602289Z"
         }
       }
     },
@@ -601,7 +597,7 @@
         "freshness": {
           "kind": "static_reference",
           "as_of": null,
-          "retrieved_at": "2026-09-29T04:34:28.473963Z"
+          "retrieved_at": "2026-09-29T05:44:15.712850Z"
         }
       }
     }
