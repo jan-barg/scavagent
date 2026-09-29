@@ -342,8 +342,19 @@ def test_a_real_architect_from_the_sources_cannot_join_the_plot():
     def fact_only(data):
         data["places"][1]["claims"].append(lpc_claim)  # stating the fact elsewhere is fine
 
+    def fact_in_the_story(data):  # a live run's handler said this; it is the sourced fact, in the story's voice
+        data["places"][1]["claims"].append(lpc_claim)
+        data["story"]["beats"][1]["summary"] = "Iris radios: 'Emery Roth built this giant. How high does it reach?'"
+
+    def cast_as_the_architect(data):
+        data["places"][1]["claims"].append(lpc_claim)
+        data["story"]["cast"][1]["name"] = "Emery Roth"
+        data["story"]["beats"][2]["characters"] = ["Iris Vane", "Emery Roth"]
+
     assert codes(evaluate(edit(PLAN, plot))) == ["REAL_PERSON_IN_FICTION"]
     assert evaluate(edit(PLAN, fact_only)).report.ok
+    assert evaluate(edit(PLAN, fact_in_the_story)).report.ok
+    assert "REAL_PERSON_IN_FICTION" in codes(evaluate(edit(PLAN, cast_as_the_architect)))
 
 
 def test_a_link_in_the_plan_must_be_a_claims_source_url():

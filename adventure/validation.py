@@ -82,6 +82,10 @@ _EARNED_OBJECT = re.compile(
     r"|(?:safe|locker|vault|door|room|box|cabinet|master|skeleton|brass|iron|spare|final|missing|secret)\s+keys?"
     r"|keys?\s+(?:card|to\s+(?:the|a|an|this|that|his|her|their|your)\s+(?:\w+\s+)?(?:door|safe|locker|vault|room|box|"
     r"lock|cabinet|drawer|office|archive|studio|car|trunk|chest|gate|cell)))\b", re.I)
+# What a person does in a plot, as opposed to a sourced fact about them ("Emery Roth designed the towers").
+_PLOT_VERBS = (r"ghost|spirit|voice|signal\w*|radio\w*|call\w*|whisper\w*|left|leav\w*|hid|hide\w*|stole|steal\w*|"
+               r"sen[dt]\w*|want\w*|knew|know\w*|watch\w*|wait\w*|appear\w*|return\w*|said|say\w*|told|tell\w*|"
+               r"warn\w*|ask\w*|met|meet\w*|hand\w*|gave|give\w*|plant\w*|buri\w*|himself|herself")
 # A real person as a voice or look-alike: "a tipster sounding remarkably like Julian Casablancas".
 _IMPERSONATION = re.compile(
     r"(?i:\b(?:sound|look|talk|dress|sing)(?:s|ed|ing)?\s+(?:\w+\s+){0,2}?like|\bimpersonat\w*|\ba dead ringer for)"
@@ -273,10 +277,14 @@ def evaluate_plan(
     for stop in request.required_stops:
         checkpoint = next((c for c in required if _same_place(stop.place, places.get(c.place_id))), None)
         if checkpoint is None:
-            flag("REQUIRED_STOP_MISSING", f"The user's required stop {stop.place.place_text or stop.stop_id} is not a "
-                                          "required checkpoint in the plan. Add a stop there; if it is closed or the user "
-                                          "no longer needs it, ask them, then pass their answer as waived_required_ids or "
-                                          "a substitute required stop.")
+            where = stop.place.place_text or stop.stop_id
+            spot = (f'place {{"name": "{where}", "lat": {stop.place.point.lat}, "lng": {stop.place.point.lng}}}'
+                    if stop.place.point else f'the place "{where}"')
+            flag("REQUIRED_STOP_MISSING", f"The user's required stop {where} is not a required checkpoint in the plan. "
+                                          f"Add a stop at {spot} with required_by_user true and its own activity; a "
+                                          "landmark nearby does not stand in for it. If it is closed or the user no longer "
+                                          "needs it, ask them, then pass their answer as waived_required_ids or a "
+                                          "substitute required stop.")
             continue
         matched.append((stop, checkpoint))
         if checkpoint.dwell_minutes < stop.dwell_minutes:
@@ -291,9 +299,16 @@ def evaluate_plan(
                                   f"{_clock(arrive + timedelta(minutes=checkpoint.dwell_minutes))}, after it closes at "
                                   f"{_clock(stop.window_end)}.", checkpoint.checkpoint_id)
     for checkpoint in required:
-        if not any(_same_place(stop.place, places.get(checkpoint.place_id)) for stop in request.required_stops):
-            flag("REQUIRED_MISMARKED", f"{checkpoint.checkpoint_id} is marked required but is not at any place the user "
-                                       "required; put the required stop where the user said.", checkpoint.checkpoint_id)
+        place = places.get(checkpoint.place_id)
+        if not any(_same_place(stop.place, place) for stop in request.required_stops):
+            nearest = min(((_meters(s.place.point.lat, s.place.point.lng, place.point.lat, place.point.lng), s)
+                           for s in request.required_stops if s.place.point and place and place.point),
+                          key=lambda pair: pair[0], default=None)
+            detail = f", {nearest[0]:.0f} m from {nearest[1].place.place_text}" if nearest else ""
+            flag("REQUIRED_MISMARKED", f"{checkpoint.checkpoint_id} ({place.name if place else checkpoint.place_id}) is "
+                                       f"marked required but is not at a place the user required{detail}. Keep it as an "
+                                       "optional stop (required_by_user false), and put the required stop at the user's "
+                                       "place itself.", checkpoint.checkpoint_id)
     fixed = sorted((s.order_index, positions[c.checkpoint_id], c.checkpoint_id) for s, c in matched
                    if s.order_index is not None)
     if [p for _, p, _ in fixed] != sorted(p for _, p, _ in fixed):
@@ -346,8 +361,11 @@ def evaluate_plan(
         story.premise, story.briefing or "", story.solution,
         *(member if isinstance(member, str) else f"{member.name} {member.role or ''}" for member in story.cast)]
     fiction += [f"{b.summary} {b.reveals or ''} {b.clue or ''}" for b in story.beats if b.beat_id not in revealed]
+    cast_names = [] if previous is not None else [_cast_name(member) for member in story.cast]
     for name in sorted(_architects(plan)):
-        if any(name.lower() in text.lower() for text in fiction):
+        # Stating what they built is a sourced fact; a part in the plot or the cast is not.
+        if (any(name.lower() in member.lower() for member in cast_names)
+                or any(_in_the_plot(name, text) for text in fiction)):
             flag("REAL_PERSON_IN_FICTION", f"The story gives {name}, a real architect named in the sources, a part in "
                                            "the plot. State real people only as sourced facts; invent the cast.")
     if story_checks and previous is None:  # story design v2: the cast against everyone named in sources and request
@@ -646,6 +664,13 @@ def _member(name, cast):
 
 def _mentions(text, name):
     return any(re.search(rf"\b{re.escape(word)}\b", text, re.I) for word in _name_words(name))
+
+
+def _in_the_plot(name, text):
+    """Whether the text gives a real person a part: "Emery Roth's ghost signals", not "Emery Roth built this"."""
+    person = re.escape(name)
+    return bool(re.search(rf"\b(?:ghost|spirit|voice)\s+of\s+{person}\b|\b{person}(?:['’]s)?\s+(?:\w+\s+){{0,2}}?"
+                          rf"(?:{_PLOT_VERBS})\b", text, re.I))
 
 
 def _impersonated(text):
