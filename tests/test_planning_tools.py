@@ -110,6 +110,15 @@ def test_a_draft_evaluated_before_a_restart_can_still_be_saved(tmp_path):
     assert draft_id in later.record.plans and later.record.drafts == {}
 
 
+def test_a_plan_too_large_to_store_is_refused_with_a_fix():
+    # Jan: an oversized draft would push the session past one Firestore document.
+    ctx = session()
+    story = {"premise": "It is 1964.", "cast": ["The Courier"], "solution": "x" * state.MAX_DRAFT_BYTES}
+    result = evaluate(ctx, draft(story=story), 5, 9)
+    assert "too large" in result["error"]["message"] and "Shorten" in result["error"]["next_step"]
+    assert ctx.record.drafts == {}
+
+
 def test_start_now_activates_and_a_draft_from_another_conversation_is_refused():
     ctx, other = session("s1"), session("s2")
     draft_id = evaluate(ctx, draft(), 5, 9)["data"]["draft_id"]
@@ -369,7 +378,8 @@ def test_minutes_left_mid_adventure_count_from_now():
     save_adventure_plan(ctx, result["data"]["draft_id"])
     assert state.active_plan(ctx.record).request.deadline == NOW + timedelta(minutes=20)
 
-    check = evaluate_adventure_plan(ctx, {"kind": "check", "duration_minutes": 5})
+    with FakeHTTP({VALHALLA: [walking(9)]}):  # Jan: the check re-times the walk; keep it off the network
+        check = evaluate_adventure_plan(ctx, {"kind": "check", "duration_minutes": 5})
     assert [v["code"] for v in check["data"]["violations"]] == ["DEADLINE_EXCEEDED"]
 
 

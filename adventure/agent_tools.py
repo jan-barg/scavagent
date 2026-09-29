@@ -64,7 +64,9 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
         return tool_error("INVALID_ARGUMENT", f"The draft is malformed: {_detail(e)}", retryable=False,
                           next_step="Send each field in the shape the tool schema describes, then evaluate again.")
     # Stored with the session (Jan's state.py), so saving works after a restart or on another instance.
-    ctx.record.remember_draft(plan.plan_id, state.EvaluatedDraft(kind=kind, plan=plan, waived_required_ids=waived))
+    if not ctx.record.remember_draft(plan.plan_id, state.EvaluatedDraft(kind=kind, plan=plan, waived_required_ids=waived)):
+        return tool_error("INVALID_ARGUMENT", "This plan is too large to keep for saving.", retryable=False,
+                          next_step="Shorten the story, activity, and hint text, then evaluate again.")
     summary = evaluation.summary()
     if summary["passes"] and (summary["slack_minutes"] or 0) >= UNUSED_MINUTES:
         summary["suggestions"].append(f"{summary['slack_minutes']:.0f} of the user's minutes are unused; consider "

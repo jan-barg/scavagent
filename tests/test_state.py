@@ -396,6 +396,49 @@ def test_only_the_newest_evaluated_drafts_are_kept():
     record.remember_draft("d2", state.EvaluatedDraft(kind="new", plan=plan))  # Evaluated again: now the newest
     assert list(record.drafts) == ["d3", "d4", "d2"]
 
+    huge = plan.model_copy(update={"story": plan.story.model_copy(update={"solution": "x" * state.MAX_DRAFT_BYTES})})
+    assert record.remember_draft("d5", state.EvaluatedDraft(kind="new", plan=huge)) is False
+    assert list(record.drafts) == ["d3", "d4", "d2"]
+
+
+def bulky_session(session_id, turns=30, blob="x" * 30_000):
+    """A long adventure: each earlier turn left a planning-sized tool result in all three stored copies."""
+    record = SessionRecord.new(session_id)
+    tools.load_dev_adventure(ToolContext(record=record, store=state.MemoryStore()), "constrained_route")
+    for i in range(turns):
+        call = {"role": "assistant", "content": None, "tool_calls": [{"id": f"c{i}", "type": "function"}]}
+        record.messages += [{"role": "user", "content": f"u{i}"}, call,
+                            {"role": "tool", "tool_call_id": f"c{i}", "content": blob}, {"role": "assistant", "content": f"a{i}"}]
+        trace = [{"name": "research_place", "args": {}, "result": {"ok": True, "data": {"text": blob}}}]
+        record.transcript += [{"role": "user", "text": f"u{i}", "at": NOW.isoformat()},
+                              {"role": "assistant", "text": f"a{i}", "tool_calls": trace, "at": NOW.isoformat()}]
+        record.remember_reply(f"m{i}", {"response": f"a{i}", "session_id": session_id, "tool_calls": trace})
+    assert len(record.model_dump_json()) > 1_048_576  # Firestore would refuse to store this
+    return record
+
+
+def test_a_long_adventure_still_fits_in_one_firestore_document(monkeypatch):
+    store = state.MemoryStore()  # No size limit of its own, so the test sees exactly what would be written
+    monkeypatch.setattr(app_module, "store", store)
+    store.save(bulky_session("long"))
+    script(monkeypatch, FakeMessage(content="Still with you.", tool_calls=None))
+
+    TestClient(app_module.app).post("/chat", json={"message": "next", "session_id": "long", "client_message_id": "new"})
+
+    saved = store.load("long")
+    assert len(saved.model_dump_json()) <= state.MAX_RECORD_BYTES
+    assert saved.messages[0]["role"] == "user" and saved.messages[-1]["content"] == "Still with you."
+    assert saved.transcript[-1]["text"] == "Still with you." and "new" in saved.replies
+    assert saved.adventure.active_plan_id in saved.plans and saved.adventure.status == "active"  # Progress kept
+
+
+def test_a_mid_turn_photo_save_also_stays_inside_the_budget():
+    record = bulky_session("photo")
+    ctx = ToolContext(record=record, store=state.MemoryStore(), now=lambda: NOW)
+    photo = ctx.save_asset(b"jpeg", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
+    saved = ctx.store.load("photo")
+    assert len(saved.model_dump_json()) <= state.MAX_RECORD_BYTES and photo.asset_id in saved.photos
+
 
 def test_a_saved_plan_cannot_be_overwritten(ctx):
     plan = load_scenario("start_only").plan

@@ -39,7 +39,13 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 MAX_STORED_MESSAGES = 200
 MAX_TRANSCRIPT_ENTRIES = 200
 MAX_CACHED_REPLIES = 20
-MAX_DRAFTS = 3  # Evaluated plans waiting to be saved; a plan can be tens of kB and a Firestore document is 1 MiB
+MAX_DRAFTS = 3  # Evaluated plans waiting to be saved
+# The whole record is one JSON string in one Firestore document, which holds at most 1 MiB. A planning turn
+# stores about 30 kB three times over (model messages, chat transcript, cached reply), so a long adventure
+# reaches the limit well before the count caps above. trim() keeps the record under this budget.
+MAX_RECORD_BYTES = 800_000
+MAX_DRAFT_BYTES = 200_000  # One evaluated plan larger than this is refused rather than stored
+MIN_KEPT_REPLIES = 3  # Replies kept for resends even when trimming for size
 # A claim older than this belongs to a turn that has stopped: app.run_agent starts no model call after
 # its own shorter deadline. (Cloud Run's request timeout does not stop the code, so it cannot be relied on.)
 IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
@@ -80,10 +86,14 @@ class SessionRecord(Record):
         now = utc_now()
         return cls(session_id=session_id, created_at=now, updated_at=now)
 
-    def remember_draft(self, draft_id: str, draft: EvaluatedDraft) -> None:
+    def remember_draft(self, draft_id: str, draft: EvaluatedDraft) -> bool:
+        """Keep an evaluated plan for save_adventure_plan. False, and nothing kept, if it alone is too large."""
+        if len(draft.model_dump_json()) > MAX_DRAFT_BYTES:
+            return False
         self.drafts = {**{k: v for k, v in self.drafts.items() if k != draft_id}, draft_id: draft}
         while len(self.drafts) > MAX_DRAFTS:
             self.drafts.pop(next(iter(self.drafts)))
+        return True
 
     def remember_reply(self, client_message_id: str, reply: dict) -> None:
         self.replies[client_message_id] = reply
@@ -92,13 +102,29 @@ class SessionRecord(Record):
             self.replies.pop(next(iter(self.replies)))
 
     def trim(self) -> None:
-        """Bound stored history, cutting only at a user message so tool calls keep their results."""
+        """Bound stored history by count and by size, cutting only at a user message so tool calls keep
+        their results. Plans, photos, and progress are never dropped."""
         if len(self.messages) > MAX_STORED_MESSAGES:
-            cut = len(self.messages) - MAX_STORED_MESSAGES
-            while cut < len(self.messages) and self.messages[cut].get("role") != "user":
-                cut += 1
-            self.messages = self.messages[cut:]
+            self._drop_messages_before(len(self.messages) - MAX_STORED_MESSAGES)
         self.transcript = self.transcript[-MAX_TRANSCRIPT_ENTRIES:]
+        # Over the size budget, give up what is cheapest to lose first: unsaved drafts (the model can evaluate
+        # again), older cached replies, the oldest model turns, then the oldest chat entries.
+        while len(self.model_dump_json()) > MAX_RECORD_BYTES:
+            if self.drafts:
+                self.drafts.pop(next(iter(self.drafts)))
+            elif len(self.replies) > MIN_KEPT_REPLIES:
+                self.replies.pop(next(iter(self.replies)))
+            elif any(m.get("role") == "user" for m in self.messages[1:]):
+                self._drop_messages_before(1)
+            elif len(self.transcript) > 2:
+                self.transcript = self.transcript[2:]
+            else:
+                break
+
+    def _drop_messages_before(self, cut: int) -> None:
+        while cut < len(self.messages) and self.messages[cut].get("role") != "user":
+            cut += 1
+        self.messages = self.messages[cut:]
 
 
 # --- Storage backends ---
@@ -405,6 +431,7 @@ class ToolContext:
         _commit(self, self.record.adventure.model_copy(
             update={"photo_asset_ids": [*self.record.adventure.photo_asset_ids, asset_id]}
         ))
+        self.record.trim()  # Drafts added this turn could otherwise push the record past one document
         try:
             self.store.save(self.record)
         except Exception:
