@@ -29,14 +29,33 @@ Latest changes/checks: J1, J2, and J3/J4 (PR #3) are merged. Camera tools are re
 
 | ID | Task | Status | Depends on |
 |---|---|---|---|
-| K1 | Research/geocoding/routing API spikes and fixture outputs | Not started | Provider/configuration choice; independent of J1 implementation |
-| K2 | Agent progression and dynamic planner | Not started | J1 and K1; a labeled development hunt can exercise progression first |
-| K3 | Original adventure evaluator | Not started | J1; route estimates from K1 |
-| K4 | Grounded story, activities, hints, coherent replanning | Not started | K2/K3 and shared state operations |
-| K5 | MTA arrivals and filming evidence with freshness handling | Not started | Provider/feed checks and common tool contracts |
-| K6 | Tool documentation, example queries, planning acceptance checks | Not started | Implemented behavior to document; checks can be designed earlier |
+| K1 | Research/geocoding/routing API spikes and fixture outputs | Done on `kyle/workstream` (pushed, not merged): geocoding, places and research, walking and subway/bus routes, live-checked September 29 | Provider/configuration choice; independent of J1 implementation |
+| K2 | Agent progression and dynamic planner | Implemented on `kyle/workstream`: `agent.py` instructions; the model plans with the tools and can save only a plan that passed the evaluator; `get_next_directions` guides each leg. All three grader queries ran end to end locally | J1 and K1, both in the branch |
+| K3 | Original adventure evaluator | Implemented: `adventure/validation.py` behind `evaluate_adventure_plan`, about 30 violation codes, tests that break one rule at a time | — |
+| K4 | Grounded story, activities, hints, coherent replanning | Implemented through the instructions, the revision builder (`adventure/drafts.py`), and the evaluator: completed stops and revealed clues kept, stranded clues moved to chat, waivers only from the user, time limits re-checked. Story quality varies with the model | K2/K3 |
+| K5 | MTA arrivals and filming evidence with freshness handling | Implemented: `get_transit_arrivals` (live GTFS-realtime and alerts; refuses feeds over 10 minutes old) and `find_filming_records` (coverage dates; refuses dates after the data ends). Both live-checked | — |
+| K6 | Tool documentation, example queries, planning acceptance checks | Implemented: `docs/TOOLS.md`, README grader section, `scripts/acceptance_checks.py` | A deployed URL for the final run |
 
-Latest changes/checks: no application work yet. Next action: K1 while Jan implements J1; review the contract proposal and send concrete interface needs through the shared repository workflow.
+Latest changes/checks (September 29, overnight):
+
+- Branch `kyle/workstream` holds everything: Kyle's K1 commit, a merge of `main` at `9b54995` (J1–J5), then Kyle's work. It is pushed to GitHub as `kyle/workstream` (a push earlier in the night was blocked by local Claude Code permissions; the final one went through). Nothing new was on `main` at the last fetch (about 2:20 AM).
+- Built:
+  - Adapters on the shared schemas: `geocode_place`, `find_places`, `research_place` (claims pinned to Wikipedia revisions and LPC records), `get_route`, `get_walking_times`.
+  - Transit: `integrations/transit.py` asks Google Routes for each leg, counts the wait for the train in door-to-door time, and caps and caches lookups. A leg rides only when that saves at least 4 minutes over a walk longer than 12. The Routes API is enabled on Kyle's project `kc3936-ieor4570-p1` (Kyle approved), and local runs bill it through `SCAVAGENT_ROUTES_PROJECT`.
+  - Planning: `adventure/validation.py` (the evaluator), `adventure/drafts.py` (draft to routed plan, revisions), and `adventure/agent_tools.py` (`evaluate_adventure_plan`, `save_adventure_plan`, `get_next_directions`); `agent.py` (instructions).
+  - Live data: `integrations/mta.py` (`get_transit_arrivals`) and `integrations/filming.py` (`find_filming_records`).
+  - Documentation and checks: `docs/TOOLS.md`, `scripts/acceptance_checks.py`, `scripts/capture_integration_fixtures.py`, `fixtures/integrations/` (labeled live captures).
+  - Edits to Jan's files, each with its original text and a revert command in `docs/SHARED_FILE_EDITS.md`: `tools.py` (registers Kyle's tool lists), `app.py` (agent prompt; tool rounds 8 → 16), `pyproject.toml`/`uv.lock` (`gtfs-realtime-bindings`), and the README grader section.
+- Checks: `uv run pytest -q` passes 252 tests (Jan's 112 plus Kyle's 140); deliberately breaking key guards made their tests fail. An independent review of the new modules found 12 bugs, each confirmed with a script (for example, a clue told in chat for a skipped stop blocked every revision, and a revision could reuse a dropped stop's id so the new stop was never visited). All 12 are fixed, each with a regression test that fails on the earlier code. Final local acceptance run after the fixes (`scripts/acceptance_checks.py`, Gemini 3.5 Flash-Lite, in-memory store): 18 of 18 checks passed. Earlier runs hit Vertex AI `429` rate limits on `agentic-ai-msds` for both Flash-Lite and Flash after repeated runs.
+- Found in live runs and now handled in code or instructions: invented props and hand-offs (`INVENTED_PROP`), a nearby landmark standing in for a required corner (`REQUIRED_MISMARKED`), real architects written into the plot (`REAL_PERSON_IN_FICTION`), broken invented links in plan text (`UNSOURCED_LINK`), completing a stop on arrival, finishing before the destination, "15 minutes left" read as a total budget, and a UTC time taken for New York time.
+- Model choice (still open): Flash-Lite answers in about 3–60 s per turn but follows the rules less reliably; it still sometimes writes invented Wikipedia links in replies, which the evaluator cannot see. Gemini 3.5 Flash followed the rules better (honest options at query 3, correct links) but took 15–130 s per turn and hit `429` rate limits. Gemini 3.5 Pro is not available on the project.
+- For Jan:
+  1. Review and merge `kyle/workstream`, using `docs/SHARED_FILE_EDITS.md`.
+  2. Transit on Cloud Run: enable `routes.googleapis.com` on `agentic-ai-msds`, so the runtime service account can call it with no key; or set `SCAVAGENT_ROUTES_PROJECT` or `GOOGLE_MAPS_API_KEY` on the service. Without either, legs fall back to walking with a warning.
+  3. Harness: retry Vertex `429`s with backoff inside `TURN_SECONDS` (for example LiteLLM `num_retries`), and retry once when the model returns neither text nor a tool call (seen once).
+  4. State guards to consider: refuse `complete_checkpoint` for a checkpoint other than the current one, and `finish_adventure` while a destination remains. The instructions ask for both, but the model slipped in earlier runs.
+  5. A public accessor for the camera catalogue: `adventure/agent_tools.camera_lookup` uses `cameras._checkpoints`.
+- Next: push and merge; deploy and run `scripts/acceptance_checks.py <deployed URL>`; field-calibrate a camera position so a camera stop can pass the evaluator; walk-test a generated hunt; decide the model.
 
 ## Joint release work
 

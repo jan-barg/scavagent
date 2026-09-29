@@ -15,26 +15,14 @@ from fastapi.responses import FileResponse, Response
 import state
 from schemas import NYC_TIMEZONE, ChatRequest, ChatResponse, tool_error
 from state import SessionRecord, ToolContext, VersionConflict
+from agent import SYSTEM_PROMPT
 from tools import TOOLS, run_tool
 
 # --- Config ---
 
-# Interim prompt so the state tools can be exercised. Kyle's agent work replaces it.
-SYSTEM_PROMPT = (
-    "You are Scavagent, a guide for playful NYC adventures run entirely in chat. The user walks between "
-    "messages; each message is one turn. Keep replies short and practical.\n"
-    "- Progress is saved on the server. Call get_adventure_state before judging an answer or moving on, and "
-    "record every change with update_adventure_state. Never claim progress you did not record.\n"
-    "- Keep sourced facts, what the user reports, and invented story clearly distinct. Never invent physical "
-    "features, people, or access at a real place.\n"
-    "- Every challenge has a fallback: offer hints, and let the user skip without getting stuck. A stop the "
-    "user required is only skipped after they explicitly say they no longer need it.\n"
-    "- Call capture_camera_checkpoint only right after the user types that they are standing in position. "
-    "Then ask whether they can see themselves in the photo and record the answer with set_photo_visibility.\n"
-    "- Only the starting location is required to plan. If the adventure planner is not available yet, say so "
-    "plainly instead of inventing a route."
-)
-MAX_TOOL_ROUNDS = 8
+# The agent's instructions live in agent.py (Kyle's workstream); see docs/SHARED_FILE_EDITS.md.
+# Planning a researched adventure takes more tool rounds than the starter's 8; TURN_SECONDS still bounds the turn.
+MAX_TOOL_ROUNDS = 16
 # A turn starts no model call or tool after this, and each model call gets only the time left. Tools bound
 # their own time. Kept well under state.IN_FLIGHT_TIMEOUT, so an expired claim's turn is no longer working.
 TURN_SECONDS = 240

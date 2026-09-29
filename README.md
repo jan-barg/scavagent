@@ -33,13 +33,15 @@ Run the checks with `uv run pytest`. Deployment steps are in [docs/DEPLOY.md](do
 
 The [original starter README](docs/STARTER_README.md) is preserved for provenance.
 
-## Planned grader examples
+## Grader examples
 
-These are implementation acceptance targets, not currently supported adventure behavior. Finalize the starting locations after selecting the field-tested pilot area.
+Type a starting place; everything else is optional. Try:
 
 1. “I'm at Central Park West and West 86th Street. Give me a 1960s spy adventure.”
 2. “I'm at Central Park West and West 86th Street. I have 45 minutes, need to finish at West 72nd Street and Broadway, and must pass West 81st Street and Columbus Avenue. Walking only, architecture theme, and include a camera stop if one fits.”
 3. Follow-up to an active adventure: “Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination.”
+
+On Kyle's branch these run end to end against live data locally (September 29, 2026). They are not yet deployed. No camera position is field-verified yet, so example 2 says no camera stop fits. `scripts/acceptance_checks.py` replays all three against a running app and checks what must hold. The tools, including the two original ones, are documented in [docs/TOOLS.md](docs/TOOLS.md).
 
 ## Submission status
 
