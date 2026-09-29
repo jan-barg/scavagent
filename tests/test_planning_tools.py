@@ -1,5 +1,6 @@
 """evaluate_adventure_plan and save_adventure_plan against a memory store, with routing faked."""
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -538,3 +539,51 @@ def test_loosely_written_numbers_and_lists_are_understood():
 
     assert result["data"]["passes"], result["data"]["violations"]
     assert result["data"]["contingency_minutes"] == 5.0
+
+
+# --- Camera stops ---
+
+
+@pytest.fixture
+def verified_camera(tmp_path, monkeypatch):
+    """One enabled, field-verified position in the catalogue the planner reads. TEST data, not fieldwork."""
+    from integrations import cameras
+    catalogue = tmp_path / "camera_catalogue.json"
+    catalogue.write_text(json.dumps({"checkpoints": [{
+        "checkpoint_id": "test_cam", "camera_id": "test-camera", "stand_location": {"lat": 40.7852, "lng": -73.9695},
+        "address": "TEST address", "landmark": "TEST corner", "side_of_street": "TEST side",
+        "positioning_instructions": "TEST: stand by the pole.", "verification_status": "field_verified",
+        "last_field_verified_at": "2026-09-29T17:00:00+00:00", "enabled": True}]}))
+    monkeypatch.setattr(cameras, "CATALOGUE_PATH", catalogue)
+    monkeypatch.delenv("SCAVAGENT_DEV_CAMERA_FIXTURES", raising=False)
+    monkeypatch.delenv("SCAVAGENT_DEV_FIXTURES", raising=False)
+
+
+def camera_stop(activity_type):
+    return {"camera_checkpoint_id": "test_cam", "dwell_minutes": 3,
+            "activity": activity(type=activity_type, prompt="Stand by the pole and tell me when you are ready."),
+            "beat": {"summary": "The surveillance post.", "reveals": "Someone is watching the corner."}}
+
+
+def test_a_stop_at_a_camera_position_must_capture(verified_camera):
+    wrong = draft()
+    wrong["stops"].insert(0, camera_stop("user_observation"))
+    refused = evaluate(session(), wrong, 1, 5, 9)
+    assert refused["error"]["code"] == "INVALID_ARGUMENT" and "camera_capture" in refused["error"]["message"]
+
+    right = draft()
+    right["stops"].insert(0, camera_stop("camera_capture"))
+    result = evaluate(session(), right, 1, 5, 9)
+    assert result["ok"] and result["data"]["passes"], result
+    assert [s["activity"] for s in result["data"]["plan"]["stops"]] == ["camera_capture", "chat_puzzle", "chat_puzzle"]
+
+
+def test_when_time_runs_short_the_camera_stop_is_the_last_suggested_cut(verified_camera):
+    tight = draft(deadline="2026-10-01T15:30:00-04:00", user_stated=["deadline", "allowed_modes"])
+    tight["stops"].insert(0, dict(camera_stop("camera_capture"), dwell_minutes=8))
+    result = evaluate(session(), tight, 1, 20, 2)  # raw savings: camera 29, El Dorado 27, Beresford 7 minutes
+
+    assert not result["data"]["passes"]
+    cuts = result["data"]["suggestions"]
+    assert [c.split()[2] for c in cuts] == ["stop_2", "stop_3", "stop_1"]
+    assert "camera stop" in cuts[2] and "camera stop" not in cuts[0]

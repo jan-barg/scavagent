@@ -422,9 +422,12 @@ def _time_savers(remaining, legs_by_pair, order):
         out_of = legs_by_pair.get((order[i], order[i + 1])) if i + 1 < len(order) else None
         around = sum(leg.duration_minutes for leg in (into, out_of) if leg is not None)
         savings.append((checkpoint.dwell_minutes + around, checkpoint))
-    savings.sort(key=lambda item: -item[0])
+    # A camera stop is usually what the user asked for, so it is suggested last.
+    savings.sort(key=lambda item: (item[1].activity.type == "camera_capture", -item[0]))
     return [f"Dropping optional {c.checkpoint_id} saves up to {minutes:.0f} minutes ({c.dwell_minutes} dwell plus its "
-            "legs); re-route to confirm." for minutes, c in savings[:3]] or [
+            "legs); re-route to confirm." + (" It is the camera stop: if the user asked for one, drop other stops "
+                                             "first." if c.activity.type == "camera_capture" else "")
+            for minutes, c in savings[:3]] or [
         "No optional stop is left to drop; shorten dwell times, allow transit, or ask the user which limit can change."]
 
 

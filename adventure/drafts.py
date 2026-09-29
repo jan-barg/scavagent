@@ -324,6 +324,11 @@ def _checkpoint(spec, checkpoint_id, place_id, beat_id):
     if not spec.get("activity"):
         raise DraftError(f"Stop {checkpoint_id} needs an activity with type, prompt, answer_rule, and fallback; a "
                          "plain arrival can be a user_observation.")
+    if spec.get("camera_checkpoint_id") and isinstance(spec["activity"], dict) and spec["activity"].get("type") != "camera_capture":
+        # Otherwise the stop sits at the camera but never captures, and the reply says no camera fit.
+        raise DraftError(f"Stop {checkpoint_id} is the camera stop {spec['camera_checkpoint_id']}: make its activity "
+                         "type camera_capture (prompt: the positioning instructions; answer_rule: they say they are "
+                         "in position), or leave out camera_checkpoint_id for an ordinary stop.")
     try:
         activity = Activity.model_validate(spec.get("activity") or {})
         return Checkpoint(checkpoint_id=checkpoint_id, place_id=place_id,

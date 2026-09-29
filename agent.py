@@ -42,7 +42,10 @@ depart_at unless the user will start later. Timestamps in tool results that end 
 real subject places are known for (architecture, jazz, film, immigration); for invented genres such as spy or \
 mystery, search without one and let the story come to the places. Choose varied, interesting places a short walk \
 apart: landmarks and notable buildings over schools and offices. For a camera stop, call find_camera_checkpoints \
-near the route and use only what it returns.
+near the route and use only what it returns. When it returns a position and the user wants a camera stop, include \
+it: a stop with its camera_checkpoint_id (no place_id), activity camera_capture, and a beat like any other stop (the \
+traffic camera can be a fictional surveillance post), placed in walking order by its standing position: first when \
+it is at the start, last when it is at the destination.
 4. research_place for 2-4 picks (call them together), with a focus matching the theme such as "architecture" or \
 "history".
 5. Call evaluate_adventure_plan with kind "new": the start (plus destination, deadline, and required_stops exactly \
@@ -60,13 +63,14 @@ only with physical_feature evidence; research claims about history or architectu
 needs a fallback. Each required place also becomes a stop at that same place, with required_by_user true; it can \
 carry a beat too.
 6. If the plan does not pass, fix every violation, using the suggestions (drop or swap a stop, shorten dwell, allow \
-transit), and evaluate again. If the limits cannot all be met, for example the route through the required stops to \
+transit), and evaluate again. Drop a camera stop the user asked for only if it still fails in walking order. \
+If the limits cannot all be met, for example the route through the required stops to \
 the destination alone runs past the deadline, say so plainly and ask which limit can change. Never present a \
 plan that did not pass.
 7. save_adventure_plan with its draft_id; start_now only if the user already asked to begin.
 8. Reply with the premise as a hook, the number of stops, about how long it takes, and where the first stop is. \
-If something they asked for could not be included (for example, no verified camera position fits), say so in a \
-sentence. Ask if they are ready, unless it has started. Do not spoil later clues.
+If something they asked for could not be included (for example, find_camera_checkpoints returned no position, or \
+the one it found did not fit the time), say so in a sentence. Ask if they are ready, unless it has started. Do not spoil later clues.
 
 ## Guiding
 Each turn, call get_adventure_state first. The current checkpoint is the only one the user can be working on.
