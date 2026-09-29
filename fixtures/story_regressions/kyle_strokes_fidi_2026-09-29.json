@@ -1,0 +1,384 @@
+{
+ "provenance": {
+  "kind": "live_capture",
+  "captured_from": "Firestore session record (session id omitted)",
+  "run": "Kyle, deployed site: \"I am on 96th and 2nd ave, and need to get to FiDi in 2 hours. I am a big fan of the band The Strokes. Help plan a trip to get there\"",
+  "note": "The draft the model sent to evaluate_adventure_plan that the CURRENT evaluator passed, plus the research it was built from. Under docs/STORY_DESIGN.md this story must fail. Real research data; the story itself is model-invented."
+ },
+ "user_message": "I am on 96th and 2nd ave, and need to get to FiDi in 2 hours. I am a big fan of the band The Strokes. Help plan a trip to get there",
+ "accepted_draft": {
+  "draft": {
+   "allowed_modes": [
+    "walk",
+    "transit"
+   ],
+   "deadline": "2026-09-29T14:38:00",
+   "chat_beats": [
+    {
+     "reveals": "The final coordinate in FiDi where the vintage master tape is secured.",
+     "summary": "You rendezvous with Julian's mysterious contact in the Financial District to hand over the recovered audio artifacts and secure the lost master tapes."
+    }
+   ],
+   "contingency_minutes": 12,
+   "theme": "The Strokes Rock Mystery",
+   "start": {
+    "lat": 40.7842494,
+    "place_text": "96th Street & 2nd Avenue",
+    "lng": -73.9470901
+   },
+   "user_stated": [
+    "destination",
+    "deadline",
+    "allowed_modes",
+    "theme"
+   ],
+   "story": {
+    "premise": "A lost master recording from the early days of Lower East Side rock has surfaced, and an anonymous tipster sounding remarkably like Julian Casablancas needs your help tracking down the missing tape before it falls into the wrong hands.",
+    "solution": "Recover the lost audio files by piecing together downtown's legendary music and architectural history from the Bowery down to the Financial District.",
+    "cast": [
+     "Julian Casablancas (Anonymous Voice on the Wire)",
+     "The Sound Engineer"
+    ]
+   },
+   "stops": [
+    {
+     "beat": {
+      "reveals": "The final combination code needed to unlock the safe in FiDi.",
+      "summary": "A scrambled radio transmission from a vintage receiver crackles to life: Julian Casablancas left clues scattered across downtown rock history, starting with the old Bowery bank where early rock ghosts and legendary rehearsal spaces once echoed."
+     },
+     "place_id": "wiki:32184500",
+     "research_focus": "history",
+     "activity": {
+      "type": "user_observation",
+      "answer_rule": "Accept any observation of the dark stonework, grand arches, or heavy doors of the former bank building.",
+      "hints": [
+       "Look at the corner where the grand stone arches meet Spring Street.",
+       "Describe the heavy masonry or windows of the old bank."
+      ],
+      "prompt": "Arrive at the Germania Bank Building at 190 Bowery [Wikipedia](https://en.wikipedia.org/w/index.php?oldid=1373299757). Your contact suspects a drop was made near this historic stone corner. Describe one visible feature of the stonework or architecture.",
+      "fallback": "Note the imposing corner entrance and continue south."
+     },
+     "dwell_minutes": 5
+    }
+   ],
+   "destination": {
+    "place_text": "Financial District",
+    "lng": -74.009271,
+    "lat": 40.7076681
+   },
+   "kind": "new"
+  }
+ },
+ "geocoded": [
+  {
+   "location": {
+    "point": {
+     "lat": 40.7842494,
+     "lng": -73.9470901
+    },
+    "place_text": "96th Street & 2nd Avenue",
+    "source": "geocoded",
+    "observed_at": "2026-09-29T16:38:41.632559Z",
+    "accuracy_m": null
+   },
+   "query": "96th Street and 2nd Avenue, New York, NY",
+   "label": "96th Street & 2nd Avenue",
+   "match_type": "intersection",
+   "provider": "openstreetmap-overpass",
+   "provider_ref": "osm:node/42443054"
+  },
+  {
+   "location": {
+    "point": {
+     "lat": 40.7076681,
+     "lng": -74.009271
+    },
+    "place_text": "Financial District",
+    "source": "geocoded",
+    "observed_at": "2026-09-29T16:38:42.053928Z",
+    "accuracy_m": null
+   },
+   "query": "Financial District, New York, NY",
+   "label": "Financial District",
+   "match_type": "place",
+   "provider": "openstreetmap-nominatim",
+   "provider_ref": "osm:node/5706568347"
+  }
+ ],
+ "research_evidence": {
+  "lpc:LP-02273": {
+   "place_id": "lpc:LP-02273",
+   "name": "Webster Hall and Annex",
+   "address": "119-125 East 11th Street",
+   "point": {
+    "lat": 40.7317719,
+    "lng": -73.9890961
+   },
+   "claims": [
+    {
+     "claim_id": "lpc:LP-02273#de24188b",
+     "text": "Webster Hall and Annex (119-125 East 11th Street) was designated a New York City individual landmark on 2008-03-18.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/buis-pvji"
+     ],
+     "checked_at": "2026-09-29T16:38:47.624493Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark Sites record. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "lpc:LP-02273#1e273fb8",
+     "text": "The LPC building database lists 119-125 East 11th Street (Webster Hall): architect/builder Charles Rentz, Jr.; primary style Queen Anne; date 1886 - 1887; historic district Individual Landmark.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/gpmc-yuvp"
+     ],
+     "checked_at": "2026-09-29T16:38:47.624493Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "lpc:LP-02273#ae0ac971",
+     "text": "The LPC building database lists 119-125 East 11th Street (Webster Hall Annex): architect/builder Charles Rentz, Jr.; primary style Renaissance Revival; date 1892; historic district Individual Landmark.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/gpmc-yuvp"
+     ],
+     "checked_at": "2026-09-29T16:38:47.624493Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    }
+   ],
+   "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+   "checked_at": "2026-09-29T16:38:47.624493Z",
+   "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+  },
+  "lpc:LP-02494": {
+   "place_id": "lpc:LP-02494",
+   "name": "Bowery Mission",
+   "address": "227 Bowery",
+   "point": {
+    "lat": 40.7219734,
+    "lng": -73.9928424
+   },
+   "claims": [
+    {
+     "claim_id": "lpc:LP-02494#e4b75c82",
+     "text": "Bowery Mission (227 Bowery) was designated a New York City individual landmark on 2012-06-26.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/buis-pvji"
+     ],
+     "checked_at": "2026-09-29T16:38:47.969703Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark Sites record. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "lpc:LP-02494#074220d5",
+     "text": "The LPC building database lists 227 Bowery (Bowery Mission): architect/builder William Jose; primary style neo-Grec; date 1876; historic district Individual Landmark.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/gpmc-yuvp"
+     ],
+     "checked_at": "2026-09-29T16:38:47.969703Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    }
+   ],
+   "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+   "checked_at": "2026-09-29T16:38:47.969703Z",
+   "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+  },
+  "wiki:32184500": {
+   "place_id": "wiki:32184500",
+   "name": "Germania Bank Building (New York City)",
+   "address": "190 Bowery (aka 1-3 Spring Street)",
+   "point": {
+    "lat": 40.72111111,
+    "lng": -73.99416667
+   },
+   "claims": [
+    {
+     "claim_id": "wiki:32184500#dcba2e82",
+     "text": "The Germania Bank Building is a historic building at 190 Bowery, on the northwest corner of the intersection with Spring Street in Manhattan, New York City.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#5dbd59ad",
+     "text": "It was the third building of the Germania Bank, which was founded in New York City in 1869.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#25991bae",
+     "text": "The building was designed in a Renaissance Revival or Beaux Arts style by Robert Maynicke and was built in 1898–99.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#0fd0a6e4",
+     "text": "The building became a New York City designated landmark on March 29, 2005.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#c6fa4816",
+     "text": "During the middle decades of the 19th century, rising numbers of German immigrants in New York led to the development of a neighborhood called Kleindeutschland or Little Germany, which became the most important German-American center in the United States.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#551efe62",
+     "text": "It had a commercial center on the Bowery north of Division Street.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#2a78cfd5",
+     "text": "The Germania Bank of the City of New York was established by local businessmen in 1869 in leased premises at 185 Bowery; its first president was Christian Schwarzwaelder, owner of a furniture store on East Broadway, and the vice-president, Joseph Kuntz, owned a brewery on Houston Street and lived on the Bowery.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#9284a8a5",
+     "text": "In 1878 the Germania Bank moved to a purchased loft building at 215 Bowery; in the early 1890s it expanded into 217 Bowery next door.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#7a9343c2",
+     "text": "To accommodate continued growth, in December 1896 the bank bought three lots at the northwest corner of the Bowery and Spring Street.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#28d1082c",
+     "text": "Plans for a new freestanding, fireproof building were filed on January 3, 1898; it was designed by the German-born architect Robert Maynicke and is considered one of his major works.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#e52f857f",
+     "text": "The construction firm of Marc Eidlitz, an American of German descent, built it at a cost of around $200,000.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#2ac5a730",
+     "text": "Construction began on February 4, 1898, and was certified complete on January 21, 1899.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1373299757#History"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Quoted from Wikipedia revision 1373299757 (edited 2026-09-05). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:32184500#c6bde239",
+     "text": "The LPC building database lists 190 Bowery (aka 1-3 Spring Street) (Germania Bank Building): architect/builder Robert Maynicke (architect), Marc Eidlitz and Son (builder); primary style Beaux-Arts; date 1898 - 1899; historic district Individual Landmark.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/gpmc-yuvp"
+     ],
+     "checked_at": "2026-09-29T16:38:48.953854Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    }
+   ],
+   "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+   "checked_at": "2026-09-29T16:38:48.953854Z",
+   "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+  }
+ },
+ "transcript": [
+  {
+   "role": "user",
+   "text": "I am on 96th and 2nd ave, and need to get to FiDi in 2 hours. I am a big fan of the band The Strokes. Help plan a trip to get there"
+  },
+  {
+   "role": "assistant",
+   "text": "A lost master recording from the early days of Lower East Side rock has surfaced, and an anonymous tipster sounding remarkably like Julian Casablancas needs your help tracking down the missing tape before it falls into the wrong hands. \n\nThis adventure features 1 stop along the way, takes about 1 hour and 45 minutes total, and gets you to the Financial District right before your 2-hour deadline. (Note: Due to route timing constraints with your 2-hour window, we couldn't squeeze in an extra transit leg or a second stop, so this streamlined route keeps you on track.)\n\nYour first destination is the historic **Germania Bank Building** at 190 Bowery and Spring Street [Wikipedia](https://en.wikipedia.org/wiki/Germania_Bank_Building_(New_York_City)).\n\nAre you ready to begin?"
+  },
+  {
+   "role": "user",
+   "text": "I have made it to the bank building"
+  },
+  {
+   "role": "assistant",
+   "text": "Welcome to the Germania Bank Building at 190 Bowery and Spring Street! Originally constructed in 1898–99 [Wikipedia](https://en.wikipedia.org/wiki/Germania_Bank_Building_(New_York_City)), this striking landmark was designed by architect Robert Maynicke [Wikipedia](https://en.wikipedia.org/wiki/Germania_Bank_Building_(New_York_City)). \n\nYour contact suspects a drop was made near this historic stone corner. Describe one visible feature of the stonework, arches, or architecture you notice here."
+  },
+  {
+   "role": "user",
+   "text": "Graffiti that says \"ugly kids\""
+  },
+  {
+   "role": "assistant",
+   "text": "Spot on. That classic urban grit marks the spot. \n\nYour radio crackles to life: *A scrambled transmission from a vintage receiver comes through—Julian Casablancas left clues scattered across downtown rock history, and unlocking this old Bowery bank gives you the final combination code needed to secure the master tape.*\n\nNow it's time for the final leg of your mission. Head south toward the Financial District to rendezvous with Julian's contact. \n\n**Directions:**\nWalk roughly 28 minutes southwest from Spring Street down toward the Financial District. \n\nLet me know as soon as you have arrived in FiDi!"
+  },
+  {
+   "role": "user",
+   "text": "Made it to FiDi"
+  },
+  {
+   "role": "assistant",
+   "text": "**Mission Accomplished!**\n\nYou successfully rendezvous with Julian's mysterious contact in the Financial District, hand over the recovered audio artifacts, and use the combination code unlocked from the old Bowery bank to secure the lost master tapes just in time.\n\n### **Case File**\n* **Stops Visited:** \n  1. **Germania Bank Building** (190 Bowery)\n* **Real Facts Learned:**\n  * The Germania Bank Building was designed by the German-born architect Robert Maynicke in a Renaissance Revival or Beaux-Arts style and built in 1898–99 [Wikipedia](https://en.wikipedia.org/wiki/Germania_Bank_Building_(New_York_City)).\n  * It became a New York City designated landmark on March 29, 2005 [Wikipedia](https://en.wikipedia.org/wiki/Germania_Bank_Building_(New_York_City)).\n* **Your Observation:** Spotted gritty downtown street art (\"ugly kids\") right on the historic stone facade.\n* **Solution:** Recovered the lost audio files by piecing together downtown's legendary music and architectural history from the Bowery down to the Financial District.\n\nGreat work on tracking down rock history across Manhattan!"
+  }
+ ]
+}

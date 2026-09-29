@@ -1,0 +1,445 @@
+{
+ "provenance": {
+  "kind": "live_capture",
+  "captured_from": "Firestore session record (session id omitted)",
+  "run": "Jan, deployed site: \"I'm at 72 and west end. I have 25 minutes. Im looking for something related to music history\"",
+  "note": "The draft the model sent to evaluate_adventure_plan that the CURRENT evaluator passed, plus the research it was built from. Under docs/STORY_DESIGN.md this story must fail. Real research data; the story itself is model-invented."
+ },
+ "user_message": "I'm at 72 and west end. I have 25 minutes. Im looking for something related to music history",
+ "accepted_draft": {
+  "draft": {
+   "user_stated": [
+    "duration_minutes",
+    "theme"
+   ],
+   "theme": "music history mystery",
+   "chat_beats": [
+    {
+     "summary": "You contact your handler via radio; they confirm the missing tape was last logged at the Pythian Temple recording studios.",
+     "reveals": "The secret archive is stored on a digital master tape labeled 'Pythian 1958'."
+    }
+   ],
+   "start": {
+    "lng": -73.9844806,
+    "place_text": "West End Avenue & West 72nd Street",
+    "lat": 40.7798127
+   },
+   "current_location": {
+    "place_text": "West End Avenue & West 72nd Street",
+    "lat": 40.7798127,
+    "lng": -73.9844806
+   },
+   "duration_minutes": 25,
+   "contingency_minutes": 3,
+   "kind": "new",
+   "story": {
+    "premise": "A rare master tape of a legendary 1950s rock-and-roll recording session has gone missing from an Upper West Side vault. You are on the trail of the missing audio.",
+    "cast": [
+     "Agent Vance (Handler)",
+     "The Sound Archivist"
+    ],
+    "solution": "The master tape was hidden inside the Pythian Temple's old recording studio vault."
+   },
+   "stops": [
+    {
+     "dwell_minutes": 5,
+     "place_id": "wiki:23291465",
+     "beat": {
+      "reveals": "A hidden cipher etched into the dispatch mentions a lost recording session from 1958.",
+      "summary": "You uncover a coded reference to Buddy Holly's final recording session at the Pythian Temple."
+     },
+     "activity": {
+      "type": "user_observation",
+      "answer_rule": "Accept any description of the building's distinctive facade or entrance.",
+      "hints": [
+       "Look toward the middle of the block between Broadway and Columbus.",
+       "Observe the building's distinctive entryway and facade styling."
+      ],
+      "fallback": "If you cannot see the exterior, note the surrounding street corner.",
+      "prompt": "Stand outside the Pythian Temple at 135 West 70th Street. Decca Records once operated a legendary recording studio here where rock-and-roll history was made. Look up at the building's unique facade and describe one architectural detail you notice."
+     },
+     "research_focus": "history"
+    }
+   ],
+   "allowed_modes": [
+    "walk",
+    "transit"
+   ]
+  }
+ },
+ "geocoded": [
+  {
+   "location": {
+    "point": {
+     "lat": 40.7798127,
+     "lng": -73.9844806
+    },
+    "place_text": "West End Avenue & West 72nd Street",
+    "source": "geocoded",
+    "observed_at": "2026-09-29T16:05:28.545875Z",
+    "accuracy_m": null
+   },
+   "query": "West End Avenue and West 72nd Street, Manhattan",
+   "label": "West End Avenue & West 72nd Street",
+   "match_type": "intersection",
+   "provider": "openstreetmap-overpass",
+   "provider_ref": "osm:node/42431004"
+  }
+ ],
+ "research_evidence": {
+  "lpc:LP-00285": {
+   "place_id": "lpc:LP-00285",
+   "name": "Ansonia Hotel",
+   "address": "2101-2119 Broadway",
+   "point": {
+    "lat": 40.7801417,
+    "lng": -73.9822132
+   },
+   "claims": [
+    {
+     "claim_id": "lpc:LP-00285#e8b2180b",
+     "text": "Ansonia Hotel (2101-2119 Broadway) was designated a New York City individual landmark on 1972-03-14.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/buis-pvji"
+     ],
+     "checked_at": "2026-09-29T16:05:31.729299Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark Sites record. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "lpc:LP-00285#06d1836b",
+     "text": "The LPC building database lists 2101-2119 Broadway (Ansonia Hotel): architect/builder Paul E. M. DuBoy; primary style Beaux-Arts; date 1899 - 1904; historic district Individual Landmark.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/gpmc-yuvp"
+     ],
+     "checked_at": "2026-09-29T16:05:31.729299Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    }
+   ],
+   "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+   "checked_at": "2026-09-29T16:05:31.729299Z",
+   "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+  },
+  "wiki:6449248": {
+   "place_id": "wiki:6449248",
+   "name": "Beacon Theatre (New York City)",
+   "address": null,
+   "point": {
+    "lat": 40.78055556,
+    "lng": -73.98111111
+   },
+   "claims": [
+    {
+     "claim_id": "wiki:6449248#61d20655",
+     "text": "The Beacon Theatre is an entertainment venue at 2124 Broadway, adjacent to the Hotel Beacon, on the Upper West Side of Manhattan in New York City, United States.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#08b3251e",
+     "text": "Opened in 1929, the Beacon Theatre was developed by Samuel \"Roxy\" Rothafel and built as a movie palace, with 2,894 seats across three levels.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#1c90df18",
+     "text": "It was designed by Walter W. Ahlschlager with decorations inspired by the Renaissance, Ancient Roman, Ancient Greek, and Rococo styles.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#439f3cc0",
+     "text": "The theater is designated as a New York City interior landmark and is listed on the National Register of Historic Places.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#3cb94baa",
+     "text": "Movie palaces became common in the 1920s, between the end of World War I and the beginning of the Great Depression.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#cdf224aa",
+     "text": "In the New York City area, only a small number of operators were involved in the construction of movie palaces.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#a180a019",
+     "text": "These theaters' designers included the architects Walter Ahlschlager, Thomas W. Lamb, C. Howard Crane, and John Eberson.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#77a277c4",
+     "text": "Samuel \"Roxy\" Rothafel was a successful theater operator who was prominent in the city's movie theater industry, having built the 5,920-seat Roxy Theatre on 50th Street in midtown during 1927.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#17cb515c",
+     "text": "The Chanin brothers also had some experience in theatrical development, having built six Broadway theaters in the mid-1920s.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#584e2625",
+     "text": "The Chanins acquired a site on 75th Street between Broadway and Amsterdam Avenue in 1925 for the construction of a hotel and an attached theater.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#e4b9fcc3",
+     "text": "Two years later, in January 1927, the Chanins sold the site to the Havemeyer Construction Company.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:6449248#95c98f37",
+     "text": "Film producer Herbert Lubin negotiated the sale on behalf of Roxy, who would operate the theater on the site, known as the Roxy Midway Theatre.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1374986898#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.108343Z",
+     "uncertainty": "Quoted from Wikipedia revision 1374986898 (edited 2026-09-15). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    }
+   ],
+   "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+   "checked_at": "2026-09-29T16:05:32.108343Z",
+   "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+  },
+  "wiki:23291465": {
+   "place_id": "wiki:23291465",
+   "name": "Pythian Temple (New York City)",
+   "address": "135-145 West 70th Street",
+   "point": {
+    "lat": 40.776837,
+    "lng": -73.981054
+   },
+   "claims": [
+    {
+     "claim_id": "wiki:23291465#cdd1bf91",
+     "text": "The Pythian Temple is a historic Knights of Pythias building at 135 West 70th Street between Columbus Avenue and Broadway in the Lincoln Square neighborhood of Manhattan, New York City.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#779c7b38",
+     "text": "It was built in 1927 to serve as a meeting place for the 120 Pythian lodges of New York City, and later for many years housed a recording studio.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#95be4642",
+     "text": "Today it is an 88-unit luxury condominium building known as The Pythian.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#24e55878",
+     "text": "As their organization's popularity declined in the early 1940s, the Pythians leased space in the building to Decca Records, which transformed a large third-floor auditorium with balconies and wooden floors into a music recording studio.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#c2a33f19",
+     "text": "On April 12, 1954, Bill Haley and His Comets recorded their single \"Rock Around the Clock\" at the Pythian Temple studios; they subsequently recorded all but two of their Decca recordings between 1954 and 1964 there.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#257f0808",
+     "text": "On October 21, 1958, Buddy Holly's final studio sessions were recorded at the Pythian.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#7fc61c2b",
+     "text": "Known by Holly fans as \"The String Sessions\", Holly recorded four songs in an innovative collaboration with the Dick Jacobs Orchestra.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#9e8dc6de",
+     "text": "These songs were: \"True Love Ways\" (written by Buddy Holly), \"Moondreams\" (written by Norman Petty), \"Raining In My Heart\" (written by Felice and Boudleaux Bryant) and \"It Doesn't Matter Anymore\" (written by Paul Anka).",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#555962ea",
+     "text": "Other artists who recorded there included Sammy Davis Jr. and Billie Holiday.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#98713e06",
+     "text": "Henny Youngman, born 18 years before the Pythian was built, told an interviewer that he \"took violin lessons\" there as a young man.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#a6391073",
+     "text": "Days after the Soviet suppression of the Hungarian Revolution of 1956, actor and Communist Party activist Paul Robeson spoke at the Temple.",
+     "kind": "historical",
+     "basis": "source",
+     "source_urls": [
+      "https://en.wikipedia.org/w/index.php?oldid=1355142454#History"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Quoted from Wikipedia revision 1355142454 (edited 2026-05-20). Claims are quoted or transcribed from the cited source; they are not independently verified."
+    },
+    {
+     "claim_id": "wiki:23291465#10f71c35",
+     "text": "The LPC building database lists 135-145 West 70th Street (Pythian Temple): architect/builder Thomas W. Lamb; primary style Exotic / neo-Babylonian; date 1926 - 1927; historic district Upper West Side / Central Park West Historic District.",
+     "kind": "architectural",
+     "basis": "source",
+     "source_urls": [
+      "https://data.cityofnewyork.us/d/gpmc-yuvp"
+     ],
+     "checked_at": "2026-09-29T16:05:32.359740Z",
+     "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+    }
+   ],
+   "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+   "checked_at": "2026-09-29T16:05:32.359740Z",
+   "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
+  }
+ },
+ "transcript": [
+  {
+   "role": "user",
+   "text": "I'm at 72 and west end. I have 25 minutes. Im looking for something related to music history"
+  },
+  {
+   "role": "assistant",
+   "text": "A rare master tape of a legendary 1950s rock-and-roll recording session has gone missing from an Upper West Side vault, and you're on the trail to recover it. This quick 1-stop adventure takes about 11 minutes total.\n\nTo reach your first stop at the historic Pythian Temple:\n1. Walk southeast on West 72nd Street.\n2. Turn right onto Broadway and keep left to stay on Broadway as you head toward West 70th Street.\n\nLet me know when you've arrived outside 135 West 70th Street!"
+  },
+  {
+   "role": "user",
+   "text": "am here!"
+  },
+  {
+   "role": "assistant",
+   "text": "Welcome to the Pythian Temple at 135 West 70th Street. \n\nBack when Decca Records ran a studio here on the third floor [Wikipedia](https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)), legendary tracks were cut in that auditorium—including Bill Haley recording \"Rock Around the Clock\" and Buddy Holly's famous 1958 string sessions [Wikipedia](https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)).\n\nLook up at the building's unique neo-Babylonian facade and describe one architectural detail or feature you notice."
+  },
+  {
+   "role": "user",
+   "text": "Assyrian type heads on the colimns"
+  },
+  {
+   "role": "assistant",
+   "text": "Spot on! Those striking neo-Babylonian and Assyrian-inspired details make this building completely unique on the Upper West Side.\n\nYour radio crackles to life as Agent Vance checks in: *\"Great eye. That confirms you're at the right spot. We intercepted a digital dispatch fragment mentioning a lost recording session from 1958 right here at the Pythian [Wikipedia](https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)).\"*\n\n***\n\n### Case File: The Missing Master Tape\n\n* **Stops Visited:** Pythian Temple (135 West 70th Street)\n* **Real Facts Learned:** \n  - Built in 1927 by architect Thomas W. Lamb in an Exotic / neo-Babylonian style, the Pythian Temple originally served as a meeting place for New York City's Pythian lodges [Wikipedia](https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)).\n  - In the 1940s, Decca Records converted its large third-floor auditorium into a legendary recording studio [Wikipedia](https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)).\n  - Iconic tracks recorded here include Bill Haley and His Comets' \"Rock Around the Clock\" (1954) and Buddy Holly's final 1958 \"String Sessions\" [Wikipedia](https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)).\n* **Your Observation:** You spotted the striking neo-Babylonian heads framing the facade.\n* **Solution:** The missing master tape was safely recovered from the old Pythian Temple recording vault, preserving rock-and-roll history!"
+  }
+ ]
+}
