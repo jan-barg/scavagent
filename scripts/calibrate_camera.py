@@ -182,7 +182,25 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
            "note": "Evidence stills are kept outside Git; the hashes identify them."}
     if notes.get("workbench_spot_id"):
         log["workbench_spot_id"] = notes["workbench_spot_id"]
+    if notes.get("derived_fields"):
+        log["derived_from_pin"] = {"fields": notes["derived_fields"], "source": "OpenStreetMap street geometry"}
     return checkpoint, log
+
+
+def fill_from_pin(spot, locate=None):
+    """Fill a spot's blank address, stop name, and side of street from its pin and the street geometry."""
+    blank = [k for k in ("address", "landmark", "side_of_street") if not (spot.get(k) or "").strip()]
+    if not blank:
+        return spot
+    if locate is None:
+        from scripts import camera_geometry as geo
+        def locate(name, mount, pin):
+            center, streets = geo.intersection_streets(name, LatLng.model_validate(mount))
+            return geo.describe(center, streets, LatLng.model_validate(pin))
+    where = locate(spot["camera_name"], spot["camera_mount"], spot["stand_location"])
+    derived = {"address": f"{where['on']} at {where['cross']}", "landmark": where["stop_name"],
+               "side_of_street": where["side_of_street"]}
+    return {**spot, **{k: derived[k] for k in blank}, "derived_fields": blank}
 
 
 def spot_notes(spot, evidence_dir, taken):
@@ -199,6 +217,7 @@ def spot_notes(spot, evidence_dir, taken):
         "verified_at": spot.get("still_retrieved_at") or "",
         "verified_by": f"{spot.get('marked_by') or 'teammate'} (camera workbench, {spot.get('marked_at', '')[:10]})",
         "evidence_stills": [str(Path(evidence_dir) / spot["still_file"])] if spot.get("still_file") else [],
+        "derived_fields": spot.get("derived_fields", []),
     }
 
 
@@ -284,6 +303,12 @@ def main(argv=None):
                 continue  # already in the catalogue; re-importing must not duplicate it
             spot = json.loads(path.read_text())
             spot = spot.get("data", spot)  # an exported document may wrap its fields
+            try:
+                spot = fill_from_pin(spot)
+            except (ValueError, KeyError) as error:
+                failed += 1
+                print(f"Skipped {path.name} ({spot.get('camera_name')}): could not derive the address ({error})", file=sys.stderr)
+                continue
             notes = dict(spot_notes(spot, args.evidence, taken), workbench_spot_id=path.stem)
             try:
                 checkpoint, log = build_entry(notes, spot.get("camera_mount"))

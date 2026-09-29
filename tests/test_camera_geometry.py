@@ -1,0 +1,79 @@
+"""Describing a standing spot from street geometry, and placing one from a description. Offline: geometry is given."""
+
+import math
+
+import pytest
+
+from integrations import cameras
+from schemas import LatLng
+from scripts import camera_geometry as geo
+
+CENTER = LatLng(lat=40.7993084, lng=-73.9432361)
+G = math.radians(geo.GRID_DEG)
+AVENUE = geo.Street("Park Avenue", (math.sin(G), math.cos(G)), 19.6)  # runs grid-north
+STREET = geo.Street("East 116th Street", (-math.cos(G), math.sin(G)), 11.5)  # runs grid-west
+
+
+def grid_point(east, north):
+    """A pin this many meters grid-east and grid-north of the intersection."""
+    x = east * math.cos(G) + north * math.sin(G)
+    y = -east * math.sin(G) + north * math.cos(G)
+    return geo.from_local(CENTER, x, y)
+
+
+def test_a_pin_along_a_street_is_described_by_side_and_distance_in_grid_directions():
+    described = geo.describe(CENTER, [AVENUE, STREET], grid_point(28, 11))
+    assert described["side_of_street"] == "north side of East 116th Street, about 30 m east of Park Avenue"
+    assert geo.describe(CENTER, [AVENUE, STREET], grid_point(-19, -60))["side_of_street"] == \
+        "west side of Park Avenue, about 60 m south of East 116th Street"
+
+
+def test_a_pin_near_both_streets_is_a_corner():
+    assert geo.describe(CENTER, [AVENUE, STREET], grid_point(-15, 12))["side_of_street"] == \
+        "northwest corner of Park Avenue and East 116th Street"
+
+
+@pytest.mark.parametrize("side, direction, along", [("north", "east", 30), ("south", "west", 45), ("south", "east", 0)])
+def test_locate_places_a_described_spot_where_describe_reads_it_back(side, direction, along):
+    pin = geo.locate(CENTER, STREET, AVENUE, side, direction, along)
+    again = geo.describe(CENTER, [AVENUE, STREET], pin)
+    if along:
+        assert again["side_of_street"] == f"{side} side of East 116th Street, about {along} m {direction} of Park Avenue"
+    else:
+        assert again["corner"] and again["side_of_street"].startswith(f"{side}{direction} corner")
+
+
+def test_locate_rejects_a_side_the_street_does_not_have():
+    with pytest.raises(ValueError, match="not a side"):
+        geo.locate(CENTER, STREET, AVENUE, "east", "east", 30)
+
+
+def test_off_grid_streets_use_true_compass_directions():
+    due_north = geo.Street("Broadway", (0.0, 1.0), 10)
+    due_east = geo.Street("Battery Place", (1.0, 0.0), 10)
+    assert not geo.on_grid([due_north, due_east])
+    pin = geo.from_local(CENTER, 40, 9)
+    assert geo.describe(CENTER, [due_north, due_east], pin)["side_of_street"] == \
+        "north side of Battery Place, about 40 m east of Broadway"
+
+
+def test_a_divided_avenue_puts_its_sidewalk_beyond_the_outer_carriageway():
+    def way(offset_east, lanes):
+        return {"tags": {"lanes": str(lanes)}, "geometry": [
+            {"lat": p.lat, "lon": p.lng} for p in (geo.from_local(CENTER, offset_east, -100), geo.from_local(CENTER, offset_east, 100))]}
+    single = geo.street_from_ways("Avenue", CENTER, [way(0, 2)])
+    divided = geo.street_from_ways("Avenue", CENTER, [way(-12, 3), way(12, 3)])
+    assert single.sidewalk_m == pytest.approx(2 * geo.LANE_M / 2 + geo.PARKING_M + geo.HALF_SIDEWALK_M)
+    assert divided.sidewalk_m == pytest.approx(12 + 3 * geo.LANE_M / 2 + geo.PARKING_M + geo.HALF_SIDEWALK_M, abs=0.2)
+    assert abs(divided.direction[1]) == pytest.approx(1)
+
+
+def test_camera_names_become_two_streets():
+    assert geo.camera_streets("Park Ave @ E 116 Street") == ["park avenue", "east 116th street"]
+    assert geo.camera_streets("Amsterdam @ 72 St") == ["amsterdam avenue", "72nd street"]
+    assert geo.camera_streets("Third Ave Bridge") is None
+
+
+def test_described_distances_stay_within_the_import_limit():
+    pin = geo.locate(CENTER, STREET, AVENUE, "north", "east", 30)
+    assert cameras._distance(pin, CENTER) < 250

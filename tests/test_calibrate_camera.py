@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from adventure import agent_tools
-from integrations import cameras
+from integrations import cameras, common
 from scripts import calibrate_camera as cal
 
 MOUNT = {"lat": 40.785302, "lng": -73.969353}
@@ -21,8 +21,9 @@ JPEG = b"\xff\xd8\xffTEST_STILL_NOT_A_PHOTO\xff\xd9"
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     def denied(*args, **kwargs):
-        raise AssertionError("Tests must not reach DOT")
+        raise AssertionError("Tests must not reach the network")
     monkeypatch.setattr(cameras.requests, "get", denied)
+    monkeypatch.setattr(common._session, "request", denied)
     monkeypatch.delenv("SCAVAGENT_DEV_CAMERA_FIXTURES", raising=False)
 
 
@@ -209,7 +210,7 @@ def test_workbench_spots_import_once_as_image_verified_entries(catalogue, tmp_pa
             "positioning_instructions": "TEST: stand by the pole.", "reference_view_notes": "TEST view",
             "visibility_notes": "", "spot_in_view": True, "marked_by": "TB", "marked_at": "2026-09-29T20:00:00Z"}
     (spots / "doc1.json").write_text(json.dumps(spot))
-    (spots / "doc2.json").write_text(json.dumps(dict(spot, landmark="")))  # incomplete: skipped, not guessed
+    (spots / "doc2.json").write_text(json.dumps(dict(spot, positioning_instructions="")))  # incomplete: skipped, not guessed
 
     cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
     cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
@@ -221,4 +222,18 @@ def test_workbench_spots_import_once_as_image_verified_entries(catalogue, tmp_pa
     assert entry["person_region"] == [0.02, 0.4, 0.08, 0.62]
     [log] = saved["field_log"]
     assert log["workbench_spot_id"] == "doc1" and log["method"] == "image" and log["evidence_stills"][0]["sha256"]
-    assert "landmark" in capsys.readouterr().err
+    assert "positioning_instructions" in capsys.readouterr().err
+
+
+def test_blank_address_fields_are_filled_from_the_pin_and_logged():
+    spot = {"camera_name": "Park Ave @ E 116 Street", "camera_mount": MOUNT, "stand_location": {"lat": 1, "lng": 2},
+            "address": "", "landmark": "  ", "side_of_street": "kept as typed"}
+    where = {"on": "East 116th Street", "cross": "Park Avenue", "stop_name": "East 116th Street at Park Avenue, north side",
+             "side_of_street": "north side of East 116th Street, about 30 m east of Park Avenue"}
+    filled = cal.fill_from_pin(spot, locate=lambda name, mount, pin: where)
+    assert filled["address"] == "East 116th Street at Park Avenue"
+    assert filled["landmark"] == "East 116th Street at Park Avenue, north side"
+    assert filled["side_of_street"] == "kept as typed"  # a typed field is never overwritten
+    assert filled["derived_fields"] == ["address", "landmark"]
+    complete = dict(spot, address="a", landmark="b")
+    assert cal.fill_from_pin(complete, locate=lambda *a: pytest.fail("no lookup needed")) is complete
