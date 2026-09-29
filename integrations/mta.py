@@ -132,8 +132,11 @@ def _matching_stations(rows, text, line):
     exact = [r for r in rows if r["gtfs_stop_id"].upper() == text.strip().upper()]
     found = exact or [r for r in rows if _station_key(r["stop_name"]) == key] or [
         r for r in rows if key in _station_key(r["stop_name"])]
-    return [r for r in found if not line or line in r["daytime_routes"].split() or FEEDS.get(line) in
-            {FEEDS.get(route) for route in r["daytime_routes"].split()}]
+    if not line:
+        return found
+    on_line = [r for r in found if line in r["daytime_routes"].split()]
+    # At night some trains stop where their line is not a daytime route (the A at 86 St on Central Park West).
+    return on_line or [r for r in found if FEEDS.get(line) in {FEEDS.get(route) for route in r["daytime_routes"].split()}]
 
 
 def _station_key(name):

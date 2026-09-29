@@ -49,18 +49,22 @@ CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of trav
 CameraLookup = Callable[[str], CameraCheckpoint | None]
 
 # Props a story might pretend are waiting at a real place. Fiction should arrive in chat instead.
-_PROP = (r"(?:note|envelope|chalk|mark(?:ing)?|package|parcel|key|card|letter|sticker|tape|microfilm|film|token|coin|"
-         r"capsule|briefcase|bag|box|flyer|poster|map|photo(?:graph)?|transmitter|bug|disk|drive|folder|dossier|"
-         r"dead drop|cache|stash)s?")
+# Objects a story might pretend are waiting at a real place. Fiction should arrive in chat instead.
+# Words with everyday meanings ("key detail", "note its shape", "take a photo") are left out.
+_PROP = (r"(?:note|envelope|chalk mark|chalk|package|parcel|card|letter|sticker|microfilm|film canister|token|coin|"
+         r"capsule|briefcase|bag|box|flyer|map|transmitter|bug|disk|folder|dossier|dead drop|cache|stash)s?")
+_OBJECT = rf"(?:(?:the|a|an|your|some|this|that)\s+)?(?:[\w-]+\s+){{0,2}}{_PROP}\b"  # the object of the verb
 _ON_SITE = [  # asked in an activity prompt
-    re.compile(rf"\b(?:find|look for|locate|search for|retrieve|collect|pick up|grab|dig up|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
-    re.compile(rf"\b(?:left|hid|hidden|stashed|placed|taped|wedged|tucked|planted|dropped)\b[^.?!]{{0,60}}\b{_PROP}\b", re.I),
-    re.compile(rf"\b{_PROP}\b[^.?!]{{0,40}}\b(?:left|hidden|stashed|placed|taped|wedged|tucked|planted)\b", re.I),
+    re.compile(rf"\b(?:find|look for|locate|search for|retrieve|collect|pick up|grab|dig up|uncover)\s+{_OBJECT}", re.I),
+    re.compile(rf"\b(?:left|hid|stashed|placed|taped|wedged|tucked|planted|dropped)\s+"
+               rf"(?:behind\s+|for you\s+)?{_OBJECT}", re.I),
+    re.compile(rf"\b{_PROP}\b\s+(?:is\s+|was\s+|has been\s+|sits\s+)?(?:hidden|stashed|taped|wedged|tucked|planted|waiting)\b",
+               re.I),
 ]
 _URL = re.compile(r"https?://[^\s)\]>\"']+")
 _ARCHITECTS = re.compile(r"architect/builder ([^;]+);")  # the LPC building record claims name them
-_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|locate|recover|pick up|retrieve|uncover)\b[^.?!]{{0,60}}\b{_PROP}\b"
-                    rf"|\b(?:handed to you|hands you|gives you|passes you|slips you|falls into your hands)\b", re.I)
+_FOUND = re.compile(rf"\byou (?:find|spot|discover|notice|see|locate|recover|pick up|retrieve|uncover)\s+{_OBJECT}"
+                    rf"|\b(?:hands|gives|passes|slips) you\s+{_OBJECT}|\b(?:handed to you|falls into your hands)\b", re.I)
 
 
 @dataclass
@@ -228,7 +232,9 @@ def evaluate_plan(
         checkpoint = next((c for c in required if _same_place(stop.place, places.get(c.place_id))), None)
         if checkpoint is None:
             flag("REQUIRED_STOP_MISSING", f"The user's required stop {stop.place.place_text or stop.stop_id} is not a "
-                                          "required checkpoint in the plan.")
+                                          "required checkpoint in the plan. Add a stop there; if it is closed or the user "
+                                          "no longer needs it, ask them, then pass their answer as waived_required_ids or "
+                                          "a substitute required stop.")
             continue
         matched.append((stop, checkpoint))
         if checkpoint.dwell_minutes < stop.dwell_minutes:
@@ -306,7 +312,7 @@ def evaluate_plan(
             flag("INVENTED_PROP", f"{beat.beat_id} says something physically reached the user ('{found.group(0)}') at a "
                                   "real place, from an object or a person who will not be there. Tell it as something "
                                   "delivered in chat instead.", beat.checkpoint_id)
-        if beat.checkpoint_id is not None and beat.checkpoint_id not in checkpoint_ids:
+        if beat.checkpoint_id is not None and beat.checkpoint_id not in checkpoint_ids and beat.beat_id not in revealed:
             flag("ORPHAN_BEAT", f"{beat.beat_id} is tied to {beat.checkpoint_id}, which is not in the plan; move it to "
                                 "another stop or deliver it in chat (checkpoint_id null).")
         if beat.checkpoint_id in skipped and beat.beat_id not in revealed:

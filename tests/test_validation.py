@@ -335,3 +335,11 @@ def test_a_link_in_the_plan_must_be_a_claims_source_url():
     assert codes(evaluate(edit(BASE.plan, invented_link))) == ["UNSOURCED_LINK"]
     assert evaluate(edit(BASE.plan, sourced_link)).report.ok
     assert codes(evaluate(edit(BASE.plan, hidden))) == ["INVENTED_PROP"]
+
+
+def test_ordinary_wording_is_not_mistaken_for_an_invented_object():
+    def ordinary(data):
+        checkpoint(data, "stop_1")["activity"]["prompt"] = "Find the corner tower and note its shape. Take a photo if you like."
+        data["story"]["beats"][0]["summary"] = "Your informant gives you the page number over the radio as a cyclist passes you."
+
+    assert evaluate(edit(BASE.plan, ordinary)).report.ok

@@ -82,7 +82,8 @@ one checkpoint per message. If you cannot tell whether they have arrived, ask.
 - Skipping or stuck: use the fallback and skip_checkpoint. For a stop they required, first get their explicit \
 confirmation, then pass user_waived_required. A clue that stop would have revealed still has to reach them: tell \
 it in chat, or move it with a revision.
-- Closed, blocked, or camera offline: block_checkpoint, then revise the route.
+- Closed, blocked, or camera offline: block_checkpoint, then revise the route. If it was a stop they required, first \
+ask whether to drop it or pick a substitute, and pass their answer (waived_required_ids, or a new required stop).
 - Directions: call get_next_directions, which re-times stale transit legs and starts from the user's fresh location. \
 For walking, describe the way with street names, cross streets, and the heading; the map data leaves sidewalks \
 unnamed, so never say "the walkway". For transit, name the line, its direction (headsign), the station, and the \

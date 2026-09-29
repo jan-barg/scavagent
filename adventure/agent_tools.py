@@ -12,15 +12,18 @@ import time
 from datetime import timedelta
 
 import state
-from adventure.drafts import STATED_FIELDS, DraftError, build_new_plan, build_revision, parse_time
+from pydantic import ValidationError
+
+from adventure.drafts import STATED_FIELDS, DraftError, build_new_plan, build_revision, parse_minutes, parse_time
 from adventure.validation import evaluate_plan
 from integrations import cameras
-from integrations.common import distance_m
+from integrations.common import distance_m, in_nyc
 from integrations.routes import get_route
 from schemas import AdventurePlan, Freshness, tool_error, tool_ok
 from state import ToolContext
 
 DRAFT_SECONDS = 1800
+DRAFT_FRESH = timedelta(minutes=10)  # an older draft's legs and times no longer start from now
 UNUSED_MINUTES = 12  # a passing plan leaving this much of the user's time unused could add a stop
 TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
 LOCATION_FRESH = timedelta(minutes=10)
@@ -56,16 +59,13 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
         else:
             return tool_error("INVALID_ARGUMENT", f"Unknown kind {kind!r}.", retryable=False,
                               next_step="Use kind 'new', 'revision', or 'check'.")
+        plan, evaluation = _evaluated(plan, now, lookup, dev, context)
     except DraftError as e:
         return tool_error("INVALID_ARGUMENT", str(e), retryable=False, next_step="Fix the draft and evaluate again.")
-
-    def evaluate(candidate):
-        return evaluate_plan(candidate, now=now, camera_lookup=lookup, allow_synthetic=dev, **context)
-
-    # Take the evaluator's own total, then evaluate the final plan so the stored report matches it.
-    plan = plan.model_copy(update={"estimated_total_minutes": evaluate(plan).report.estimated_total_minutes})
-    evaluation = evaluate(plan)
-    plan = plan.model_copy(update={"validation": evaluation.report})
+    except (ValidationError, ValueError, TypeError, AttributeError, KeyError) as e:
+        # A malformed field the draft checks did not anticipate: still something the model can fix.
+        return tool_error("INVALID_ARGUMENT", f"The draft is malformed: {_detail(e)}", retryable=False,
+                          next_step="Send each field in the shape the tool schema describes, then evaluate again.")
     _drafts[plan.plan_id] = (time.monotonic() + DRAFT_SECONDS, ctx.record.session_id, kind, plan, waived)
     summary = evaluation.summary()
     if summary["passes"] and (summary["slack_minutes"] or 0) >= UNUSED_MINUTES:
@@ -89,6 +89,11 @@ def save_adventure_plan(ctx: ToolContext, draft_id: str, start_now: bool = False
     if not plan.validation.ok:
         return tool_error("PLAN_INFEASIBLE", "That draft did not pass evaluation.", retryable=False,
                           next_step="Fix its violations and evaluate again.")
+    age = ctx.now() - plan.validation.evaluated_at
+    if age > DRAFT_FRESH:
+        return tool_error("INVALID_ARGUMENT", f"That draft was evaluated {age.total_seconds() / 60:.0f} minutes ago, so its "
+                                              "times no longer start from now.", retryable=False,
+                          next_step="Evaluate the same draft again, then save the new draft_id.")
     if kind == "new" and ctx.record.adventure.status == "active":
         return tool_error("INVALID_ARGUMENT", "An adventure is already under way.", retryable=False,
                           next_step="Ask whether to abandon it (update_adventure_state abandon_adventure) or revise it instead.")
@@ -110,19 +115,21 @@ def get_next_directions(ctx: ToolContext) -> dict:
     now = ctx.now().replace(microsecond=0)
     places = {p.place_id: p for p in plan.places}
     goal = _endpoint(plan, places, target)
+    order = [c.checkpoint_id for c in plan.checkpoints]
+    finished = [i for i in (order[:order.index(target)] if target in order else order) if i in progress.completed_ids]
     leg = next((leg for leg in plan.legs if leg.to_id == target), None)
+    if leg is not None and leg.from_id in order and leg.from_id not in progress.completed_ids:
+        leg = None  # it starts at a stop the user skipped or could not reach, not where they are
 
-    here = None
-    latest = progress.latest_location
-    if latest and latest.point and now - latest.observed_at <= LOCATION_FRESH and (latest.accuracy_m or 0) <= OFF_ROUTE_M:
-        here = latest.point
-    origin = _endpoint(plan, places, leg.from_id) if leg else None
+    here = _usable_location(progress.latest_location, now)
+    origin = _endpoint(plan, places, leg.from_id) if leg else None  # None for a revision's "current_location"
+    known = _endpoint(plan, places, finished[-1]) if finished else plan.request.start.point
     wandered = here is not None and origin is not None and distance_m(here.lat, here.lng, origin.lat, origin.lng) > OFF_ROUTE_M
     stale = leg is not None and "transit" in leg.actual_modes and (
         now - leg.retrieved_at > TRANSIT_REFRESH or (leg.depart_at is not None and leg.depart_at < now - timedelta(minutes=2)))
+    start = here or origin or known
 
     warnings, details = [], None
-    start = here if (wandered or leg is None) and here is not None else origin
     if (leg is None or stale or wandered) and start is not None and goal is not None:
         result = get_route([{"id": "here", "lat": start.lat, "lng": start.lng}, {"id": target, "lat": goal.lat, "lng": goal.lng}],
                            modes=plan.request.allowed_modes, depart_at=now.isoformat())
@@ -164,26 +171,55 @@ def _check_under_way(active, progress, draft, now, lookup, dev):
     if active is None or progress.status not in ("proposed", "active"):
         return tool_error("INVALID_ARGUMENT", "There is no adventure to check.", retryable=False,
                           next_step="Plan a new adventure with kind 'new'.")
-    plan = active
-    deadline = None
-    if draft.get("deadline"):
-        try:
-            deadline = parse_time(draft["deadline"])
-        except DraftError as e:
-            return tool_error("INVALID_ARGUMENT", str(e), retryable=False, next_step="Pass an ISO time.")
-    elif draft.get("duration_minutes"):
-        deadline = now + timedelta(minutes=float(draft["duration_minutes"]))  # "15 minutes left" counts from now
-    if deadline is not None:
-        plan = AdventurePlan.model_validate({**plan.model_dump(), "request": {**plan.request.model_dump(), "deadline": deadline}})
-    done = set(progress.completed_ids) | set(progress.skipped_ids) | set(progress.blocked_ids)
-    visited = [c.checkpoint_id for c in plan.checkpoints if c.checkpoint_id in done]
-    origin = visited[-1] if visited and any(leg.from_id == visited[-1] for leg in plan.legs) else plan.legs[0].from_id
-    evaluation = evaluate_plan(plan, now=now, state=progress, origin=origin, camera_lookup=lookup, allow_synthetic=dev)
+    changes = {key: draft[key] for key in ("deadline", "duration_minutes", "current_location") if draft.get(key)}
+    if progress.status == "active":
+        # Re-time what is left from where the user is now: a dry run of a revision keeping every pending stop.
+        done = set(progress.completed_ids) | set(progress.skipped_ids) | set(progress.blocked_ids)
+        keep = [{"keep": c.checkpoint_id} for c in active.checkpoints if c.checkpoint_id not in done]
+        if not keep and active.request.destination is None:
+            return tool_ok({"kind": "check", "passes": True, "remaining": False},
+                           warnings=["No stops remain; finish the adventure."])
+        plan, waived, warnings = build_revision({"kind": "revision", "stops": keep, **changes}, active, progress, now, lookup)
+        plan, evaluation = _evaluated(plan, now, lookup, dev,
+                                      {"state": progress, "previous": active, "waived_required_ids": waived})
+        origin = "current_location"
+    else:  # saved but not started: the plan as saved, timed from now
+        plan, warnings, origin = active, [], "start"
+        deadline = parse_time(changes.get("deadline"))
+        if deadline is None and changes.get("duration_minutes"):
+            deadline = now + timedelta(minutes=parse_minutes(changes["duration_minutes"], "duration_minutes"))
+        if deadline is not None:
+            plan = AdventurePlan.model_validate({**plan.model_dump(), "request": {**plan.request.model_dump(), "deadline": deadline}})
+        evaluation = evaluate_plan(plan, now=now, start_at=now, camera_lookup=lookup, allow_synthetic=dev)
     summary = evaluation.summary()
     summary["next_step"] = ("The remaining route still fits." if summary["passes"] else
                             "Revise the remaining route (kind 'revision') or tell the user which limit cannot be met.")
-    return tool_ok({"kind": "check", "plan_id": plan.plan_id, "from": origin, **summary},
+    return tool_ok({"kind": "check", "plan_id": active.plan_id, "from": origin, **summary}, warnings=warnings,
                    freshness=_freshness(plan, now))
+
+
+def _evaluated(plan, now, lookup, dev, context):
+    """The plan carrying the evaluator's own total and report, and that evaluation."""
+    def evaluate(candidate):
+        return evaluate_plan(candidate, now=now, camera_lookup=lookup, allow_synthetic=dev, **context)
+
+    plan = plan.model_copy(update={"estimated_total_minutes": evaluate(plan).report.estimated_total_minutes})
+    evaluation = evaluate(plan)
+    return plan.model_copy(update={"validation": evaluation.report}), evaluation
+
+
+def _usable_location(latest, now):
+    """The user's browser fix, when it is fresh, precise, and inside the city (graders may be elsewhere)."""
+    if (latest is not None and latest.point is not None and in_nyc(latest.point.lat, latest.point.lng)
+            and now - latest.observed_at <= LOCATION_FRESH and (latest.accuracy_m or 0) <= OFF_ROUTE_M):
+        return latest.point
+    return None
+
+
+def _detail(error):
+    if isinstance(error, ValidationError):
+        return "; ".join(f"{'.'.join(map(str, e['loc'])) or 'value'}: {e['msg']}" for e in error.errors()[:5])
+    return f"{type(error).__name__}: {error}"
 
 
 def overview(plan: AdventurePlan, timeline: list[dict]) -> dict:

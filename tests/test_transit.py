@@ -116,3 +116,25 @@ def test_user_credentials_bill_to_the_configured_project(monkeypatch, configured
     headers = http.calls[0]["headers"]
     assert headers["Authorization"] == "Bearer user-token"
     assert headers["x-goog-user-project"] == expected
+
+
+def test_a_cached_route_is_retimed_for_each_caller_and_refetched_once_its_train_has_left():
+    ready = (datetime.now(timezone.utc) + timedelta(minutes=10)).replace(second=0, microsecond=0)
+    # The train leaves 150 s after `ready`, and the walk to it takes 130 s: leave by ready + 20 s.
+    answers = {GOOGLE: [(200, google_transit_response(ready, wait_s=150)), (200, google_transit_response(ready, wait_s=300))]}
+    with FakeHTTP(answers) as http:
+        first = transit.transit_leg(CPW_86, WASHINGTON_SQUARE, ready)
+        early = transit.transit_leg(CPW_86, WASHINGTON_SQUARE, ready + timedelta(seconds=10))
+        late = transit.transit_leg(CPW_86, WASHINGTON_SQUARE, ready + timedelta(seconds=55))
+
+    assert early["duration_minutes"] == round(first["duration_minutes"] - 10 / 60, 1)  # same train, re-timed
+    assert len(http.calls) == 2  # the 55-second caller would have missed it, so Google was asked again
+    assert late["leave_by"] != first["leave_by"]
+
+
+def test_an_answer_that_leaves_before_the_user_is_ready_is_not_used():
+    ready = soon()
+    already_gone = google_transit_response(ready, wait_s=60, walk_before_s=300)  # leave by 4 minutes ago
+    with FakeHTTP({GOOGLE: [(200, already_gone)]}):
+        with pytest.raises(UpstreamError):
+            transit.transit_leg(CPW_86, WASHINGTON_SQUARE, ready)

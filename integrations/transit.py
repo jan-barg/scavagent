@@ -11,8 +11,9 @@ Auth, first match wins:
   else their quota project; on Cloud Run the runtime service account's own project pays. The
   Routes API must be enabled in whichever project pays.
 
-Guards: at most SCAVAGENT_ROUTES_DAILY_LIMIT requests per process per UTC day (default 500), and
-the same request within 10 minutes reuses the earlier answer.
+Guards: at most SCAVAGENT_ROUTES_DAILY_LIMIT requests per process per UTC day (default 500). A request
+for the same leg in the same minute reuses Google's earlier route, re-timed for the new ready time, unless
+its first vehicle would already have left.
 """
 
 import os
@@ -33,7 +34,7 @@ MAX_PAST = timedelta(days=7)  # Google accepts departure times up to 7 days back
 MAX_FUTURE = timedelta(days=100)
 
 _credentials = None
-_cache = {}  # request key -> (expires at, parsed leg)
+_cache = {}  # request key -> (expires at, Google's route)
 _usage = {"day": None, "count": 0}
 
 
@@ -49,10 +50,12 @@ def transit_leg(origin, destination, depart_at: datetime, transit_types=("subway
                             retryable=False)
     modes = sorted({mode for kind in transit_types for mode in VEHICLE_MODES[kind]})
     key = (round(origin[0], 5), round(origin[1], 5), round(destination[0], 5), round(destination[1], 5),
-           tuple(modes), int(depart_at.timestamp() // 300))
+           tuple(modes), int(depart_at.timestamp() // 60))
     cached = _cache.get(key)
     if cached and cached[0] > time.monotonic():
-        return cached[1]
+        leg = parse_route(cached[1], depart_at)  # times are relative to this caller's ready time
+        if not leg["has_transit"] or datetime.fromisoformat(leg["leave_by"]) >= depart_at - timedelta(seconds=30):
+            return leg
 
     _count_request()
     body = {
@@ -71,8 +74,11 @@ def transit_leg(origin, destination, depart_at: datetime, transit_types=("subway
         raise _explained(e) from e
     if not response.get("routes"):
         raise NoRoute("Google Routes found no transit route")
-    leg = parse_route(response["routes"][0], depart_at)
-    _cache[key] = (time.monotonic() + CACHE_SECONDS, leg)
+    route = response["routes"][0]
+    leg = parse_route(route, depart_at)
+    if leg["has_transit"] and datetime.fromisoformat(leg["leave_by"]) < depart_at - timedelta(minutes=2):
+        raise UpstreamError("google-routes", "the answer's first vehicle leaves before the user is ready")
+    _cache[key] = (time.monotonic() + CACHE_SECONDS, route)
     return leg
 
 

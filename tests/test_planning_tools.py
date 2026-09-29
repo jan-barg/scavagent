@@ -218,10 +218,12 @@ def test_draft_fields_sent_beside_the_draft_are_accepted():
 
 def test_check_retimes_the_adventure_under_way_against_a_new_deadline():
     ctx = started_and_first_stop_done()
-    result = evaluate_adventure_plan(ctx, {"kind": "check", "deadline": "2026-10-01T15:08:00-04:00"})
+    with FakeHTTP({VALHALLA: [walking(9)]}) as http:
+        result = evaluate_adventure_plan(ctx, {"kind": "check", "deadline": "2026-10-01T15:08:00-04:00"})
 
     data = result["data"]
-    assert data["from"] == "stop_1"
+    assert data["from"] == "current_location"  # routed afresh from where the user is
+    assert http.calls[0]["json"]["locations"][0]["lat"] == 40.78833  # the El Dorado, the stop they finished
     assert [v["code"] for v in data["violations"]] == ["DEADLINE_EXCEEDED"]
     assert data["timeline"][0]["checkpoint_id"] == "stop_2"
     assert state.active_plan(ctx.record).request.deadline is None  # checking changes nothing
@@ -247,7 +249,9 @@ def test_a_budget_the_agent_chose_is_recorded_as_a_default():
     ctx = session()
     save_adventure_plan(ctx, evaluate(ctx, draft(duration_minutes=40), 5, 9)["data"]["draft_id"])
 
-    assert state.active_plan(ctx.record).request.defaulted_fields == ["duration_minutes", "theme"]
+    request = state.active_plan(ctx.record).request
+    assert request.defaulted_fields == ["deadline", "duration_minutes", "theme"]
+    assert request.deadline == NOW + timedelta(minutes=40)  # the budget runs from the planned start
 
 
 def test_a_stop_without_an_activity_gets_a_plain_instruction():
@@ -363,3 +367,151 @@ def test_a_departure_hours_away_is_rejected_as_a_time_zone_mix_up():
 
     assert result["error"]["code"] == "INVALID_ARGUMENT"
     assert "UTC" in result["error"]["message"]
+
+
+# --- Regressions from the September 29 code review ---
+
+SAN_REMO = {"place": {"name": "The San Remo", "lat": 40.7775, "lng": -73.9754}, "dwell_minutes": 5,
+            "activity": {"type": "user_observation", "prompt": "Describe the twin towers from the corner.",
+                         "answer_rule": "Any honest description.", "fallback": "Continue."},
+            "beat": {"summary": "A coded radio message.", "reveals": "The doorman took the C train."}}
+
+
+def three_stops(**changes):
+    plan_draft = draft(**changes)
+    plan_draft["stops"].append(SAN_REMO)
+    return plan_draft
+
+
+def underway_with_three_stops():
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, three_stops(), 5, 9, 6)["data"]["draft_id"], start_now=True)
+    state.resolve_checkpoint(ctx, "stop_1", "completed")
+    state.reveal_beat(ctx, "beat_1")
+    return ctx
+
+
+def test_a_clue_already_told_for_a_skipped_stop_does_not_block_revisions():
+    ctx = underway_with_three_stops()
+    state.resolve_checkpoint(ctx, "stop_2", "skipped")
+    state.reveal_beat(ctx, "beat_2")  # told in chat, as the instructions ask
+
+    result = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_3"}]}, 6)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    save_adventure_plan(ctx, result["data"]["draft_id"])
+    assert {b.beat_id: b.checkpoint_id for b in state.active_plan(ctx.record).story.beats}["beat_2"] is None
+
+
+def test_a_new_stop_never_reuses_the_id_of_a_stop_an_earlier_revision_dropped():
+    ctx = underway_with_three_stops()
+    state.resolve_checkpoint(ctx, "stop_3", "blocked", note="closed")
+    save_adventure_plan(ctx, evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_2"}]}, 9)["data"]["draft_id"])
+
+    corner = {**SAN_REMO, "place": {"name": "Columbus Avenue & West 81st Street", "lat": 40.78326, "lng": -73.97455}}
+    result = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_2"}, corner]}, 9, 4)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    assert [s["checkpoint_id"] for s in result["data"]["plan"]["stops"]] == ["stop_1", "stop_2", "stop_4"]
+    save_adventure_plan(ctx, result["data"]["draft_id"])
+    state.resolve_checkpoint(ctx, "stop_2", "completed")
+    assert ctx.record.adventure.current_checkpoint_id == "stop_4"
+
+
+def test_directions_after_a_skip_start_from_the_last_stop_the_user_finished():
+    ctx = underway_with_three_stops()
+    state.resolve_checkpoint(ctx, "stop_2", "skipped")
+    with FakeHTTP({VALHALLA: [walking(11)]}) as http:
+        result = agent_tools.get_next_directions(ctx)
+
+    assert result["data"]["to_id"] == "stop_3" and result["data"]["refreshed"]
+    assert http.calls[0]["json"]["locations"][0]["lat"] == 40.78833  # from the El Dorado, not the skipped Beresford
+
+
+def test_a_location_outside_the_city_is_ignored_when_revising():
+    from schemas import LocationContext
+
+    ctx = underway_with_three_stops()
+    princeton = LocationContext(point=LatLng(lat=40.3431, lng=-74.6551), source="browser", observed_at=NOW, accuracy_m=10)
+    state.update_location(ctx.record, princeton)  # a grader sharing a real location from elsewhere
+    with FakeHTTP({VALHALLA: [walking(9, 6)]}) as http:
+        result = evaluate_adventure_plan(ctx, {"kind": "revision", "stops": [{"keep": "stop_2"}, {"keep": "stop_3"}]})
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    assert http.calls[0]["json"]["locations"][0]["lat"] == 40.78833
+
+
+def test_a_time_budget_keeps_its_start_when_checked_later():
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, draft(duration_minutes=30), 5, 9)["data"]["draft_id"], start_now=True)
+    state.resolve_checkpoint(ctx, "stop_1", "completed")
+    ctx.now = lambda: NOW + timedelta(minutes=25)
+    with FakeHTTP({VALHALLA: [walking(9)]}):
+        result = evaluate_adventure_plan(ctx, {"kind": "check"})
+
+    assert [v["code"] for v in result["data"]["violations"]] == ["DEADLINE_EXCEEDED"]  # the 30 minutes began at 3:00
+
+
+def test_a_departure_in_the_past_is_rejected():
+    result = evaluate(session(), draft(depart_at="2026-10-01T14:00:00-04:00"), 5, 9)
+
+    assert "already passed" in result["error"]["message"]
+
+
+def test_a_draft_evaluated_long_ago_must_be_evaluated_again_before_saving():
+    ctx = session()
+    draft_id = evaluate(ctx, draft(), 5, 9)["data"]["draft_id"]
+    ctx.now = lambda: NOW + timedelta(minutes=25)
+
+    result = save_adventure_plan(ctx, draft_id, start_now=True)
+
+    assert result["error"]["code"] == "INVALID_ARGUMENT" and "25 minutes ago" in result["error"]["message"]
+
+
+def test_a_blocked_required_stop_stays_required_until_the_user_waives_it():
+    corner = {"place": {"name": "Columbus Avenue & West 81st Street", "lat": 40.78326, "lng": -73.97455},
+              "required_by_user": True, "dwell_minutes": 2, "activity": activity(type="user_observation", hints=[])}
+    plan_draft = three_stops(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
+    plan_draft["stops"][1] = corner
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, plan_draft, 5, 4, 6)["data"]["draft_id"], start_now=True)
+    state.resolve_checkpoint(ctx, "stop_1", "completed")
+    state.resolve_checkpoint(ctx, "stop_2", "blocked", note="closed for construction")
+
+    unasked = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_3"}]}, 6)
+    asked = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_3"}], "waived_required_ids": ["stop_2"]}, 6)
+
+    assert [v["code"] for v in unasked["data"]["violations"]] == ["REQUIRED_STOP_MISSING"]
+    assert asked["data"]["passes"], asked["data"]["violations"]
+
+
+def test_a_stop_marked_required_needs_the_places_the_user_named():
+    stand_in = draft()
+    stand_in["stops"][1]["required_by_user"] = True
+    result = evaluate(session(), stand_in, 5, 9)
+
+    assert "list every place the user required in required_stops" in result["error"]["message"]
+
+
+@pytest.mark.parametrize("change", [
+    lambda d: d.update(required_stops=[{**COLUMBUS_81, "order_index": -1}]),
+    lambda d: d.update(required_stops=[{}]),
+    lambda d: d.update(story="A courier vanished."),
+    lambda d: d["stops"].append("the San Remo"),
+])
+def test_malformed_fields_are_reported_as_fixable(change):
+    bad = draft()
+    change(bad)
+    result = evaluate(session(), bad, 5, 9)
+
+    assert result["error"]["code"] == "INVALID_ARGUMENT"
+
+
+def test_loosely_written_numbers_and_lists_are_understood():
+    loose = draft(contingency_minutes="5 min")
+    loose["stops"][0]["dwell_minutes"] = "6 minutes"
+    loose["stops"][0]["beat"]["reveals"] = ["The courier", "took the A train"]
+    result = evaluate(session(), loose, 5, 9)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    assert result["data"]["contingency_minutes"] == 5.0

@@ -18,6 +18,8 @@ ROWS = [
      "gtfs_longitude": "-73.968916", "north_direction_label": "Uptown", "south_direction_label": "Downtown"},
     {"gtfs_stop_id": "121", "stop_name": "86 St", "daytime_routes": "1", "gtfs_latitude": "40.788644",
      "gtfs_longitude": "-73.976218", "north_direction_label": "Uptown & The Bronx", "south_direction_label": "Downtown"},
+    {"gtfs_stop_id": "626", "stop_name": "86 St", "daytime_routes": "4 5 6", "gtfs_latitude": "40.779492",
+     "gtfs_longitude": "-73.955589", "north_direction_label": "Uptown & The Bronx", "south_direction_label": "Downtown"},
     {"gtfs_stop_id": "A02", "stop_name": "Inwood-207 St", "daytime_routes": "A", "gtfs_latitude": "40.868072",
      "gtfs_longitude": "-73.919899", "north_direction_label": "", "south_direction_label": "Manhattan"},
     {"gtfs_stop_id": "A32", "stop_name": "W 4 St-Wash Sq", "daytime_routes": "A C E B D F M", "gtfs_latitude": "40.732338",
@@ -116,3 +118,12 @@ def test_an_unknown_station_is_no_match():
         result = get_transit_arrivals("Hogwarts")
 
     assert result["error"]["code"] == "NO_MATCH"
+
+
+def test_a_line_picks_its_own_station_among_same_named_ones():
+    one = feed(("1", [("121S", 180)]))
+    with FakeHTTP({STATIONS: [(200, ROWS)], "mtagtfsfeeds/nyct%2Fgtfs": [one], ALERTS: [(200, ALERT_BODY)]}):
+        result = get_transit_arrivals("86 St", line="1")
+
+    assert result["ok"], result
+    assert result["data"]["station"]["gtfs_stop_id"] == "121"
