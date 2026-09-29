@@ -1,8 +1,12 @@
 """Model configuration and what each model is sent back: Claude, open models on Vertex, and Gemini."""
 
+import json
+
+import httpx
 import litellm
 import pytest
 from fastapi.testclient import TestClient
+from litellm.llms.vertex_ai.vertex_llm_base import VertexBase
 
 import app as app_module
 import state
@@ -113,8 +117,105 @@ def test_a_failed_model_call_is_stored_with_its_error_reply(client, monkeypatch)
     assert app_module.store.load(body["session_id"]).messages[-1] == {"role": "assistant", "content": body["response"]}
 
 
-def test_an_overloaded_model_is_retried(client, monkeypatch):
+def test_a_save_during_the_turn_does_not_change_what_the_model_already_saw(client, monkeypatch):
+    # A photo save trims the record, which can compact stored tool arguments in place. The next model call in
+    # the same turn must still get the conversation its thinking blocks were made with.
+    record = state.SessionRecord.new("s")
+    record.messages = [
+        {"role": "user", "content": "plan"},
+        {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "e1", "type": "function", "function": {"name": "evaluate_adventure_plan", "arguments": "x" * 5000}}]},
+        {"role": "tool", "tool_call_id": "e1", "content": "{}"}, {"role": "assistant", "content": "Planned."}]
+    app_module.store.save(record)
+    monkeypatch.setattr(state, "COMPACT_BYTES", 100)
+    monkeypatch.setitem(tools.TOOL_MAP, "get_adventure_state", lambda ctx: ctx.record._compact_tool_payloads() and tools.tool_ok({}))
+    seen = script(
+        monkeypatch,
+        FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "get_adventure_state", "{}")]),
+        FakeMessage(content="Onward.", tool_calls=None),
+    )
+    client.post("/chat", json={"message": "next?", "session_id": "s"})
+
+    assert seen[1][:len(seen[0])] == seen[0]
+
+
+# --- Claude through LiteLLM's real Vertex transformation; only the HTTP transport is faked ---
+
+
+def anthropic_reply(*content, stop_reason="end_turn"):
+    return {"id": "msg", "type": "message", "role": "assistant", "model": "claude-opus-5-5", "content": list(content),
+            "stop_reason": stop_reason, "stop_sequence": None, "usage": {"input_tokens": 10, "output_tokens": 5}}
+
+
+@pytest.fixture
+def vertex_claude(monkeypatch):
+    """Configure Claude Opus 5.5 on Vertex; returns (queue of (status, body) replies, list of request bodies sent)."""
+    monkeypatch.setattr(app_module, "REASONING_EFFORT", None)
+    monkeypatch.setattr(app_module, "MODEL", "vertex_ai/claude-opus-5-5")
+    monkeypatch.setattr(app_module, "MODEL_OPTIONS", app_module.model_options("vertex_ai/claude-opus-5-5"))
     monkeypatch.setattr(app_module, "sleep", lambda seconds: None)
-    overloaded = litellm.InternalServerError(message="529 overloaded_error", llm_provider="vertex_ai", model="claude")
-    script(monkeypatch, overloaded, FakeMessage(content="Back.", tool_calls=None))
+    monkeypatch.setattr(VertexBase, "_ensure_access_token", lambda self, **kw: ("test-token", "test-project"))
+    replies, sent = [], []
+    real_send = httpx.Client.send
+
+    def send(self, request, **kwargs):
+        if request.url.host == "testserver":  # The test's own client
+            return real_send(self, request, **kwargs)
+        sent.append(json.loads(request.content))
+        status, body = replies.pop(0)
+        return httpx.Response(status, json=body, request=request)
+
+    monkeypatch.setattr(httpx.Client, "send", send)
+    return replies, sent
+
+
+def test_claude_requests_adaptive_thinking_and_replays_it_only_within_the_turn(client, vertex_claude):
+    replies, sent = vertex_claude
+    thinking = {"type": "thinking", "thinking": "Weather first.", "signature": "SIG-TURN-1"}
+    replies += [
+        (200, anthropic_reply(thinking, {"type": "tool_use", "id": "toolu_1", "name": "get_weather",
+                                         "input": {"location": "NYC"}}, stop_reason="tool_use")),
+        (200, anthropic_reply({"type": "thinking", "thinking": "", "signature": "SIG-TURN-1B"},
+                              {"type": "text", "text": "Sunny."})),
+        (200, anthropic_reply({"type": "text", "text": "Still sunny."})),
+    ]
+    session = client.post("/chat", json={"message": "weather?"}).json()["session_id"]
+    assert client.post("/chat", json={"message": "now?", "session_id": session}).json()["response"] == "Still sunny."
+
+    first = sent[0]
+    assert first["thinking"]["type"] == "adaptive" and first["output_config"] == {"effort": "medium"}
+    assert first["max_tokens"] == 32_000 and first["cache_control"] == {"type": "ephemeral"}
+    assert "tool_choice" not in first
+    # The tool round goes back with its thinking block ahead of the tool call, as Claude requires.
+    assert [b["type"] for b in sent[1]["messages"][1]["content"]] == ["thinking", "tool_use"]
+    assert sent[1]["messages"][1]["content"][0]["signature"] == "SIG-TURN-1"
+    # Neither the next turn nor storage carries any of it.
+    assert "SIG-TURN" not in json.dumps(sent[2]["messages"])
+    assert "SIG-TURN" not in app_module.store.load(session).model_dump_json()
+
+
+def test_an_overloaded_claude_is_asked_again(client, vertex_claude):
+    replies, sent = vertex_claude
+    overloaded = {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}}
+    replies += [(529, overloaded), (500, {"type": "error", "error": {"type": "api_error", "message": "Internal"}}),
+                (200, anthropic_reply({"type": "text", "text": "Back."}))]
     assert client.post("/chat", json={"message": "hi"}).json()["response"] == "Back."
+    assert len(sent) == 3
+
+
+def test_claude_without_quota_reports_a_rate_limit_after_retrying(client, vertex_claude, monkeypatch):
+    replies, sent = vertex_claude
+    monkeypatch.setattr(app_module, "RETRY_DELAYS", (1,))
+    quota = {"error": {"code": 429, "message": "Quota exceeded for base model: anthropic-claude-opus",
+                       "status": "RESOURCE_EXHAUSTED"}}
+    replies += [(429, quota), (429, quota)]
+    body = client.post("/chat", json={"message": "hi"}).json()
+    assert body["response"].startswith("Model call failed (RateLimitError)") and len(sent) == 2
+
+
+def test_a_rejected_claude_request_is_not_retried(client, vertex_claude):
+    replies, sent = vertex_claude
+    replies += [(400, {"type": "error", "error": {"type": "invalid_request_error",
+                                                  "message": "Invalid `signature` in `thinking` block."}})] * 3
+    body = client.post("/chat", json={"message": "hi"}).json()
+    assert body["response"].startswith("Model call failed") and len(sent) == 1

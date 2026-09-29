@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import os
@@ -126,8 +127,8 @@ def complete(messages: list[dict], deadline: float):
                 timeout=remaining,
                 **MODEL_OPTIONS,
             ).choices[0].message
-        except (litellm.RateLimitError, litellm.InternalServerError, litellm.ServiceUnavailableError):
-            if not waits or waits[0] >= deadline - monotonic():
+        except Exception as error:
+            if not retryable(error) or not waits or waits[0] >= deadline - monotonic():
                 raise
             sleep(waits.pop(0))
             continue
@@ -135,6 +136,15 @@ def complete(messages: list[dict], deadline: float):
             return reply
         asked_again = True
     return None
+
+
+def retryable(error: Exception) -> bool:
+    """Rate limited (429), failed (500), unavailable (503), or overloaded (529): worth asking again.
+
+    LiteLLM reports Claude's 529 overloaded_error on Vertex as a plain APIError, so the status decides.
+    """
+    return isinstance(error, (litellm.RateLimitError, litellm.InternalServerError, litellm.ServiceUnavailableError)) or (
+        isinstance(error, litellm.APIError) and getattr(error, "status_code", None) in (500, 503, 529))
 
 
 # --- Context for each turn ---
@@ -172,13 +182,19 @@ def recent(messages: list[dict]) -> list[dict]:
 
 
 def without_reasoning(messages: list[dict]) -> list[dict]:
-    """Earlier turns without the model's reasoning, which is replayed only within the turn that produced it.
+    """Copies of earlier turns without the model's reasoning, which is replayed only within the turn that made it.
 
     Claude binds each thinking block to the exact conversation before it, and the server context in the system
     message changes every turn, so an older block would be rejected. Removing every earlier block is allowed.
-    Sessions stored before this change may still hold them.
+    Sessions stored before this change may still hold them. The copies are deep: a save during the turn may
+    compact the stored history, and the conversation the model already saw must not change under it.
     """
-    return [{key: value for key, value in message.items() if key not in REASONING_FIELDS} for message in messages]
+    plain = copy.deepcopy(messages)
+    for message in plain:
+        for key in REASONING_FIELDS:
+            message.pop(key, None)
+            (message.get("provider_specific_fields") or {}).pop(key, None)  # LiteLLM keeps a second copy there
+    return plain
 
 
 def turn_messages(messages: list[dict], response: str) -> list[dict]:
