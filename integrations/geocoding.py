@@ -1,6 +1,6 @@
 """Resolve a typed NYC place (street intersection, address, or named landmark) to coordinates.
 
-Returns a LocationContext-shaped record (docs/CONTRACTS.md) with source "geocoded".
+Returns a schemas.LocationContext with source "geocoded", plus how the place was matched.
 
 Providers, all keyless:
 - Intersections: OpenStreetMap through Overpass, taking the node the two streets share.
@@ -14,16 +14,8 @@ import re
 import time
 from functools import lru_cache
 
-from integrations.common import (
-    NYC_BOUNDS,
-    UpstreamError,
-    distance_m,
-    failure,
-    fetch_json,
-    in_nyc,
-    now_iso,
-    success,
-)
+from integrations.common import NYC_BOUNDS, UpstreamError, distance_m, fetch_json, in_nyc, reference, utc_now
+from schemas import LatLng, LocationContext, tool_error, tool_ok
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -70,15 +62,15 @@ def geocode_place(text):
     """Resolve a typed NYC place to coordinates: a cross street, a street address, or a named place.
 
     Intersections resolve to the node both streets share, addresses to the city's address point,
-    and names to the feature's center. Returns a LocationContext-shaped record.
+    and names to the feature's center. data["location"] is a LocationContext for AdventureRequest.
     """
     query = " ".join(str(text or "").split())
     if not query:
-        return failure("INVALID_ARGUMENT", "The place text is empty.",
-                       "Ask the user for a cross street, a street address, or a landmark name.")
+        return tool_error("INVALID_ARGUMENT", "The place text is empty.", retryable=False,
+                          next_step="Ask the user for a cross street, a street address, or a landmark name.")
     if len(query) > 200:
-        return failure("INVALID_ARGUMENT", "The place text is too long to be a single place.",
-                       "Pass only the place, e.g. 'Central Park West and West 86th Street'.")
+        return tool_error("INVALID_ARGUMENT", "The place text is too long to be a single place.", retryable=False,
+                          next_step="Pass only the place, e.g. 'Central Park West and West 86th Street'.")
 
     streets = parse_intersection(query)
     lookups = []
@@ -101,23 +93,21 @@ def geocode_place(text):
             break
     else:
         if errors:
-            return failure("UPSTREAM_UNAVAILABLE", "Could not finish the lookup: " + "; ".join(errors),
-                           "Try again shortly, or ask the user for a nearby landmark.", retryable=True)
-        return failure("NO_MATCH", f"No NYC place matched {query!r}.",
-                       "Ask for a cross street (e.g. 'Columbus Avenue and West 81st Street'), "
-                       "a street address, or a well-known landmark.")
+            return tool_error("UPSTREAM_UNAVAILABLE", "Could not finish the lookup: " + "; ".join(errors),
+                              retryable=True, next_step="Try again shortly, or ask the user for a nearby landmark.")
+        return tool_error("NO_MATCH", f"No NYC place matched {query!r}.", retryable=False,
+                          next_step="Ask for a cross street (e.g. 'Columbus Avenue and West 81st Street'), "
+                                    "a street address, or a well-known landmark.")
 
     warnings = place.pop("warnings") + [f"Fell back after a provider failed: {e}" for e in errors]
-    if not in_nyc(place["lat"], place["lon"]):
-        return failure("OUTSIDE_COVERAGE", f"{place['label']} is outside New York City.",
-                       "Ask for a place within the five boroughs.")
-    return success({
-        "query": query,
-        **place,
-        "source": "geocoded",
-        "observed_at": now_iso(),
-        "accuracy_m": None,  # Geocoders do not report accuracy; match_type says what the point is.
-    }, warnings)
+    if not in_nyc(place["lat"], place["lng"]):
+        return tool_error("OUTSIDE_COVERAGE", f"{place['label']} is outside New York City.", retryable=False,
+                          next_step="Ask for a place within the five boroughs.")
+    # Geocoders report no accuracy, so accuracy_m stays None; match_type says what the point is.
+    location = LocationContext(point=LatLng(lat=place.pop("lat"), lng=place.pop("lng")),
+                               place_text=place["label"], source="geocoded", observed_at=utc_now())
+    return tool_ok({"location": location.model_dump(mode="json"), "query": query, **place},
+                   warnings=warnings, freshness=reference())
 
 
 def parse_intersection(text):
@@ -210,14 +200,14 @@ def _intersection(street_a, street_b):
     place = {
         "label": f"{_display(street_a)} & {_display(street_b)}",
         "lat": centers[0][0],
-        "lon": centers[0][1],
+        "lng": centers[0][1],
         "match_type": "intersection",
         "provider": "openstreetmap-overpass",
         "provider_ref": f"osm:node/{clusters[0][0][0]}",
         "warnings": [],
     }
     if len(clusters) > 1:
-        place["alternatives"] = [{"lat": lat, "lon": lon} for lat, lon in centers[1:]]
+        place["alternatives"] = [{"lat": lat, "lng": lng} for lat, lng in centers[1:]]
         place["warnings"].append(f"These streets meet at {len(clusters)} separate places; confirm the "
                                  "neighborhood or borough with the user before planning from here.")
     return place
@@ -225,7 +215,7 @@ def _intersection(street_a, street_b):
 
 @lru_cache(maxsize=256)
 def _shared_nodes(pattern_a, pattern_b):
-    """OSM nodes (id, lat, lon) where a way named like pattern_a meets one named like pattern_b."""
+    """OSM nodes (id, lat, lng) where a way named like pattern_a meets one named like pattern_b."""
     south, west, north, east = NYC_BOUNDS
     bbox = f"({south},{west},{north},{east})"
     a, b = (p.replace("\\", "\\\\") for p in (pattern_a, pattern_b))  # escape for the QL string
@@ -250,12 +240,12 @@ def _address(query):
     if not features:
         return None
     props = features[0]["properties"]
-    lon, lat = features[0]["geometry"]["coordinates"]
+    lng, lat = features[0]["geometry"]["coordinates"]
     pad = (props.get("addendum") or {}).get("pad") or {}
     place = {
         "label": props.get("label"),
         "lat": lat,
-        "lon": lon,
+        "lng": lng,
         "match_type": "address",
         "provider": "nyc-geosearch",
         "provider_ref": f"bbl:{pad['bbl']}" if pad.get("bbl") else None,
@@ -283,11 +273,11 @@ def _named_place(query, is_intersection=False):
     if not hits:
         return None
     hit = hits[0]
-    lat, lon = float(hit["lat"]), float(hit["lon"])
+    lat, lng = float(hit["lat"]), float(hit["lon"])
     place = {
         "label": hit.get("name") or hit["display_name"].split(",")[0],
         "lat": lat,
-        "lon": lon,
+        "lng": lng,
         "match_type": "place",
         "provider": "openstreetmap-nominatim",
         "provider_ref": f"osm:{hit['osm_type']}/{hit['osm_id']}",
@@ -296,7 +286,7 @@ def _named_place(query, is_intersection=False):
     if is_intersection:
         place["warnings"].append(f"Matched {place['label']!r} by name because the street lookup found no "
                                  "shared corner; confirm it is the intended intersection.")
-    s, n, w, e = (float(v) for v in hit.get("boundingbox", [lat, lat, lon, lon]))
+    s, n, w, e = (float(v) for v in hit.get("boundingbox", [lat, lat, lng, lng]))
     if distance_m(s, w, n, e) > LARGE_FEATURE_M:
         place["warnings"].append(f"{place['label']} is a large area and this point is its center; ask "
                                  "which entrance or side the user means before giving directions.")

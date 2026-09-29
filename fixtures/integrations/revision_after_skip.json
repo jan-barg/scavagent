@@ -2,15 +2,16 @@
   "fixture": {
     "label": "LIVE CAPTURE for development: real provider responses on the capture date, in the /chat tool-call shape. Not field-verified and not an adventure plan.",
     "scenario": "Fixture 3: mid-adventure revision after a skip, with 15 minutes left and a fixed destination.",
-    "captured_at": "2026-09-28T23:48:27+00:00",
+    "captured_at": "2026-09-29T04:34:28+00:00",
     "generator": "scripts/capture_integration_fixtures.py",
     "notes": [
       "Follow-up (grader example 3): the user is at the required stop, skipped the next optional stop, has 15 minutes left, and must still reach the destination.",
-      "Arithmetic on the captured route only (not evaluator output): walking to the destination takes 12.2 min; with 5 min contingency, -2.2 min remain for any detour or activity."
+      "Arithmetic on the captured route only (not evaluator output): getting to the destination takes 12.2 min; with 5 min contingency, -2.2 min remain for any detour or activity."
     ],
     "attribution": [
       "Wikipedia text is CC BY-SA 4.0; each claim links to the revision it was quoted from.",
       "Map and route data © OpenStreetMap contributors (ODbL), via Overpass, Nominatim, Valhalla, and OSRM.",
+      "Transit directions: Google Routes API.",
       "Landmark records: NYC Landmarks Preservation Commission, via NYC Open Data.",
       "Addresses: NYC Planning Labs GeoSearch."
     ]
@@ -24,19 +25,29 @@
       "result": {
         "ok": true,
         "data": {
+          "location": {
+            "point": {
+              "lat": 40.7832589,
+              "lng": -73.9745499
+            },
+            "place_text": "Columbus Avenue & West 81st Street",
+            "source": "geocoded",
+            "observed_at": "2026-09-29T04:34:26.524181Z",
+            "accuracy_m": null
+          },
           "query": "Columbus Avenue and West 81st Street",
           "label": "Columbus Avenue & West 81st Street",
-          "lat": 40.7832589,
-          "lon": -73.9745499,
           "match_type": "intersection",
           "provider": "openstreetmap-overpass",
-          "provider_ref": "osm:node/42443280",
-          "source": "geocoded",
-          "observed_at": "2026-09-28T23:48:27+00:00",
-          "accuracy_m": null
+          "provider_ref": "osm:node/42443280"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:26.524254Z"
+        }
       }
     },
     {
@@ -47,19 +58,29 @@
       "result": {
         "ok": true,
         "data": {
+          "location": {
+            "point": {
+              "lat": 40.7787867,
+              "lng": -73.9820522
+            },
+            "place_text": "Broadway & West 72nd Street",
+            "source": "geocoded",
+            "observed_at": "2026-09-29T04:34:26.524327Z",
+            "accuracy_m": null
+          },
           "query": "Broadway and West 72nd Street",
           "label": "Broadway & West 72nd Street",
-          "lat": 40.7787867,
-          "lon": -73.9820522,
           "match_type": "intersection",
           "provider": "openstreetmap-overpass",
-          "provider_ref": "osm:node/42428634",
-          "source": "geocoded",
-          "observed_at": "2026-09-28T23:48:27+00:00",
-          "accuracy_m": null
+          "provider_ref": "osm:node/42428634"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:26.524336Z"
+        }
       }
     },
     {
@@ -69,35 +90,34 @@
           {
             "id": "current_location",
             "lat": 40.7832589,
-            "lon": -73.9745499
+            "lng": -73.9745499
           },
           {
             "id": "destination",
             "lat": 40.7787867,
-            "lon": -73.9820522
+            "lng": -73.9820522
           }
         ]
       },
       "result": {
         "ok": true,
         "data": {
-          "mode": "walk",
           "legs": [
             {
+              "leg_id": "leg_1",
               "from_id": "current_location",
               "to_id": "destination",
-              "permitted_modes": [
+              "allowed_modes": [
+                "transit",
                 "walk"
               ],
-              "mode": "walk",
-              "duration_min": 12.2,
-              "distance_m": 1052,
-              "heading": "southwest",
-              "via_streets": [
-                "Columbus Avenue",
-                "Amsterdam Avenue",
-                "West 72nd Street"
+              "actual_modes": [
+                "walk"
               ],
+              "depart_at": "2026-09-29T04:34:26.524376Z",
+              "arrive_at": "2026-09-29T04:46:38.524376Z",
+              "duration_minutes": 12.2,
+              "distance_m": 1052.0,
               "instructions": [
                 "Walk southwest on Columbus Avenue.",
                 "Turn right onto the walkway.",
@@ -108,23 +128,42 @@
                 "Turn left onto Amsterdam Avenue.",
                 "Turn right onto West 72nd Street."
               ],
-              "provider": "valhalla-fossgis",
-              "retrieved_at": "2026-09-28T23:48:27+00:00",
+              "source": "valhalla-fossgis",
+              "retrieved_at": "2026-09-29T04:34:26.642050Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             }
           ],
-          "total_duration_min": 12.2,
-          "total_distance_m": 1052
+          "details": [
+            {
+              "leg_id": "leg_1",
+              "mode": "walk",
+              "heading": "southwest",
+              "walking_minutes": 12.2,
+              "via_streets": [
+                "Columbus Avenue",
+                "Amsterdam Avenue",
+                "West 72nd Street"
+              ]
+            }
+          ],
+          "travel_minutes": 12.2,
+          "arrive_at": "2026-09-29T04:46:38.524376Z",
+          "arrive_local": "12:46 AM"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:27.922346Z"
+        }
       }
     },
     {
       "name": "find_places",
       "args": {
         "lat": 40.7832589,
-        "lon": -73.9745499,
+        "lng": -73.9745499,
         "radius_m": 400
       },
       "result": {
@@ -132,7 +171,7 @@
         "data": {
           "center": {
             "lat": 40.7832589,
-            "lon": -73.9745499
+            "lng": -73.9745499
           },
           "radius_m": 400,
           "query": null,
@@ -141,8 +180,10 @@
               "place_id": "wiki:21248128",
               "name": "81st Street station (IRT Ninth Avenue Line)",
               "description": "Former Manhattan Railway elevated station (closed 1940)",
-              "lat": 40.78324167,
-              "lon": -73.97453056,
+              "point": {
+                "lat": 40.78324167,
+                "lng": -73.97453056
+              },
               "distance_m": 3,
               "address": null,
               "designation": null,
@@ -158,8 +199,10 @@
               "place_id": "wiki:24153841",
               "name": "Endicott Hotel",
               "description": "Luxury hotel in Manhattan, New York",
-              "lat": 40.78375,
-              "lon": -73.97458333,
+              "point": {
+                "lat": 40.78375,
+                "lng": -73.97458333
+              },
               "distance_m": 55,
               "address": null,
               "designation": null,
@@ -175,8 +218,10 @@
               "place_id": "wiki:74844960",
               "name": "Eighty One",
               "description": "Defunct restaurant in New York City, U.S.",
-              "lat": 40.78313889,
-              "lon": -73.97388889,
+              "point": {
+                "lat": 40.78313889,
+                "lng": -73.97388889
+              },
               "distance_m": 57,
               "address": null,
               "designation": null,
@@ -192,8 +237,10 @@
               "place_id": "wiki:61517252",
               "name": "Nobel Monument",
               "description": "Monument in New York City",
-              "lat": 40.78182,
-              "lon": -73.9752,
+              "point": {
+                "lat": 40.78182,
+                "lng": -73.9752
+              },
               "distance_m": 169,
               "address": null,
               "designation": null,
@@ -209,8 +256,10 @@
               "place_id": "wiki:23630744",
               "name": "PS 9 Sarah Anderson School",
               "description": "Elementary school in Manhattan, New York",
-              "lat": 40.78511944,
-              "lon": -73.97388611,
+              "point": {
+                "lat": 40.78511944,
+                "lng": -73.97388611
+              },
               "distance_m": 214,
               "address": null,
               "designation": null,
@@ -226,8 +275,10 @@
               "place_id": "wiki:5632611",
               "name": "Rose Center for Earth and Space",
               "description": "Part of the American Museum of Natural History",
-              "lat": 40.78153611,
-              "lon": -73.97324722,
+              "point": {
+                "lat": 40.78153611,
+                "lng": -73.97324722
+              },
               "distance_m": 221,
               "address": null,
               "designation": null,
@@ -243,8 +294,10 @@
               "place_id": "wiki:5667636",
               "name": "The Beresford",
               "description": "Residential skyscraper in Manhattan, New York",
-              "lat": 40.7825,
-              "lon": -73.97194444,
+              "point": {
+                "lat": 40.7825,
+                "lng": -73.97194444
+              },
               "distance_m": 235,
               "address": "211 Central Park West",
               "designation": {
@@ -272,8 +325,10 @@
               "place_id": "wiki:18622881",
               "name": "Congregation Rodeph Sholom (Manhattan)",
               "description": "Reform synagogue in New York City",
-              "lat": 40.78388889,
-              "lon": -73.97166667,
+              "point": {
+                "lat": 40.78388889,
+                "lng": -73.97166667
+              },
               "distance_m": 253,
               "address": null,
               "designation": null,
@@ -289,8 +344,10 @@
               "place_id": "wiki:68182758",
               "name": "Allison and Roberto Mignone Halls of Gems and Minerals",
               "description": "Exhibition halls at the American Museum of Natural History in New York City",
-              "lat": 40.781,
-              "lon": -73.974,
+              "point": {
+                "lat": 40.781,
+                "lng": -73.974
+              },
               "distance_m": 255,
               "address": null,
               "designation": null,
@@ -306,8 +363,10 @@
               "place_id": "wiki:399990",
               "name": "American Museum of Natural History",
               "description": "Natural history museum in Manhattan, New York",
-              "lat": 40.78083333,
-              "lon": -73.97444444,
+              "point": {
+                "lat": 40.78083333,
+                "lng": -73.97444444
+              },
               "distance_m": 270,
               "address": "Central Park West at West 77th Street",
               "designation": {
@@ -335,8 +394,10 @@
               "place_id": "wiki:12462731",
               "name": "Kol Zimrah",
               "description": "Independent minyan in Manhattan, New York",
-              "lat": 40.78447222,
-              "lon": -73.97177778,
+              "point": {
+                "lat": 40.78447222,
+                "lng": -73.97177778
+              },
               "distance_m": 270,
               "address": null,
               "designation": null,
@@ -352,8 +413,10 @@
               "place_id": "wiki:936421",
               "name": "81st Street–Museum of Natural History station",
               "description": "New York City Subway station in Manhattan",
-              "lat": 40.781971,
-              "lon": -73.971763,
+              "point": {
+                "lat": 40.781971,
+                "lng": -73.971763
+              },
               "distance_m": 275,
               "address": null,
               "designation": null,
@@ -369,8 +432,10 @@
               "place_id": "wiki:19276634",
               "name": "Metropolitan Fireproof Warehouse",
               "description": "Structure in New York, US",
-              "lat": 40.7855,
-              "lon": -73.9763,
+              "point": {
+                "lat": 40.7855,
+                "lng": -73.9763
+              },
               "distance_m": 290,
               "address": null,
               "designation": null,
@@ -386,8 +451,10 @@
               "place_id": "wiki:40958000",
               "name": "Innovation Diploma Plus High School",
               "description": "Public school in New York City",
-              "lat": 40.78595278,
-              "lon": -73.97398889,
+              "point": {
+                "lat": 40.78595278,
+                "lng": -73.97398889
+              },
               "distance_m": 303,
               "address": null,
               "designation": null,
@@ -403,8 +470,10 @@
               "place_id": "wiki:9977757",
               "name": "John Burroughs Association",
               "description": "Organization",
-              "lat": 40.780555,
-              "lon": -73.973772,
+              "point": {
+                "lat": 40.780555,
+                "lng": -73.973772
+              },
               "distance_m": 308,
               "address": null,
               "designation": null,
@@ -416,11 +485,15 @@
                 }
               ]
             }
-          ],
-          "retrieved_at": "2026-09-28T23:48:27+00:00"
+          ]
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:28.355964Z"
+        }
       }
     },
     {
@@ -429,48 +502,48 @@
         "origin": {
           "id": "current_location",
           "lat": 40.7832589,
-          "lon": -73.9745499
+          "lng": -73.9745499
         },
         "destinations": [
           {
             "id": "wiki:21248128",
             "lat": 40.78324167,
-            "lon": -73.97453056
+            "lng": -73.97453056
           },
           {
             "id": "wiki:24153841",
             "lat": 40.78375,
-            "lon": -73.97458333
+            "lng": -73.97458333
           },
           {
             "id": "wiki:74844960",
             "lat": 40.78313889,
-            "lon": -73.97388889
+            "lng": -73.97388889
           },
           {
             "id": "wiki:61517252",
             "lat": 40.78182,
-            "lon": -73.9752
+            "lng": -73.9752
           },
           {
             "id": "wiki:23630744",
             "lat": 40.78511944,
-            "lon": -73.97388611
+            "lng": -73.97388611
           },
           {
             "id": "wiki:5632611",
             "lat": 40.78153611,
-            "lon": -73.97324722
+            "lng": -73.97324722
           },
           {
             "id": "wiki:5667636",
             "lat": 40.7825,
-            "lon": -73.97194444
+            "lng": -73.97194444
           },
           {
             "id": "wiki:18622881",
             "lat": 40.78388889,
-            "lon": -73.97166667
+            "lng": -73.97166667
           }
         ]
       },
@@ -482,51 +555,54 @@
           "times": [
             {
               "to_id": "wiki:21248128",
-              "duration_min": 0.0,
+              "duration_minutes": 0.0,
               "distance_m": 0
             },
             {
               "to_id": "wiki:24153841",
-              "duration_min": 0.7,
+              "duration_minutes": 0.7,
               "distance_m": 55
             },
             {
               "to_id": "wiki:74844960",
-              "duration_min": 0.8,
+              "duration_minutes": 0.8,
               "distance_m": 65
             },
             {
               "to_id": "wiki:61517252",
-              "duration_min": 2.3,
+              "duration_minutes": 2.3,
               "distance_m": 194
             },
             {
               "to_id": "wiki:23630744",
-              "duration_min": 3.4,
+              "duration_minutes": 3.4,
               "distance_m": 287
             },
             {
               "to_id": "wiki:5632611",
-              "duration_min": 2.9,
+              "duration_minutes": 2.9,
               "distance_m": 242
             },
             {
               "to_id": "wiki:5667636",
-              "duration_min": 3.1,
+              "duration_minutes": 3.1,
               "distance_m": 242
             },
             {
               "to_id": "wiki:18622881",
-              "duration_min": 4.3,
+              "duration_minutes": 4.3,
               "distance_m": 350
             }
           ],
-          "provider": "valhalla-fossgis",
-          "retrieved_at": "2026-09-28T23:48:27+00:00",
           "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:28.473963Z"
+        }
       }
     }
   ]

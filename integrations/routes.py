@@ -1,153 +1,267 @@
-"""Walking routes and walking-time matrices between NYC coordinates.
+"""Routes between NYC points on foot or by subway and bus, as schemas.RouteLeg records.
 
-Returns RouteLeg-shaped records (docs/CONTRACTS.md). Only walking is routed: transit needs
-Google Routes, which is not enabled on the class GCP project, or another keyed provider.
-Legs carry durations only. Scheduling with dwell time and contingency belongs to the plan evaluator.
+Walking uses keyless public servers run by FOSSGIS on OpenStreetMap data: Valhalla (primary) and
+OSRM with the foot profile (fallback). Manhattan sidewalks are mapped as unnamed ways, so many
+walking instructions say "the walkway"; each leg's details also list the named streets it uses
+and a compass heading.
 
-Providers are keyless, low-volume public servers run by FOSSGIS on OpenStreetMap data:
-- Valhalla (valhalla1.openstreetmap.de): primary, for multi-stop routes and matrices.
-- OSRM with the foot profile (routing.openstreetmap.de): fallback.
-Manhattan sidewalks are mapped as separate unnamed ways, so many instructions say "the walkway".
-Each leg also lists the named streets it uses, so the agent can describe it in street terms.
+Transit comes from Google Routes (integrations/transit.py), one request per leg. When walking is
+allowed, a leg rides transit only if that beats walking by MIN_TRANSIT_SAVING_MIN, and a walk of
+at most WALK_WITHOUT_TRANSIT_MIN is never looked up. Each leg is timed from when the user is
+ready: `depart_at` plus the dwell time at every earlier stop.
 """
 
 import math
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from integrations.common import UpstreamError, failure, fetch_json, in_nyc, now_iso, success
+from integrations import transit
+from integrations.common import NoRoute, UpstreamError, fetch_json, in_nyc, read_point, reference, utc_now
+from schemas import NYC_TIMEZONE, Freshness, RouteLeg, tool_error, tool_ok
 
 VALHALLA_URL = "https://valhalla1.openstreetmap.de"
 OSRM_URL = "https://routing.openstreetmap.de/routed-foot"
 MAX_STOPS = 10
 MAX_DESTINATIONS = 25
 MAX_INSTRUCTIONS = 12
+MAX_DWELL_MINUTES = 240
 SAME_SPOT_M = 25  # consecutive stops closer than this need no directions
+MIN_TRANSIT_SAVING_MIN = 4  # ride only when it beats walking by at least this much
+WALK_WITHOUT_TRANSIT_MIN = 12  # a walk this short is never worth a transit lookup
 VALHALLA_ARRIVAL_TYPES = {4, 5, 6}  # "You have arrived" maneuvers add nothing to directions
-ESTIMATE_NOTE = ("Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and "
-                 "finding entrances, so add contingency before promising an arrival time.")
-WALK_ONLY_STEP = ("Plan the leg on foot if the user allows walking; otherwise explain that transit "
-                  "directions are not available yet.")
+WALK_NOTE = ("Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding "
+             "entrances, so add contingency before promising an arrival time.")
+TRANSIT_NOTE = ("Google transit schedule, with live data where Google has it; the time includes the wait for "
+                "the first vehicle. Refresh this leg shortly before the user leaves.")
 COMPASS = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"]
 OSRM_VERBS = {"turn": "Turn", "end of road": "Turn", "fork": "Keep", "new name": "Continue", "continue": "Continue"}
 
 
-class NoRoute(Exception):
-    """The router answered, but no walking path connects the points."""
+def get_route(stops, modes=("walk", "transit"), depart_at=None, transit_types=("subway", "bus")):
+    """Route through `stops` in visiting order: one RouteLeg per consecutive pair, on foot or by transit.
 
-
-def get_route(stops, modes=("walk",)):
-    """Walking route through `stops` in visiting order, as one RouteLeg per consecutive pair.
-
-    stops: 2-10 points like {"id": "start", "lat": 40.7853, "lon": -73.9693}.
-    modes: travel modes the user allows. Only "walk" can be routed today.
+    stops: 2-10 points like {"id": "start", "lat": 40.7853, "lng": -73.9693, "dwell_minutes": 0};
+      dwell_minutes is time spent at a stop before leaving it.
+    modes: travel modes the user allows, "walk" and/or "transit". Car routing is not available.
+    depart_at: ISO time the user is ready at the first stop (default now; no zone means New York time).
+    transit_types: "subway" and/or "bus".
     """
-    problem = _check_points(stops, "stops", 2, MAX_STOPS)
-    if problem:
-        return problem
-    modes = [modes] if isinstance(modes, str) else list(modes or ["walk"])  # models sometimes send one string
-    if "walk" not in modes:
-        return failure("INVALID_ARGUMENT", f"Only walking can be routed; the allowed modes were {modes}.", WALK_ONLY_STEP)
+    points = _read_points(stops, "stops", 2, MAX_STOPS)
+    if isinstance(points, dict):
+        return points
+    allowed = _read_modes(modes)
+    if isinstance(allowed, dict):
+        return allowed
+    ready = _read_time(depart_at)
+    if isinstance(ready, dict):
+        return ready
+    types = _read_transit_types(transit_types)
+    if isinstance(types, dict):
+        return types
 
     warnings = []
-    if set(modes) - {"walk"}:
-        warnings.append("Transit and car routing are not configured, so every leg is on foot.")
-    try:
-        try:
-            raw_legs, provider = _valhalla_route(stops), "valhalla-fossgis"
-        except UpstreamError as first:
-            raw_legs, provider = _osrm_route(stops), "osrm-fossgis-foot"
-            warnings.append(f"Valhalla was unavailable ({first}); used OSRM, whose instructions are sparser.")
-    except NoRoute as e:
-        return failure("NO_MATCH", f"No walking route connects these stops ({e}).",
-                       "Replace the unreachable stop, or check that each point is on a public street.")
-    except UpstreamError as e:
-        return failure("UPSTREAM_UNAVAILABLE", f"Both walking routers failed; last error: {e}.",
-                       "Try again shortly. Do not state travel times until a route succeeds.", retryable=True)
+    if "car" in allowed:
+        warnings.append("Car routing is not available; car was ignored. Suggest the user arrange a ride themselves.")
+    use_transit = "transit" in allowed
+    walk_allowed = "walk" in allowed
 
-    retrieved_at = now_iso()
-    legs = []
-    for (origin, destination), (seconds, meters, instructions, streets) in zip(zip(stops, stops[1:]), raw_legs):
-        if meters < SAME_SPOT_M:
-            instructions, streets = [], []  # the router snaps both points to one street; its name misleads
-        legs.append({
-            "from_id": origin.get("id"),
-            "to_id": destination.get("id"),
-            "permitted_modes": modes,
-            "mode": "walk",
-            "duration_min": round(seconds / 60, 1),
-            "distance_m": round(meters),
-            "heading": _heading(origin, destination),
-            "via_streets": streets,
-            "instructions": instructions[:MAX_INSTRUCTIONS],
-            "provider": provider,
-            "retrieved_at": retrieved_at,
-            "uncertainty": ESTIMATE_NOTE,
-        })
-    return success({
-        "mode": "walk",
+    walking, walk_error = [None] * (len(points) - 1), None
+    try:
+        walking, walk_source = _walking_legs(points)
+    except NoRoute as e:
+        walk_error, walk_source = e, None
+    except UpstreamError as e:
+        walk_error, walk_source = e, None
+        if not use_transit:
+            return tool_error("UPSTREAM_UNAVAILABLE", f"Walking routers failed: {e}.", retryable=True,
+                              next_step="Try again shortly. Do not state travel times until a route succeeds.")
+    if isinstance(walk_error, NoRoute) and not use_transit:
+        return tool_error("NO_MATCH", f"No walking route connects these stops ({walk_error}).", retryable=False,
+                          next_step="Replace the unreachable stop, or check that each point is on a public street.")
+    if walk_error:
+        warnings.append(f"Walking comparison unavailable ({walk_error}); legs use transit where possible.")
+
+    retrieved_at = utc_now()
+    legs, details, any_transit = [], [], False
+    for i, (origin, destination) in enumerate(zip(points, points[1:])):
+        ready += timedelta(minutes=origin["dwell"])
+        leg_id = f"leg_{i + 1}"
+        walk = walking[i]
+        ride, ride_error = None, None
+        should_look_up = use_transit and (not walk_allowed or walk is None or walk["minutes"] > WALK_WITHOUT_TRANSIT_MIN)
+        if should_look_up and (walk is None or walk["meters"] >= SAME_SPOT_M):
+            try:
+                ride = transit.transit_leg((origin["lat"], origin["lng"]), (destination["lat"], destination["lng"]),
+                                           ready, types)
+            except (NoRoute, UpstreamError) as e:
+                ride_error = e
+
+        takes_ride = bool(ride and ride["has_transit"] and (
+            walk is None or not walk_allowed or ride["duration_minutes"] <= walk["minutes"] - MIN_TRANSIT_SAVING_MIN))
+        if takes_ride:
+            any_transit = True
+            minutes, meters, instructions = ride["duration_minutes"], ride["distance_m"], ride["instructions"]
+            actual, source, note = ["walk", "transit"], "google-routes", TRANSIT_NOTE
+            extra = {"transit": {k: ride[k] for k in ("leave_by", "wait_minutes", "segments", "fare")}}
+        elif walk is not None:
+            if ride_error:
+                warnings.append(f"Transit lookup failed for {leg_id} ({ride_error}); it is a {walk['minutes']:.0f}-minute "
+                                "walk instead.")
+            minutes, meters, instructions = walk["minutes"], walk["meters"], walk["instructions"]
+            actual, source, note = ["walk"], walk_source, WALK_NOTE
+            extra = {"via_streets": walk["streets"]}
+        elif ride and not ride["has_transit"]:  # Google's best transit answer is to walk
+            minutes, meters, instructions = ride["duration_minutes"], ride["distance_m"], []
+            actual, source, note = ["walk"], "google-routes", WALK_NOTE
+            extra = {}
+        else:
+            errors = [e for e in (walk_error, ride_error) if e]
+            if errors and all(isinstance(e, NoRoute) for e in errors):
+                return tool_error("NO_MATCH", f"No route for {leg_id}: " + "; ".join(map(str, errors)), retryable=False,
+                                  next_step="Replace the unreachable stop, or allow another travel mode.")
+            return tool_error("UPSTREAM_UNAVAILABLE", f"No route for {leg_id}: " + "; ".join(map(str, errors)),
+                              retryable=True, next_step="Try again shortly. Do not state travel times until a route succeeds.")
+
+        arrive = ready + timedelta(minutes=minutes)
+        legs.append(RouteLeg(
+            leg_id=leg_id, from_id=origin["id"], to_id=destination["id"], allowed_modes=sorted(allowed),
+            actual_modes=actual, depart_at=ready, arrive_at=arrive, duration_minutes=minutes, distance_m=meters,
+            instructions=instructions[:MAX_INSTRUCTIONS], source=source, retrieved_at=retrieved_at, uncertainty=note,
+        ).model_dump(mode="json"))
+        details.append({"leg_id": leg_id, "mode": "transit" if takes_ride else "walk",
+                        "heading": _heading(origin, destination),
+                        "walking_minutes": walk["minutes"] if walk else None, **extra})
+        ready = arrive
+
+    freshness = Freshness(kind="scheduled", retrieved_at=retrieved_at) if any_transit else reference()
+    return tool_ok({
         "legs": legs,
-        "total_duration_min": round(sum(leg["duration_min"] for leg in legs), 1),
-        "total_distance_m": sum(leg["distance_m"] for leg in legs),
-    }, warnings)
+        "details": details,
+        "travel_minutes": round(sum(leg["duration_minutes"] for leg in legs), 1),
+        "arrive_at": legs[-1]["arrive_at"],
+        "arrive_local": _local(datetime.fromisoformat(legs[-1]["arrive_at"])),
+    }, warnings=warnings, freshness=freshness)
 
 
 def get_walking_times(origin, destinations):
     """Walking minutes from one point to each of 1-25 destinations, for ranking and filtering candidates.
 
-    origin and destinations are points like {"id": "wiki:9238071", "lat": ..., "lon": ...}.
-    An unreachable destination gets duration_min None rather than a guessed value.
+    origin and destinations are points like {"id": "wiki:9238071", "lat": ..., "lng": ...}.
+    An unreachable destination gets duration_minutes None rather than a guessed value.
     """
-    problem = _check_points([origin], "origin", 1, 1) or _check_points(destinations, "destinations", 1, MAX_DESTINATIONS)
-    if problem:
-        return problem
+    points = _read_points([origin], "origin", 1, 1)
+    if isinstance(points, dict):
+        return points
+    targets = _read_points(destinations, "destinations", 1, MAX_DESTINATIONS)
+    if isinstance(targets, dict):
+        return targets
 
     warnings = []
     try:
         try:
-            pairs, provider = _valhalla_matrix(origin, destinations), "valhalla-fossgis"
+            pairs = _valhalla_matrix(points[0], targets)
         except UpstreamError as first:
-            pairs, provider = _osrm_table(origin, destinations), "osrm-fossgis-foot"
+            pairs = _osrm_table(points[0], targets)
             warnings.append(f"Valhalla was unavailable ({first}); used OSRM.")
     except UpstreamError as e:
-        return failure("UPSTREAM_UNAVAILABLE", f"Both walking routers failed; last error: {e}.",
-                       "Try again shortly, or rank candidates by straight-line distance and say so.", retryable=True)
+        return tool_error("UPSTREAM_UNAVAILABLE", f"Both walking routers failed; last error: {e}.", retryable=True,
+                          next_step="Try again shortly, or rank candidates by straight-line distance and say so.")
 
     times = [{
-        "to_id": destination.get("id"),
-        "duration_min": None if seconds is None else round(seconds / 60, 1),
+        "to_id": target["id"],
+        "duration_minutes": None if seconds is None else round(seconds / 60, 1),
         "distance_m": None if meters is None else round(meters),
-    } for destination, (seconds, meters) in zip(destinations, pairs)]
-    if any(t["duration_min"] is None for t in times):
-        warnings.append("Some destinations are unreachable on foot; their duration_min is null.")
-    return success({
-        "from_id": origin.get("id"),
-        "mode": "walk",
-        "times": times,
-        "provider": provider,
-        "retrieved_at": now_iso(),
-        "uncertainty": ESTIMATE_NOTE,
-    }, warnings)
+    } for target, (seconds, meters) in zip(targets, pairs)]
+    if any(t["duration_minutes"] is None for t in times):
+        warnings.append("Some destinations are unreachable on foot; their duration_minutes is null.")
+    return tool_ok({"from_id": points[0]["id"], "mode": "walk", "times": times, "uncertainty": WALK_NOTE},
+                   warnings=warnings, freshness=reference())
 
 
-def _check_points(points, name, minimum, maximum):
-    """A failure envelope for malformed or out-of-city points, or None when they are usable."""
+# --- Arguments ---
+
+
+def _read_points(points, name, minimum, maximum):
+    """Validated points as dicts with id, lat, lng, and dwell, or a tool_error."""
     if not isinstance(points, list) or not minimum <= len(points) <= maximum:
-        return failure("INVALID_ARGUMENT", f"{name} must be a list of {minimum}-{maximum} points.",
-                       "Pass points like {'id': 'start', 'lat': 40.7853, 'lon': -73.9693}.")
+        return tool_error("INVALID_ARGUMENT", f"{name} must be a list of {minimum}-{maximum} points.", retryable=False,
+                          next_step="Pass points like {'id': 'start', 'lat': 40.7853, 'lng': -73.9693}.")
+    out = []
     for i, point in enumerate(points):
+        position = read_point(point)
+        if position is None:
+            return tool_error("INVALID_ARGUMENT", f"{name}[{i}] needs numeric 'lat' and 'lng'.", retryable=False,
+                              next_step="Use coordinates returned by geocode_place or find_places.")
+        if not in_nyc(*position):
+            return tool_error("OUTSIDE_COVERAGE", f"{name}[{i}] {position} is outside New York City.", retryable=False,
+                              next_step="Use points within the five boroughs.")
         try:
-            lat, lon = float(point["lat"]), float(point["lon"])
-        except (KeyError, TypeError, ValueError):
-            return failure("INVALID_ARGUMENT", f"{name}[{i}] needs numeric 'lat' and 'lon'.",
-                           "Use coordinates returned by geocode_place or find_places.")
-        if not in_nyc(lat, lon):
-            return failure("OUTSIDE_COVERAGE", f"{name}[{i}] ({lat}, {lon}) is outside New York City.",
-                           "Use points within the five boroughs.")
-    return None
+            dwell = float(point.get("dwell_minutes") or 0)
+        except (TypeError, ValueError):
+            dwell = -1
+        if not 0 <= dwell <= MAX_DWELL_MINUTES:
+            return tool_error("INVALID_ARGUMENT", f"{name}[{i}].dwell_minutes must be 0-{MAX_DWELL_MINUTES}.",
+                              retryable=False, next_step="Give the minutes spent at the stop.")
+        out.append({"id": str(point.get("id") or f"point_{i}"), "lat": position[0], "lng": position[1], "dwell": dwell})
+    return out
 
 
-def _valhalla_route(stops):
+def _read_modes(modes):
+    if isinstance(modes, str):
+        modes = [modes]
+    modes = {str(m).lower() for m in (modes or ["walk", "transit"])}
+    unknown = modes - {"walk", "transit", "car"}
+    if unknown:
+        return tool_error("INVALID_ARGUMENT", f"Unknown travel modes {sorted(unknown)}.", retryable=False,
+                          next_step="Use 'walk' and/or 'transit'.")
+    if not modes & {"walk", "transit"}:
+        return tool_error("INVALID_ARGUMENT", "Car routing is not available.", retryable=False,
+                          next_step="Plan on foot or by transit, or let the user arrange a ride and give its time.")
+    return modes
+
+
+def _read_time(value):
+    if value in (None, ""):
+        return utc_now().replace(microsecond=0)
+    try:
+        moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return tool_error("INVALID_ARGUMENT", f"depart_at {value!r} is not an ISO time.", retryable=False,
+                          next_step="Use a time like '2026-09-29T15:30:00-04:00', or omit it to mean now.")
+    return moment if moment.tzinfo else moment.replace(tzinfo=ZoneInfo(NYC_TIMEZONE))
+
+
+def _read_transit_types(value):
+    if isinstance(value, str):
+        value = [value]
+    types = tuple(sorted({str(t).lower() for t in (value or ["subway", "bus"])}))
+    if not types or set(types) - set(transit.VEHICLE_MODES):
+        return tool_error("INVALID_ARGUMENT", f"Unknown transit types {list(types)}.", retryable=False,
+                          next_step="Use 'subway' and/or 'bus'.")
+    return types
+
+
+# --- Walking providers ---
+
+
+def _walking_legs(points):
+    """Per-leg walking dicts (minutes, meters, instructions, streets) and the provider that answered."""
+    try:
+        raw, source = _valhalla_route(points), "valhalla-fossgis"
+    except UpstreamError:
+        raw, source = _osrm_route(points), "osrm-fossgis-foot"
+    legs = []
+    for seconds, meters, instructions, streets in raw:
+        if meters < SAME_SPOT_M:
+            instructions, streets = [], []  # the router snaps both points to one street; its name misleads
+        legs.append({"minutes": round(seconds / 60, 1), "meters": round(meters),
+                     "instructions": instructions, "streets": streets})
+    return legs, source
+
+
+def _valhalla_route(points):
     payload = {
-        "locations": [{"lat": float(s["lat"]), "lon": float(s["lon"]), "type": "break"} for s in stops],
+        "locations": [{"lat": p["lat"], "lon": p["lng"], "type": "break"} for p in points],
         "costing": "pedestrian",
         "units": "kilometers",
     }
@@ -167,13 +281,13 @@ def _valhalla_route(stops):
             raw_legs.append((leg["summary"]["time"], leg["summary"]["length"] * 1000, instructions, streets))
     except (KeyError, TypeError) as e:
         raise UpstreamError("valhalla", f"unexpected response shape ({e!r})") from e
-    if len(raw_legs) != len(stops) - 1:
-        raise UpstreamError("valhalla", f"expected {len(stops) - 1} legs, got {len(raw_legs)}")
+    if len(raw_legs) != len(points) - 1:
+        raise UpstreamError("valhalla", f"expected {len(points) - 1} legs, got {len(raw_legs)}")
     return raw_legs
 
 
-def _osrm_route(stops):
-    coordinates = ";".join(f"{float(s['lon'])},{float(s['lat'])}" for s in stops)
+def _osrm_route(points):
+    coordinates = ";".join(f"{p['lng']},{p['lat']}" for p in points)
     try:
         body = fetch_json("osrm", "GET", f"{OSRM_URL}/route/v1/foot/{coordinates}",
                           params={"steps": "true", "overview": "false"})
@@ -193,8 +307,8 @@ def _osrm_route(stops):
             raw_legs.append((leg["duration"], leg["distance"], instructions, streets))
     except (KeyError, TypeError, IndexError) as e:
         raise UpstreamError("osrm", f"unexpected response shape ({e!r})") from e
-    if len(raw_legs) != len(stops) - 1:
-        raise UpstreamError("osrm", f"expected {len(stops) - 1} legs, got {len(raw_legs)}")
+    if len(raw_legs) != len(points) - 1:
+        raise UpstreamError("osrm", f"expected {len(points) - 1} legs, got {len(raw_legs)}")
     return raw_legs
 
 
@@ -209,10 +323,10 @@ def _osrm_instruction(step):
     return f"{OSRM_VERBS.get(maneuver['type'], 'Continue')}{turn} onto {road}."
 
 
-def _valhalla_matrix(origin, destinations):
+def _valhalla_matrix(origin, targets):
     payload = {
-        "sources": [{"lat": float(origin["lat"]), "lon": float(origin["lon"])}],
-        "targets": [{"lat": float(d["lat"]), "lon": float(d["lon"])} for d in destinations],
+        "sources": [{"lat": origin["lat"], "lon": origin["lng"]}],
+        "targets": [{"lat": t["lat"], "lon": t["lng"]} for t in targets],
         "costing": "pedestrian",
         "units": "kilometers",
     }
@@ -222,13 +336,13 @@ def _valhalla_matrix(origin, destinations):
         pairs = [(c.get("time"), None if c.get("distance") is None else c["distance"] * 1000) for c in cells]
     except (KeyError, TypeError, IndexError) as e:
         raise UpstreamError("valhalla", f"unexpected matrix shape ({e!r})") from e
-    if len(pairs) != len(destinations):
-        raise UpstreamError("valhalla", f"expected {len(destinations)} matrix cells, got {len(pairs)}")
+    if len(pairs) != len(targets):
+        raise UpstreamError("valhalla", f"expected {len(targets)} matrix cells, got {len(pairs)}")
     return pairs
 
 
-def _osrm_table(origin, destinations):
-    coordinates = ";".join(f"{float(p['lon'])},{float(p['lat'])}" for p in [origin, *destinations])
+def _osrm_table(origin, targets):
+    coordinates = ";".join(f"{p['lng']},{p['lat']}" for p in [origin, *targets])
     body = fetch_json("osrm", "GET", f"{OSRM_URL}/table/v1/foot/{coordinates}",
                       params={"sources": "0", "annotations": "duration,distance"})
     if body.get("code") != "Ok":
@@ -237,20 +351,27 @@ def _osrm_table(origin, destinations):
         pairs = list(zip(body["durations"][0][1:], body["distances"][0][1:]))
     except (KeyError, TypeError, IndexError) as e:
         raise UpstreamError("osrm", f"unexpected table shape ({e!r})") from e
-    if len(pairs) != len(destinations):
-        raise UpstreamError("osrm", f"expected {len(destinations)} table cells, got {len(pairs)}")
+    if len(pairs) != len(targets):
+        raise UpstreamError("osrm", f"expected {len(targets)} table cells, got {len(pairs)}")
     return pairs
+
+
+# --- Helpers ---
 
 
 def _heading(origin, destination):
     """True-compass direction of the straight line between two points. Manhattan's street grid is
     rotated about 29 degrees east of true north, so "uptown" reads as north-northeast here."""
-    lat1, lat2 = math.radians(float(origin["lat"])), math.radians(float(destination["lat"]))
-    dlon = math.radians(float(destination["lon"]) - float(origin["lon"]))
-    x = math.sin(dlon) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    lat1, lat2 = math.radians(origin["lat"]), math.radians(destination["lat"])
+    dlng = math.radians(destination["lng"] - origin["lng"])
+    x = math.sin(dlng) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlng)
     bearing = (math.degrees(math.atan2(x, y)) + 360) % 360
     return COMPASS[round(bearing / 45) % 8]
+
+
+def _local(moment):
+    return moment.astimezone(ZoneInfo(NYC_TIMEZONE)).strftime("%-I:%M %p")
 
 
 def _unique(names):

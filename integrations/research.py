@@ -1,6 +1,6 @@
 """Find candidate places near a point and gather sourced claims about one of them.
 
-Returns candidate lists and PlaceEvidence-shaped records (docs/CONTRACTS.md).
+Returns candidate lists and schemas.PlaceEvidence records.
 
 Sources, all keyless:
 - Wikipedia: articles with coordinates (geosearch, or text search limited to a radius), and
@@ -10,16 +10,27 @@ Sources, all keyless:
   style, and construction dates.
 
 Claims are quoted or transcribed from the source with a URL; this module does not verify them.
-Nothing here shows that a physical detail is visible today, so physical_features stays empty
-until fieldwork or a current source supports one.
+Nothing here shows that a physical detail is visible today, so no claim has kind
+"physical_feature" until fieldwork or a current source supports one.
 """
 
+import hashlib
 import math
 import re
 from collections import defaultdict
 from datetime import datetime
 
-from integrations.common import UpstreamError, distance_m, failure, fetch_json, in_nyc, now_iso, success
+from integrations.common import (
+    UpstreamError,
+    distance_m,
+    fetch_json,
+    in_nyc,
+    read_point,
+    reference,
+    upstream_failure,
+    utc_now,
+)
+from schemas import Claim, LatLng, PlaceEvidence, tool_error, tool_ok
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 LPC_SITES_API = "https://data.cityofnewyork.us/resource/buis-pvji.json"
@@ -38,15 +49,18 @@ NAME_NOISE = {"the", "apartments", "apartment", "building", "manhattan", "new", 
 CLAIMS_NOTE = "Claims are quoted or transcribed from the cited source; they are not independently verified."
 FEATURES_NOTE = ("No source here shows that a plaque, inscription, or facade detail is visible today. Use a "
                  "user-observation or chat-delivered activity unless fieldwork confirms a feature.")
-ACCESS_UNKNOWN = {"status": "unknown", "note": "These sources do not establish current public access or opening hours."}
+ACCESS_UNKNOWN = "Unknown: these sources do not establish current public access or opening hours."
 
 AREA_DESCRIPTION = re.compile(r"^(neighbou?rhood|borough|county|country|census)\b", re.IGNORECASE)
+ARCHITECTURAL = re.compile(r"\b(architect\w*|design\w*|facade|façade|style|stor(?:y|ies)|towers?|Beaux-Arts|"
+                           r"Art Deco|Renaissance|Gothic|Romanesque|Revival|cornice|limestone|brick|terra[- ]cotta)\b",
+                           re.IGNORECASE)
 _HEADING = re.compile(r"^(={2,6})\s*(.*?)\s*\1\s*$", re.MULTILINE)
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(])")
 _ABBREVIATION_END = re.compile(r"\b(?:[A-Z]|St|Ave|Jr|Sr|Mr|Mrs|Dr|Co|Inc|No|Mt|Ft|ca|c)\.$")
 
 
-def find_places(lat, lon, radius_m=800, query=None, limit=15):
+def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
     """Real places near a point that could anchor an adventure stop, nearest first.
 
     Candidates come from Wikipedia articles with coordinates and from designated NYC landmarks.
@@ -55,32 +69,36 @@ def find_places(lat, lon, radius_m=800, query=None, limit=15):
     fill the list. Distances are straight-line; use get_walking_times for travel time. A candidate is
     a lead for research_place, not evidence that it suits an activity or is open.
     """
+    point = read_point({"lat": lat, "lng": lng if lng is not None else lon})
     try:
-        lat, lon, radius_m, limit = float(lat), float(lon), int(radius_m), int(limit)
+        radius_m, limit = int(radius_m), int(limit)
     except (TypeError, ValueError):
-        return failure("INVALID_ARGUMENT", "lat, lon, radius_m, and limit must be numbers.",
-                       "Use coordinates returned by geocode_place.")
-    if not in_nyc(lat, lon):
-        return failure("OUTSIDE_COVERAGE", f"({lat}, {lon}) is outside New York City.",
-                       "Search around a point within the five boroughs.")
+        point = None
+    if point is None:
+        return tool_error("INVALID_ARGUMENT", "lat, lng, radius_m, and limit must be numbers.", retryable=False,
+                          next_step="Use coordinates returned by geocode_place.")
+    lat, lng = point
+    if not in_nyc(lat, lng):
+        return tool_error("OUTSIDE_COVERAGE", f"({lat}, {lng}) is outside New York City.", retryable=False,
+                          next_step="Search around a point within the five boroughs.")
     radius_m = max(100, min(radius_m, MAX_RADIUS_M))
     limit = max(1, min(limit, MAX_CANDIDATES))
     query = " ".join(str(query or "").split())[:80] or None
 
     errors = []
     try:
-        articles = _article_candidates(lat, lon, radius_m, query)
+        articles = _article_candidates(lat, lng, radius_m, query)
     except UpstreamError as e:
         articles = []
         errors.append(str(e))
     try:
-        landmarks, unlocated = _landmark_candidates(lat, lon, radius_m)
+        landmarks, unlocated = _landmark_candidates(lat, lng, radius_m)
     except UpstreamError as e:
         landmarks, unlocated = [], []
         errors.append(str(e))
     if len(errors) == 2:
-        return failure("UPSTREAM_UNAVAILABLE", "Place sources are unavailable: " + "; ".join(errors),
-                       "Try again shortly.", retryable=True)
+        return tool_error("UPSTREAM_UNAVAILABLE", "Place sources are unavailable: " + "; ".join(errors),
+                          retryable=True, next_step="Try again shortly.")
 
     warnings = [f"Partial results; a source failed: {e}" for e in errors]
     if unlocated:
@@ -95,22 +113,18 @@ def find_places(lat, lon, radius_m=800, query=None, limit=15):
     candidates = sorted(designated + nearest, key=lambda c: c["distance_m"])
     if not candidates:
         matching = f" matching {query!r}" if query else ""
-        return failure("NO_MATCH", f"No candidate places within {radius_m} m{matching}.",
-                       "Widen radius_m (up to 2000) or drop the query.")
-    return success({
-        "center": {"lat": lat, "lon": lon},
-        "radius_m": radius_m,
-        "query": query,
-        "candidates": candidates,
-        "retrieved_at": now_iso(),
-    }, warnings)
+        return tool_error("NO_MATCH", f"No candidate places within {radius_m} m{matching}.", retryable=False,
+                          next_step="Widen radius_m (up to 2000) or drop the query.")
+    return tool_ok({"center": {"lat": lat, "lng": lng}, "radius_m": radius_m, "query": query,
+                    "candidates": candidates}, warnings=warnings, freshness=reference())
 
 
 def research_place(place_id, focus=None):
-    """Sourced claims about one place from find_places, each with a citable source URL.
+    """Sourced claims about one place from find_places, as a PlaceEvidence record.
 
     place_id: "wiki:<pageid>" or "lpc:<LP number>". focus: an optional topic such as
     "architecture" or "history"; for Wikipedia places it adds claims from the matching section.
+    Claim ids come from the claim text, so researching the same place again gives the same ids.
     """
     kind, _, key = str(place_id or "").partition(":")
     focus = " ".join(str(focus or "").split())[:60] or None
@@ -120,21 +134,20 @@ def research_place(place_id, focus=None):
         if kind == "lpc" and re.fullmatch(r"LP-\d+[A-Z]?", key):
             return _research_landmark(key)
     except UpstreamError as e:
-        return failure("UPSTREAM_UNAVAILABLE", str(e), "Try again shortly, or research another candidate.",
-                       retryable=e.retryable)
-    return failure("INVALID_ARGUMENT", f"Unknown place_id {place_id!r}.",
-                   "Use a place_id returned by find_places, such as 'wiki:9238071' or 'lpc:LP-01521'.")
+        return upstream_failure(e, "Try again shortly, or research another candidate.")
+    return tool_error("INVALID_ARGUMENT", f"Unknown place_id {place_id!r}.", retryable=False,
+                      next_step="Use a place_id returned by find_places, such as 'wiki:9238071' or 'lpc:LP-01521'.")
 
 
 # --- Candidates ---
 
 
-def _article_candidates(lat, lon, radius_m, query):
+def _article_candidates(lat, lng, radius_m, query):
     if query:
-        found = _wiki({"list": "search", "srsearch": f"nearcoord:{radius_m}m,{lat},{lon} {query}",
+        found = _wiki({"list": "search", "srsearch": f"nearcoord:{radius_m}m,{lat},{lng} {query}",
                        "srlimit": 30, "srprop": ""}).get("search", [])
     else:
-        found = _wiki({"list": "geosearch", "gscoord": f"{lat}|{lon}", "gsradius": radius_m,
+        found = _wiki({"list": "geosearch", "gscoord": f"{lat}|{lng}", "gsradius": radius_m,
                        "gslimit": 50}).get("geosearch", [])
     if not found:
         return []
@@ -147,15 +160,14 @@ def _article_candidates(lat, lon, radius_m, query):
         coords = (page.get("coordinates") or [None])[0]
         if not coords or AREA_DESCRIPTION.match(page.get("description") or ""):
             continue  # a neighborhood's article point is not somewhere to walk to
-        d = distance_m(lat, lon, coords["lat"], coords["lon"])
+        d = distance_m(lat, lng, coords["lat"], coords["lon"])
         if d > radius_m:
             continue
         candidates.append({
             "place_id": f"wiki:{page['pageid']}",
             "name": page["title"],
             "description": page.get("description"),
-            "lat": coords["lat"],
-            "lon": coords["lon"],
+            "point": {"lat": coords["lat"], "lng": coords["lon"]},
             "distance_m": round(d),
             "address": None,
             "designation": None,
@@ -165,14 +177,14 @@ def _article_candidates(lat, lon, radius_m, query):
     return candidates
 
 
-def _landmark_candidates(lat, lon, radius_m):
+def _landmark_candidates(lat, lng, radius_m):
     """Designated individual landmarks within the radius, plus names skipped for having no usable point."""
     dlat = radius_m / 111_320
-    dlon = radius_m / (111_320 * math.cos(math.radians(lat)))
+    dlng = radius_m / (111_320 * math.cos(math.radians(lat)))
     rows = fetch_json("nyc-open-data", "GET", LPC_SITES_API, params={
         "$select": "lpc_name,lpc_lpnumb,address,desdate,landmarkty,url_report,latitude,longitude",
         "$where": (f"latitude between {lat - dlat} and {lat + dlat} "
-                   f"and longitude between {lon - dlon} and {lon + dlon}"),
+                   f"and longitude between {lng - dlng} and {lng + dlng}"),
         "$limit": 200,
     })
 
@@ -187,8 +199,8 @@ def _landmark_candidates(lat, lon, radius_m):
         lp = row.get("lpc_lpnumb")
         if not lp or not row.get("latitude") or not row.get("longitude"):
             continue
-        row_lat, row_lon = float(row["latitude"]), float(row["longitude"])
-        d = distance_m(lat, lon, row_lat, row_lon)
+        row_lat, row_lng = float(row["latitude"]), float(row["longitude"])
+        d = distance_m(lat, lng, row_lat, row_lng)
         if d > radius_m:
             continue
         if len(landmarks_at[(row["latitude"], row["longitude"])]) > 1:
@@ -200,8 +212,7 @@ def _landmark_candidates(lat, lon, radius_m):
             "place_id": f"lpc:{lp}",
             "name": row.get("lpc_name"),
             "description": "Designated New York City landmark",
-            "lat": row_lat,
-            "lon": row_lon,
+            "point": {"lat": row_lat, "lng": row_lng},
             "distance_m": round(d),
             "address": row.get("address"),
             "designation": _designation(row),
@@ -216,7 +227,8 @@ def _merge(articles, landmarks):
     merged = list(articles)
     for landmark in landmarks:
         article = next((a for a in articles
-                        if distance_m(a["lat"], a["lon"], landmark["lat"], landmark["lon"]) <= SAME_PLACE_M
+                        if distance_m(a["point"]["lat"], a["point"]["lng"],
+                                      landmark["point"]["lat"], landmark["point"]["lng"]) <= SAME_PLACE_M
                         and _same_name(a["name"], landmark["name"])), None)
         if article:
             article["related_ids"].append(landmark["place_id"])
@@ -237,54 +249,48 @@ def _research_article(pageid, focus):
                    "inprop": "url"}).get("pages", [])
     page = pages[0] if pages else {}
     if not page or page.get("missing") or page.get("invalid") or not page.get("revisions"):
-        return failure("NO_MATCH", f"Wikipedia has no page with id {pageid}.",
-                       "Use a place_id from a fresh find_places call.")
+        return tool_error("NO_MATCH", f"Wikipedia has no page with id {pageid}.", retryable=False,
+                          next_step="Use a place_id from a fresh find_places call.")
 
-    title = page["title"]
+    place_id, title = f"wiki:{pageid}", page["title"]
     revision = page["revisions"][0]
     permalink = f"https://en.wikipedia.org/w/index.php?oldid={revision['revid']}"
+    note = f"Quoted from Wikipedia revision {revision['revid']} (edited {revision['timestamp'][:10]})."
     extract = page.get("extract") or ""
     first_heading = _HEADING.search(extract)
     intro = extract[:first_heading.start()] if first_heading else extract
+    checked_at = utc_now()
 
     claims, warnings = [], []
-
-    def cite(sentences, section=None):
-        for sentence in sentences:
-            claims.append({
-                "id": f"claim_{len(claims) + 1}",
-                "text": sentence,
-                "source_title": f"Wikipedia: {title}" + (f" (section: {section})" if section else ""),
-                "source_url": permalink + (f"#{section.replace(' ', '_')}" if section else ""),
-                "source_revised_at": revision["timestamp"],
-                "source_kind": "encyclopedia",
-            })
-
-    cite(_sentences(intro)[:MAX_INTRO_CLAIMS])
+    for sentence in _sentences(intro)[:MAX_INTRO_CLAIMS]:
+        claims.append(_claim(place_id, sentence, _kind(sentence), permalink, checked_at, note))
     if focus:
         section, text = _section_about(extract, focus)
         if section:
-            cite(_sentences(text)[:MAX_FOCUS_CLAIMS], section)
+            url = f"{permalink}#{section.replace(' ', '_')}"
+            for sentence in _sentences(text)[:MAX_FOCUS_CLAIMS]:
+                claims.append(_claim(place_id, sentence, _kind(sentence, section), url, checked_at, note))
         else:
             warnings.append(f"The article has no section about {focus!r}; returned its introduction only.")
 
     coords = (page.get("coordinates") or [None])[0]
-    lat, lon = (coords["lat"], coords["lon"]) if coords else (None, None)
+    point = LatLng(lat=coords["lat"], lng=coords["lon"]) if coords else None
     address = None
-    if coords:
+    if point:
         try:
-            building = _matching_building(lat, lon, title)
+            building = _matching_building(point.lat, point.lng, title)
         except UpstreamError as e:
             building = None
             warnings.append(f"LPC building records were unavailable: {e}")
         if building:
-            claims.append(_building_claim(building, len(claims) + 1))
+            claims.append(_building_claim(place_id, building, checked_at))
             address = building.get("des_addres")
     if not claims:
         warnings.append("The article text yielded no quotable sentences.")
 
-    return success(_evidence(f"wiki:{pageid}", title, page.get("description"), address, lat, lon, claims),
-                   warnings)
+    evidence = _evidence(place_id, title, address, point, claims, checked_at)
+    return tool_ok({"evidence": evidence, "description": page.get("description")},
+                   warnings=warnings, freshness=reference())
 
 
 def _research_landmark(lp):
@@ -294,47 +300,45 @@ def _research_landmark(lp):
         "$limit": 20,
     })
     if not rows:
-        return failure("NO_MATCH", f"No LPC landmark {lp}.", "Use a place_id from a fresh find_places call.")
+        return tool_error("NO_MATCH", f"No LPC landmark {lp}.", retryable=False,
+                          next_step="Use a place_id from a fresh find_places call.")
     site = rows[0]
     designation = _designation(site)
+    place_id, checked_at = f"lpc:{lp}", utc_now()
 
-    uncertainty = []
-    lat, lon = _number(site.get("latitude")), _number(site.get("longitude"))
+    notes = []
+    lat, lng = _number(site.get("latitude")), _number(site.get("longitude"))
     buildings = []
     if site.get("bbl"):
         lot_landmarks = fetch_json("nyc-open-data", "GET", LPC_SITES_API, params={
             "$select": "lpc_lpnumb", "$where": f"bbl = '{site['bbl']}'", "$limit": 50})
         if len({r.get("lpc_lpnumb") for r in lot_landmarks}) > 1:
-            lat = lon = None
-            uncertainty.append("The recorded point is the center of a tax lot shared with other landmarks, so "
-                               "it does not locate this structure; geocode its address instead.")
+            lat = lng = None
+            notes.append("The recorded point is the center of a tax lot shared with other landmarks, so it does "
+                         "not locate this structure; geocode its address instead.")
         buildings = fetch_json("nyc-open-data", "GET", LPC_BUILDINGS_API, params={
             "$select": "des_addres,build_nme,arch_build,style_prim,date_combo,hist_dist,bbl",
             "$where": f"bbl = '{site['bbl']}'", "$limit": 3})
 
-    claims = [{
-        "id": "claim_1",
-        "text": (f"{site.get('lpc_name')} ({site.get('address')}) was designated a New York City "
-                 f"{(designation['type'] or 'landmark').lower()} on {designation['designated_on']}."),
-        "source_title": "NYC LPC: Individual Landmark Sites (NYC Open Data)",
-        "source_url": LPC_SITES_PAGE,
-        "source_revised_at": None,
-        "source_kind": "official_record",
-    }]
-    for building in buildings:
-        claims.append(_building_claim(building, len(claims) + 1))
+    kind = (designation["type"] or "landmark").lower()
+    claims = [_claim(place_id,
+                     f"{site.get('lpc_name')} ({site.get('address')}) was designated a New York City {kind} "
+                     f"on {designation['designated_on']}.",
+                     "historical", designation["report_url"] or LPC_SITES_PAGE, checked_at,
+                     "Transcribed from the LPC Individual Landmark Sites record.")]
+    claims += [_building_claim(place_id, building, checked_at) for building in buildings]
 
-    evidence = _evidence(f"lpc:{lp}", site.get("lpc_name"), "Designated New York City landmark",
-                         site.get("address"), lat, lon, claims, uncertainty)
-    evidence["designation"] = designation
-    return success(evidence)
+    point = LatLng(lat=lat, lng=lng) if lat is not None and lng is not None else None
+    evidence = _evidence(place_id, site.get("lpc_name"), site.get("address"), point, claims, checked_at, notes)
+    return tool_ok({"evidence": evidence, "description": "Designated New York City landmark",
+                    "designation": designation}, freshness=reference())
 
 
-def _matching_building(lat, lon, name):
+def _matching_building(lat, lng, name):
     """The LPC building record near this point whose name or address matches `name`, if exactly one does."""
     rows = fetch_json("nyc-open-data", "GET", LPC_BUILDINGS_API, params={
         "$select": "des_addres,build_nme,arch_build,style_prim,date_combo,hist_dist,bbl",
-        "$where": f"within_circle(the_geom, {lat}, {lon}, {BUILDING_SEARCH_M})",
+        "$where": f"within_circle(the_geom, {lat}, {lng}, {BUILDING_SEARCH_M})",
         "$limit": 100,
     })
     key = _name_key(name)
@@ -346,37 +350,34 @@ def _matching_building(lat, lon, name):
     return next(iter(matches.values())) if len(matches) == 1 else None
 
 
-def _building_claim(row, number):
+def _building_claim(place_id, row, checked_at):
     name, address = _blank(row.get("build_nme")), row.get("des_addres")
     details = [f"architect/builder {_blank(row.get('arch_build')) or 'not recorded'}",
                f"primary style {_blank(row.get('style_prim')) or 'not recorded'}",
                f"date {_blank(row.get('date_combo')) or 'not recorded'}"]
     if _blank(row.get("hist_dist")):
         details.append(f"historic district {row['hist_dist']}")
-    return {
-        "id": f"claim_{number}",
-        "text": f"The LPC building database lists {address}" + (f" ({name})" if name else "") + ": " + "; ".join(details) + ".",
-        "source_title": "NYC LPC: Individual Landmark and Historic District Building Database (NYC Open Data)",
-        "source_url": LPC_BUILDINGS_PAGE,
-        "source_revised_at": None,
-        "source_kind": "official_record",
-    }
+    text = f"The LPC building database lists {address}" + (f" ({name})" if name else "") + ": " + "; ".join(details) + "."
+    return _claim(place_id, text, "architectural", LPC_BUILDINGS_PAGE, checked_at,
+                  "Transcribed from the LPC Individual Landmark and Historic District Building Database.")
 
 
-def _evidence(place_id, name, description, address, lat, lon, claims, uncertainty=()):
-    return {
-        "place_id": place_id,
-        "name": name,
-        "description": description,
-        "address": address,
-        "lat": lat,
-        "lon": lon,
-        "claims": claims,
-        "physical_features": [],
-        "access": dict(ACCESS_UNKNOWN),
-        "checked_at": now_iso(),
-        "uncertainty": [*uncertainty, CLAIMS_NOTE, FEATURES_NOTE],
-    }
+def _claim(place_id, text, kind, url, checked_at, note):
+    digest = hashlib.sha1(text.encode()).hexdigest()[:8]
+    return Claim(claim_id=f"{place_id}#{digest}", text=text, kind=kind, basis="source", source_urls=[url],
+                 checked_at=checked_at, uncertainty=f"{note} {CLAIMS_NOTE}")
+
+
+def _kind(sentence, section=None):
+    return "architectural" if ARCHITECTURAL.search(section or "") or ARCHITECTURAL.search(sentence) else "historical"
+
+
+def _evidence(place_id, name, address, point, claims, checked_at, notes=()):
+    unique = list({claim.claim_id: claim for claim in claims}.values())
+    return PlaceEvidence(
+        place_id=place_id, name=name, address=address, point=point, claims=unique,
+        access_notes=ACCESS_UNKNOWN, checked_at=checked_at, uncertainty=" ".join([*notes, FEATURES_NOTE]),
+    ).model_dump(mode="json")
 
 
 # --- Helpers ---

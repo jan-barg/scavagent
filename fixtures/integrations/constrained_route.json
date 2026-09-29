@@ -2,7 +2,7 @@
   "fixture": {
     "label": "LIVE CAPTURE for development: real provider responses on the capture date, in the /chat tool-call shape. Not field-verified and not an adventure plan.",
     "scenario": "Fixture 2: destination, deadline, required stop, walking only, architecture theme.",
-    "captured_at": "2026-09-28T23:48:27+00:00",
+    "captured_at": "2026-09-29T04:34:26+00:00",
     "generator": "scripts/capture_integration_fixtures.py",
     "notes": [
       "Grader example 2: 45 minutes, walking only, must pass Columbus Avenue & West 81st Street, finish at Broadway & West 72nd Street, architecture theme.",
@@ -11,6 +11,7 @@
     "attribution": [
       "Wikipedia text is CC BY-SA 4.0; each claim links to the revision it was quoted from.",
       "Map and route data © OpenStreetMap contributors (ODbL), via Overpass, Nominatim, Valhalla, and OSRM.",
+      "Transit directions: Google Routes API.",
       "Landmark records: NYC Landmarks Preservation Commission, via NYC Open Data.",
       "Addresses: NYC Planning Labs GeoSearch."
     ]
@@ -24,19 +25,29 @@
       "result": {
         "ok": true,
         "data": {
+          "location": {
+            "point": {
+              "lat": 40.7852965,
+              "lng": -73.9693444
+            },
+            "place_text": "Central Park West & West 86th Street",
+            "source": "geocoded",
+            "observed_at": "2026-09-29T04:34:12.321494Z",
+            "accuracy_m": null
+          },
           "query": "Central Park West and West 86th Street",
           "label": "Central Park West & West 86th Street",
-          "lat": 40.7852965,
-          "lon": -73.9693444,
           "match_type": "intersection",
           "provider": "openstreetmap-overpass",
-          "provider_ref": "osm:node/7106818626",
-          "source": "geocoded",
-          "observed_at": "2026-09-28T23:48:12+00:00",
-          "accuracy_m": null
+          "provider_ref": "osm:node/7106818626"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:12.321597Z"
+        }
       }
     },
     {
@@ -47,19 +58,29 @@
       "result": {
         "ok": true,
         "data": {
+          "location": {
+            "point": {
+              "lat": 40.7832589,
+              "lng": -73.9745499
+            },
+            "place_text": "Columbus Avenue & West 81st Street",
+            "source": "geocoded",
+            "observed_at": "2026-09-29T04:34:18.985152Z",
+            "accuracy_m": null
+          },
           "query": "Columbus Avenue and West 81st Street",
           "label": "Columbus Avenue & West 81st Street",
-          "lat": 40.7832589,
-          "lon": -73.9745499,
           "match_type": "intersection",
           "provider": "openstreetmap-overpass",
-          "provider_ref": "osm:node/42443280",
-          "source": "geocoded",
-          "observed_at": "2026-09-28T23:48:22+00:00",
-          "accuracy_m": null
+          "provider_ref": "osm:node/42443280"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:18.985336Z"
+        }
       }
     },
     {
@@ -70,19 +91,29 @@
       "result": {
         "ok": true,
         "data": {
+          "location": {
+            "point": {
+              "lat": 40.7787867,
+              "lng": -73.9820522
+            },
+            "place_text": "Broadway & West 72nd Street",
+            "source": "geocoded",
+            "observed_at": "2026-09-29T04:34:25.609490Z",
+            "accuracy_m": null
+          },
           "query": "Broadway and West 72nd Street",
           "label": "Broadway & West 72nd Street",
-          "lat": 40.7787867,
-          "lon": -73.9820522,
           "match_type": "intersection",
           "provider": "openstreetmap-overpass",
-          "provider_ref": "osm:node/42428634",
-          "source": "geocoded",
-          "observed_at": "2026-09-28T23:48:26+00:00",
-          "accuracy_m": null
+          "provider_ref": "osm:node/42428634"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:25.609656Z"
+        }
       }
     },
     {
@@ -92,17 +123,17 @@
           {
             "id": "start",
             "lat": 40.7852965,
-            "lon": -73.9693444
+            "lng": -73.9693444
           },
           {
             "id": "required_stop",
             "lat": 40.7832589,
-            "lon": -73.9745499
+            "lng": -73.9745499
           },
           {
             "id": "destination",
             "lat": 40.7787867,
-            "lon": -73.9820522
+            "lng": -73.9820522
           }
         ],
         "modes": [
@@ -112,22 +143,21 @@
       "result": {
         "ok": true,
         "data": {
-          "mode": "walk",
           "legs": [
             {
+              "leg_id": "leg_1",
               "from_id": "start",
               "to_id": "required_stop",
-              "permitted_modes": [
+              "allowed_modes": [
                 "walk"
               ],
-              "mode": "walk",
-              "duration_min": 7.7,
-              "distance_m": 684,
-              "heading": "southwest",
-              "via_streets": [
-                "Central Park West",
-                "Columbus Avenue"
+              "actual_modes": [
+                "walk"
               ],
+              "depart_at": "2026-09-29T04:34:25.609851Z",
+              "arrive_at": "2026-09-29T04:42:07.609851Z",
+              "duration_minutes": 7.7,
+              "distance_m": 684.0,
               "instructions": [
                 "Walk southwest on Central Park West.",
                 "Turn right onto the walkway.",
@@ -135,25 +165,24 @@
                 "Turn right onto the walkway.",
                 "Turn left onto Columbus Avenue."
               ],
-              "provider": "valhalla-fossgis",
-              "retrieved_at": "2026-09-28T23:48:26+00:00",
+              "source": "valhalla-fossgis",
+              "retrieved_at": "2026-09-29T04:34:25.735378Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             },
             {
+              "leg_id": "leg_2",
               "from_id": "required_stop",
               "to_id": "destination",
-              "permitted_modes": [
+              "allowed_modes": [
                 "walk"
               ],
-              "mode": "walk",
-              "duration_min": 12.2,
-              "distance_m": 1052,
-              "heading": "southwest",
-              "via_streets": [
-                "Columbus Avenue",
-                "Amsterdam Avenue",
-                "West 72nd Street"
+              "actual_modes": [
+                "walk"
               ],
+              "depart_at": "2026-09-29T04:42:07.609851Z",
+              "arrive_at": "2026-09-29T04:54:19.609851Z",
+              "duration_minutes": 12.2,
+              "distance_m": 1052.0,
               "instructions": [
                 "Walk southwest on Columbus Avenue.",
                 "Turn right onto the walkway.",
@@ -164,23 +193,52 @@
                 "Turn left onto Amsterdam Avenue.",
                 "Turn right onto West 72nd Street."
               ],
-              "provider": "valhalla-fossgis",
-              "retrieved_at": "2026-09-28T23:48:26+00:00",
+              "source": "valhalla-fossgis",
+              "retrieved_at": "2026-09-29T04:34:25.735378Z",
               "uncertainty": "Walking estimate from OpenStreetMap routing; it excludes waiting at crossings and finding entrances, so add contingency before promising an arrival time."
             }
           ],
-          "total_duration_min": 19.9,
-          "total_distance_m": 1736
+          "details": [
+            {
+              "leg_id": "leg_1",
+              "mode": "walk",
+              "heading": "southwest",
+              "walking_minutes": 7.7,
+              "via_streets": [
+                "Central Park West",
+                "Columbus Avenue"
+              ]
+            },
+            {
+              "leg_id": "leg_2",
+              "mode": "walk",
+              "heading": "southwest",
+              "walking_minutes": 12.2,
+              "via_streets": [
+                "Columbus Avenue",
+                "Amsterdam Avenue",
+                "West 72nd Street"
+              ]
+            }
+          ],
+          "travel_minutes": 19.9,
+          "arrive_at": "2026-09-29T04:54:19.609851Z",
+          "arrive_local": "12:54 AM"
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:25.735771Z"
+        }
       }
     },
     {
       "name": "find_places",
       "args": {
         "lat": 40.7832589,
-        "lon": -73.9745499,
+        "lng": -73.9745499,
         "radius_m": 500,
         "query": "architecture"
       },
@@ -189,7 +247,7 @@
         "data": {
           "center": {
             "lat": 40.7832589,
-            "lon": -73.9745499
+            "lng": -73.9745499
           },
           "radius_m": 500,
           "query": "architecture",
@@ -198,8 +256,10 @@
               "place_id": "wiki:24153841",
               "name": "Endicott Hotel",
               "description": "Luxury hotel in Manhattan, New York",
-              "lat": 40.78375,
-              "lon": -73.97458333,
+              "point": {
+                "lat": 40.78375,
+                "lng": -73.97458333
+              },
               "distance_m": 55,
               "address": null,
               "designation": null,
@@ -215,8 +275,10 @@
               "place_id": "wiki:23630744",
               "name": "PS 9 Sarah Anderson School",
               "description": "Elementary school in Manhattan, New York",
-              "lat": 40.78511944,
-              "lon": -73.97388611,
+              "point": {
+                "lat": 40.78511944,
+                "lng": -73.97388611
+              },
               "distance_m": 214,
               "address": null,
               "designation": null,
@@ -232,8 +294,10 @@
               "place_id": "wiki:5632611",
               "name": "Rose Center for Earth and Space",
               "description": "Part of the American Museum of Natural History",
-              "lat": 40.78153611,
-              "lon": -73.97324722,
+              "point": {
+                "lat": 40.78153611,
+                "lng": -73.97324722
+              },
               "distance_m": 221,
               "address": null,
               "designation": null,
@@ -249,8 +313,10 @@
               "place_id": "wiki:5667636",
               "name": "The Beresford",
               "description": "Residential skyscraper in Manhattan, New York",
-              "lat": 40.7825,
-              "lon": -73.97194444,
+              "point": {
+                "lat": 40.7825,
+                "lng": -73.97194444
+              },
               "distance_m": 235,
               "address": "211 Central Park West",
               "designation": {
@@ -278,8 +344,10 @@
               "place_id": "wiki:18622881",
               "name": "Congregation Rodeph Sholom (Manhattan)",
               "description": "Reform synagogue in New York City",
-              "lat": 40.78388889,
-              "lon": -73.97166667,
+              "point": {
+                "lat": 40.78388889,
+                "lng": -73.97166667
+              },
               "distance_m": 253,
               "address": null,
               "designation": null,
@@ -295,8 +363,10 @@
               "place_id": "wiki:399990",
               "name": "American Museum of Natural History",
               "description": "Natural history museum in Manhattan, New York",
-              "lat": 40.78083333,
-              "lon": -73.97444444,
+              "point": {
+                "lat": 40.78083333,
+                "lng": -73.97444444
+              },
               "distance_m": 270,
               "address": "Central Park West at West 77th Street",
               "designation": {
@@ -324,8 +394,10 @@
               "place_id": "wiki:12462731",
               "name": "Kol Zimrah",
               "description": "Independent minyan in Manhattan, New York",
-              "lat": 40.78447222,
-              "lon": -73.97177778,
+              "point": {
+                "lat": 40.78447222,
+                "lng": -73.97177778
+              },
               "distance_m": 270,
               "address": null,
               "designation": null,
@@ -341,8 +413,10 @@
               "place_id": "wiki:19276634",
               "name": "Metropolitan Fireproof Warehouse",
               "description": "Structure in New York, US",
-              "lat": 40.7855,
-              "lon": -73.9763,
+              "point": {
+                "lat": 40.7855,
+                "lng": -73.9763
+              },
               "distance_m": 290,
               "address": null,
               "designation": null,
@@ -358,8 +432,10 @@
               "place_id": "wiki:30247450",
               "name": "Holy Trinity Church (Upper West Side)",
               "description": "Catholic church in Manhattan, New York",
-              "lat": 40.785505,
-              "lon": -73.977447,
+              "point": {
+                "lat": 40.785505,
+                "lng": -73.977447
+              },
               "distance_m": 349,
               "address": null,
               "designation": null,
@@ -375,8 +451,10 @@
               "place_id": "wiki:83134309",
               "name": "44 West 77th Street",
               "description": "Apartment building in Manhattan, New York",
-              "lat": 40.7801,
-              "lon": -73.9758,
+              "point": {
+                "lat": 40.7801,
+                "lng": -73.9758
+              },
               "distance_m": 367,
               "address": null,
               "designation": null,
@@ -392,8 +470,10 @@
               "place_id": "wiki:1100245",
               "name": "Bard Graduate Center",
               "description": "Graduate research institute and gallery",
-              "lat": 40.78583333,
-              "lon": -73.97127778,
+              "point": {
+                "lat": 40.78583333,
+                "lng": -73.97127778
+              },
               "distance_m": 397,
               "address": null,
               "designation": null,
@@ -409,8 +489,10 @@
               "place_id": "wiki:34528939",
               "name": "Rossleigh Court",
               "description": "Apartment building in Manhattan, New York",
-              "lat": 40.78472222,
-              "lon": -73.97,
+              "point": {
+                "lat": 40.78472222,
+                "lng": -73.97
+              },
               "distance_m": 416,
               "address": null,
               "designation": null,
@@ -426,8 +508,10 @@
               "place_id": "wiki:10418168",
               "name": "Central Park West Historic District",
               "description": "Historic district in Manhattan, New York",
-              "lat": 40.78444444,
-              "lon": -73.96944444,
+              "point": {
+                "lat": 40.78444444,
+                "lng": -73.96944444
+              },
               "distance_m": 450,
               "address": null,
               "designation": null,
@@ -443,8 +527,10 @@
               "place_id": "wiki:607241",
               "name": "New York Historical",
               "description": "Museum and library in New York City",
-              "lat": 40.77916667,
-              "lon": -73.97416667,
+              "point": {
+                "lat": 40.77916667,
+                "lng": -73.97416667
+              },
               "distance_m": 456,
               "address": "170 Central Park West",
               "designation": {
@@ -472,8 +558,10 @@
               "place_id": "lpc:LP-02338",
               "name": "West Park Presbyterian Church",
               "description": "Designated New York City landmark",
-              "lat": 40.7877267,
-              "lon": -73.9745085,
+              "point": {
+                "lat": 40.7877267,
+                "lng": -73.9745085
+              },
               "distance_m": 497,
               "address": "165 West 86th Street",
               "designation": {
@@ -491,11 +579,15 @@
                 }
               ]
             }
-          ],
-          "retrieved_at": "2026-09-28T23:48:27+00:00"
+          ]
         },
         "error": null,
-        "warnings": []
+        "warnings": [],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:26.152247Z"
+        }
       }
     },
     {
@@ -507,53 +599,64 @@
       "result": {
         "ok": true,
         "data": {
-          "place_id": "wiki:24153841",
-          "name": "Endicott Hotel",
-          "description": "Luxury hotel in Manhattan, New York",
-          "address": "440-456 Columbus Avenue (aka 101-107 West 81st Street; 100-108 West 82nd Street)",
-          "lat": 40.78375,
-          "lon": -73.97458333,
-          "claims": [
-            {
-              "id": "claim_1",
-              "text": "The Endicott Hotel is a former luxury hotel which now serves as a co-op.",
-              "source_title": "Wikipedia: Endicott Hotel",
-              "source_url": "https://en.wikipedia.org/w/index.php?oldid=1344721508",
-              "source_revised_at": "2026-03-22T04:38:08Z",
-              "source_kind": "encyclopedia"
+          "evidence": {
+            "place_id": "wiki:24153841",
+            "name": "Endicott Hotel",
+            "address": "440-456 Columbus Avenue (aka 101-107 West 81st Street; 100-108 West 82nd Street)",
+            "point": {
+              "lat": 40.78375,
+              "lng": -73.97458333
             },
-            {
-              "id": "claim_2",
-              "text": "The building sits between 81st and 82nd St. on Columbus Avenue on the  Upper West Side of Manhattan in New York City, diagonal from the American Museum of Natural History.",
-              "source_title": "Wikipedia: Endicott Hotel",
-              "source_url": "https://en.wikipedia.org/w/index.php?oldid=1344721508",
-              "source_revised_at": "2026-03-22T04:38:08Z",
-              "source_kind": "encyclopedia"
-            },
-            {
-              "id": "claim_3",
-              "text": "The LPC building database lists 440-456 Columbus Avenue (aka 101-107 West 81st Street; 100-108 West 82nd Street) (Hotel Endicott): architect/builder Edward L. Angell; primary style Romanesque Revival; date 1889 - 1891; historic district Upper West Side / Central Park West Historic District.",
-              "source_title": "NYC LPC: Individual Landmark and Historic District Building Database (NYC Open Data)",
-              "source_url": "https://data.cityofnewyork.us/d/gpmc-yuvp",
-              "source_revised_at": null,
-              "source_kind": "official_record"
-            }
-          ],
-          "physical_features": [],
-          "access": {
-            "status": "unknown",
-            "note": "These sources do not establish current public access or opening hours."
+            "claims": [
+              {
+                "claim_id": "wiki:24153841#85fd71f5",
+                "text": "The Endicott Hotel is a former luxury hotel which now serves as a co-op.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1344721508"
+                ],
+                "checked_at": "2026-09-29T04:34:26.263348Z",
+                "uncertainty": "Quoted from Wikipedia revision 1344721508 (edited 2026-03-22). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:24153841#0a470654",
+                "text": "The building sits between 81st and 82nd St. on Columbus Avenue on the  Upper West Side of Manhattan in New York City, diagonal from the American Museum of Natural History.",
+                "kind": "historical",
+                "basis": "source",
+                "source_urls": [
+                  "https://en.wikipedia.org/w/index.php?oldid=1344721508"
+                ],
+                "checked_at": "2026-09-29T04:34:26.263348Z",
+                "uncertainty": "Quoted from Wikipedia revision 1344721508 (edited 2026-03-22). Claims are quoted or transcribed from the cited source; they are not independently verified."
+              },
+              {
+                "claim_id": "wiki:24153841#6c1881a3",
+                "text": "The LPC building database lists 440-456 Columbus Avenue (aka 101-107 West 81st Street; 100-108 West 82nd Street) (Hotel Endicott): architect/builder Edward L. Angell; primary style Romanesque Revival; date 1889 - 1891; historic district Upper West Side / Central Park West Historic District.",
+                "kind": "architectural",
+                "basis": "source",
+                "source_urls": [
+                  "https://data.cityofnewyork.us/d/gpmc-yuvp"
+                ],
+                "checked_at": "2026-09-29T04:34:26.263348Z",
+                "uncertainty": "Transcribed from the LPC Individual Landmark and Historic District Building Database. Claims are quoted or transcribed from the cited source; they are not independently verified."
+              }
+            ],
+            "access_notes": "Unknown: these sources do not establish current public access or opening hours.",
+            "checked_at": "2026-09-29T04:34:26.263348Z",
+            "uncertainty": "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
           },
-          "checked_at": "2026-09-28T23:48:27+00:00",
-          "uncertainty": [
-            "Claims are quoted or transcribed from the cited source; they are not independently verified.",
-            "No source here shows that a plaque, inscription, or facade detail is visible today. Use a user-observation or chat-delivered activity unless fieldwork confirms a feature."
-          ]
+          "description": "Luxury hotel in Manhattan, New York"
         },
         "error": null,
         "warnings": [
           "The article has no section about 'architecture'; returned its introduction only."
-        ]
+        ],
+        "freshness": {
+          "kind": "static_reference",
+          "as_of": null,
+          "retrieved_at": "2026-09-29T04:34:26.519474Z"
+        }
       }
     }
   ]
