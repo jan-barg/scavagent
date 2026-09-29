@@ -1,7 +1,7 @@
 import unittest
 
 from integrations.research import find_places, research_place
-from tests.fake_http import FakeHTTP
+from fake_http import FakeHTTP
 
 WIKIPEDIA = "en.wikipedia.org"
 LPC_SITES = "buis-pvji"

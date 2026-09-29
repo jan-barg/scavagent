@@ -1,0 +1,36 @@
+{
+  "provenance": {
+    "kind": "synthetic_fixture",
+    "description": "Development camera checkpoint and photo record. The camera id is not a DOT id, the standing position was never calibrated, and no image bytes exist for the photo record.",
+    "field_verified": false
+  },
+  "checkpoints": [
+    {
+      "checkpoint_id": "fixture_cam_cp_1",
+      "camera_id": "fixture-camera-not-dot",
+      "stand_location": {"lat": 40.7800, "lng": -73.9795},
+      "address": "Synthetic corner near West 75th Street",
+      "landmark": "Synthetic landmark: the green newsstand",
+      "side_of_street": "east sidewalk",
+      "positioning_instructions": "Synthetic instructions: stand beside the newsstand, facing north toward the intersection.",
+      "reference_view_notes": "No reference image; this checkpoint was never calibrated.",
+      "person_region": [0.4, 0.55, 0.6, 0.95],
+      "verification_status": "synthetic_fixture",
+      "visibility_notes": "Unknown.",
+      "enabled": true
+    }
+  ],
+  "photos": [
+    {
+      "asset_id": "fixture_photo_1",
+      "media_url": "/media/fixture_photo_1",
+      "camera_id": "fixture-camera-not-dot",
+      "checkpoint_id": "fixture_cam_cp_1",
+      "content_type": "image/jpeg",
+      "byte_size": 0,
+      "retrieved_at": "2026-09-28T15:30:00-04:00",
+      "visibility": "unconfirmed",
+      "provenance": "synthetic_fixture"
+    }
+  ]
+}

@@ -1,0 +1,292 @@
+"""Mocked camera boundary checks; no network or actual photos/positions.
+
+The field_verified records below are TEST inputs for exercising eligibility and
+capture. They are not fieldwork evidence and are never written to the catalogue.
+"""
+
+import json
+from datetime import datetime, timezone
+
+import pytest
+import requests
+
+from integrations import cameras as cam
+from schemas import CameraCheckpoint, PhotoAsset, ToolResult
+
+STAMP = datetime(2026, 9, 28, 12, tzinfo=timezone.utc)
+POINT = {"lat": 40.785, "lng": -73.97}
+# Signature-only mocked response, not a photograph; never saved to the repository.
+JPEG = b"\xff\xd8\xffMOCK_HTTP_IMAGE_BYTES\xff\xd9"
+
+
+def checkpoint(checkpoint_id="test_cp", camera_id="test-camera", lat=40.785, lng=-73.97, **changes):
+    values = dict(
+        checkpoint_id=checkpoint_id, camera_id=camera_id,
+        stand_location={"lat": lat, "lng": lng}, address="TEST location",
+        landmark="TEST landmark", side_of_street="TEST side",
+        positioning_instructions="TEST instructions, not for navigation.",
+        verification_status="field_verified", last_field_verified_at=STAMP,
+        enabled=True,
+    )
+    values.update(changes)
+    return CameraCheckpoint(**values)
+
+
+def row(camera_id="test-camera", online="true", **changes):
+    return {"id": camera_id, "isOnline": online, "latitude": 0, "longitude": 0, "imageUrl": "https://untrusted.invalid/private", **changes}
+
+
+class Response:
+    def __init__(self, body=JPEG, content_type="image/jpeg", status=200, headers=None, chunks=None):
+        self.body, self.status_code = body, status
+        self.headers = {"Content-Type": content_type, **(headers or {})}
+        self.chunks = chunks
+        self.closed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.closed = True
+
+    def iter_content(self, chunk_size):
+        yield from (self.chunks if self.chunks is not None else [self.body])
+
+
+def catalogue(rows=None):
+    return Response(json.dumps([row()] if rows is None else rows).encode(), "application/json; charset=utf-8")
+
+
+def http(monkeypatch, *responses):
+    remaining = list(responses)
+    calls = []
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        assert remaining, "Unexpected HTTP request"
+        response = remaining.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+    monkeypatch.setattr(cam.requests, "get", get)
+    return calls
+
+
+def result(value, code=None):
+    ToolResult.model_validate(value)
+    json.dumps(value, allow_nan=False)
+    if code:
+        assert value["ok"] is False
+        assert value["error"]["code"] == code
+        assert value["error"]["next_step"]
+    else:
+        assert value["ok"] is True
+    return value
+
+
+@pytest.fixture(autouse=True)
+def no_accidental_network(monkeypatch):
+    monkeypatch.delenv("SCAVAGENT_DEV_CAMERA_FIXTURES", raising=False)
+    def denied(*args, **kwargs):
+        raise AssertionError("Tests must mock every HTTP request")
+    monkeypatch.setattr(cam.requests, "get", denied)
+
+
+def test_seed_contains_only_disabled_incomplete_candidates():
+    data = json.loads(cam.CATALOGUE_PATH.read_text())
+    assert len(data["candidates"]) >= 3
+    assert data["checkpoints"] == []
+    for candidate in data["candidates"]:
+        assert candidate["verification_status"] == "unverified"
+        assert candidate["enabled"] is False
+        assert candidate["stand_location"] is None
+        assert candidate["positioning_instructions"] is None
+    result(cam.find_camera_checkpoints(point=POINT), "NO_MATCH")
+
+
+def test_string_offline_unknown_and_online_normalization(monkeypatch):
+    values = ["false", False, "unknown", None, 1, "true", True]
+    http(monkeypatch, catalogue([row(f"camera-{i}", value) for i, value in enumerate(values)]))
+    rows, stamp = cam.DOTCameraClient().catalogue()
+    assert [c["is_online"] for c in rows.values()] == [False] * 5 + [True, True]
+    assert stamp.tzinfo is not None
+
+
+def test_nearest_standing_position_wins_not_hardware(monkeypatch):
+    calls = http(monkeypatch, catalogue([row("far"), row("near")]), Response())
+    records = [checkpoint("far", "far", lat=40.79), checkpoint("near", "near", lat=40.7851)]
+    reply = result(cam.find_camera_checkpoints(point=POINT, checkpoints=records, limit=1))
+    match = reply["data"]["checkpoints"][0]
+    assert match["checkpoint"]["checkpoint_id"] == "near"
+    assert 10 < match["distance_m"] < 12
+    assert 20 < match["estimated_detour_m"] < 24
+    assert match["checkpoint"]["positioning_instructions"].startswith("TEST")
+    assert match["availability"] == "still_retrieved"
+    assert calls[-1][0] == cam.CATALOGUE_URL + "/near/image"
+    assert all(kwargs["allow_redirects"] is False and kwargs["timeout"] == cam.TIMEOUT for _, kwargs in calls)
+
+
+def test_corridor_distance_and_round_trip_detour(monkeypatch):
+    route = [{"lat": 40.784, "lng": -73.97}, {"lat": 40.786, "lng": -73.97}]
+    records = [checkpoint(lng=-73.969)]
+    result(cam.find_camera_checkpoints(corridor=route, checkpoints=records, max_detour_m=100), "NO_MATCH")
+    http(monkeypatch, catalogue(), Response())
+    match = result(cam.find_camera_checkpoints(corridor=route, checkpoints=records, max_detour_m=180))["data"]["checkpoints"][0]
+    assert 80 < match["distance_m"] < 90
+    assert 160 < match["estimated_detour_m"] < 180
+
+
+def test_degenerate_corridor_is_bounded_point_distance(monkeypatch):
+    http(monkeypatch, catalogue(), Response())
+    reply = result(cam.find_camera_checkpoints(corridor=[POINT, POINT], checkpoints=[checkpoint()]))
+    assert reply["data"]["checkpoints"][0]["distance_m"] == 0
+
+
+@pytest.mark.parametrize("kwargs", [
+    {}, {"point": POINT, "corridor": [POINT, POINT]}, {"point": {"lat": 91, "lng": 0}},
+    {"point": POINT, "limit": 0}, {"point": POINT, "limit": True}, {"point": POINT, "limit": 6},
+    {"point": POINT, "max_distance_m": float("nan")}, {"point": POINT, "max_detour_m": -1},
+    {"point": POINT, "max_distance_m": "800"}, {"corridor": [POINT]},
+    {"corridor": [POINT] * 51}, {"corridor": [POINT, {"lat": 41.8, "lng": -73.97}]},
+])
+def test_bad_arguments_never_fetch(kwargs):
+    result(cam.find_camera_checkpoints(checkpoints=[checkpoint()], **kwargs), "INVALID_ARGUMENT")
+
+
+@pytest.mark.parametrize("changes", [{"enabled": False}, {"verification_status": "unverified"}, {"verification_status": "synthetic_fixture"}])
+def test_ineligible_positions_never_fetch(changes):
+    record = checkpoint(**changes)
+    result(cam.find_camera_checkpoints(point=POINT, checkpoints=[record]), "NO_MATCH")
+    result(cam.capture_camera_checkpoint(record.checkpoint_id, lambda **kwargs: None, checkpoints=[record]), "MISSING_EVIDENCE")
+
+
+def test_dev_flag_is_explicit_and_synthetic_data_stays_labeled(monkeypatch):
+    fixture = checkpoint(verification_status="synthetic_fixture")
+    monkeypatch.setenv("SCAVAGENT_DEV_CAMERA_FIXTURES", "true")
+    result(cam.find_camera_checkpoints(point=POINT, checkpoints=[fixture]), "NO_MATCH")
+    monkeypatch.setenv("SCAVAGENT_DEV_CAMERA_FIXTURES", "1")
+    reply = result(cam.find_camera_checkpoints(point=POINT, checkpoints=[fixture]))
+    assert reply["freshness"]["kind"] == "synthetic_fixture"
+    assert reply["data"]["checkpoints"][0]["availability"] == "synthetic_fixture_not_checked"
+    assert any("DEVELOPMENT FIXTURE" in w for w in reply["warnings"])
+    result(cam.capture_camera_checkpoint(fixture.checkpoint_id, lambda **kwargs: None, checkpoints=[fixture]), "MISSING_EVIDENCE")
+
+
+def test_unknown_offline_and_broken_feeds_skip_to_working_feed(monkeypatch):
+    records = [checkpoint("a", "missing"), checkpoint("b", "offline"), checkpoint("c", "broken"), checkpoint("d", "works")]
+    calls = http(monkeypatch, catalogue([row("offline", "false"), row("broken"), row("works")]), Response(status=503), Response())
+    reply = result(cam.find_camera_checkpoints(point=POINT, checkpoints=records))
+    assert [m["checkpoint"]["checkpoint_id"] for m in reply["data"]["checkpoints"]] == ["d"]
+    assert len(calls) == 3
+    assert any("3 unavailable" in w for w in reply["warnings"])
+
+
+def test_probe_count_is_bounded_even_if_all_feeds_fail(monkeypatch):
+    records = [checkpoint(str(i), f"camera-{i}") for i in range(10)]
+    calls = http(monkeypatch, catalogue([row(f"camera-{i}") for i in range(10)]), *[Response(status=503) for _ in range(5)])
+    result(cam.find_camera_checkpoints(point=POINT, checkpoints=records), "UPSTREAM_UNAVAILABLE")
+    assert len(calls) == 6
+
+
+@pytest.mark.parametrize("response", [
+    requests.Timeout("secret must never appear"), Response(status=302), Response(status=500),
+    Response(b"not json", "application/json"), Response(b"{}", "application/json"),
+    Response(b"[]", "application/json"), Response(b"{}", "text/html"),
+    catalogue([row(), row()]),
+    Response(b"", "application/json", headers={"Content-Length": "9000000"}),
+])
+def test_catalogue_failures_are_actionable_and_do_not_leak(monkeypatch, response):
+    http(monkeypatch, response)
+    reply = result(cam.find_camera_checkpoints(point=POINT, checkpoints=[checkpoint()]), "UPSTREAM_UNAVAILABLE")
+    assert "secret" not in json.dumps(reply)
+
+
+@pytest.mark.parametrize("response", [
+    Response(status=302, headers={"Location": "https://evil.invalid"}), Response(status=404),
+    Response(b"<svg></svg>", "image/svg+xml"), Response(b"<html>offline</html>", "image/jpeg"),
+    Response(JPEG[:-2]), Response(b""), Response(headers={"Content-Length": "99999999"}),
+    requests.ConnectionError("sensitive internal diagnostic"),
+])
+def test_image_failure_does_not_call_storage(monkeypatch, response):
+    http(monkeypatch, catalogue(), response)
+    def never(**kwargs):
+        pytest.fail("Storage must not be called for failed captures")
+    reply = result(cam.capture_camera_checkpoint("test_cp", never, checkpoints=[checkpoint()]), "UPSTREAM_UNAVAILABLE")
+    assert "sensitive" not in json.dumps(reply)
+
+
+def test_unknown_or_malicious_ids_never_form_a_still_url(monkeypatch):
+    calls = http(monkeypatch, catalogue([row("../../private"), row()]))
+    result(cam.capture_camera_checkpoint("test_cp", lambda **kw: None, checkpoints=[checkpoint(camera_id="../../private")]), "UPSTREAM_UNAVAILABLE")
+    assert [url for url, _ in calls] == [cam.CATALOGUE_URL]
+
+
+def test_oversized_stream_and_slow_stream_are_rejected(monkeypatch):
+    monkeypatch.setattr(cam, "MAX_IMAGE_BYTES", 6)
+    http(monkeypatch, catalogue(), Response(chunks=[b"1234", b"5678"]))
+    result(cam.capture_camera_checkpoint("test_cp", lambda **kw: None, checkpoints=[checkpoint()]), "UPSTREAM_UNAVAILABLE")
+    tick = iter([0, 16])
+    monkeypatch.setattr(cam.time, "monotonic", lambda: next(tick))
+    http(monkeypatch, catalogue())
+    with pytest.raises(cam.CameraUnavailable, match="time limit"):
+        cam.DOTCameraClient().catalogue()
+
+
+def asset_for(kwargs, **updates):
+    value = dict(asset_id="saved-test", media_url="/media/saved-test", byte_size=len(kwargs["data"]),
+                 provenance="live_capture", **{k:v for k,v in kwargs.items() if k != "data"})
+    value.update(updates)
+    return PhotoAsset(**value)
+
+
+def test_capture_passes_exact_bytes_and_metadata_once(monkeypatch):
+    http(monkeypatch, catalogue(), Response(headers={"Date": "Mon, 28 Sep 2026 12:00:00 GMT", "Last-Modified": "Mon, 28 Sep 2026 11:59:00 GMT"}))
+    saved = []
+    def save(**kwargs):
+        saved.append(kwargs)
+        return asset_for(kwargs)
+    reply = result(cam.capture_camera_checkpoint("test_cp", save, checkpoints=[checkpoint()]))
+    assert len(saved) == 1 and saved[0]["data"] == JPEG
+    assert saved[0]["source_url"] == cam.CATALOGUE_URL + "/test-camera/image"
+    assert saved[0]["checkpoint_id"] == "test_cp" and saved[0]["retrieved_at"].tzinfo is not None
+    photo = PhotoAsset.model_validate(reply["data"]["photo"])
+    assert photo.media_url == "/media/saved-test" and photo.frame_time is None
+    assert photo.visibility == "unconfirmed" and photo.retrieved_at == saved[0]["retrieved_at"]
+    assert "MOCK_HTTP_IMAGE_BYTES" not in json.dumps(reply)
+
+
+@pytest.mark.parametrize("changes", [
+    {"camera_id": "another-camera"}, {"checkpoint_id": "another-checkpoint"},
+    {"byte_size": 1}, {"content_type": "image/png"}, {"retrieved_at": STAMP},
+    {"frame_time": STAMP}, {"visibility": "user_confirmed_visible"}, {"provenance": "synthetic_fixture"},
+    {"media_url": "https://evil.invalid/photo.jpg"}, {"media_url": "/media/%252e%252e/secrets"},
+])
+def test_storage_cannot_substitute_capture_metadata(monkeypatch, changes):
+    http(monkeypatch, catalogue(), Response())
+    result(cam.capture_camera_checkpoint("test_cp", lambda **kw: asset_for(kw, **changes), checkpoints=[checkpoint()]), "INTERNAL_ERROR")
+
+
+def test_storage_failure_is_not_retried_and_is_sanitized(monkeypatch):
+    http(monkeypatch, catalogue(), Response())
+    saved = []
+    def fail(**kwargs):
+        saved.append(kwargs)
+        raise RuntimeError("secret-storage-token")
+    reply = result(cam.capture_camera_checkpoint("test_cp", fail, checkpoints=[checkpoint()]), "INTERNAL_ERROR")
+    assert len(saved) == 1 and "secret-storage-token" not in json.dumps(reply)
+    result(cam.capture_camera_checkpoint("test_cp", checkpoints=[checkpoint()]), "INTERNAL_ERROR")
+    result(cam.capture_camera_checkpoint("unknown", checkpoints=[]), "NO_MATCH")
+    result(cam.capture_camera_checkpoint(None), "INVALID_ARGUMENT")
+
+
+def test_invalid_local_records_are_not_silently_treated_as_empty():
+    result(cam.find_camera_checkpoints(point=POINT, checkpoints=[{"bad": True}]), "INTERNAL_ERROR")
+    result(cam.capture_camera_checkpoint("test_cp", checkpoints=[{"bad": True}]), "INTERNAL_ERROR")
+    result(cam.find_camera_checkpoints(point=POINT, checkpoints=[checkpoint(), checkpoint()]), "INTERNAL_ERROR")
+
+
+def test_exported_tools_exclude_server_only_arguments():
+    assert set(cam.CAMERA_TOOL_MAP) == {"find_camera_checkpoints", "capture_camera_checkpoint"}
+    for tool in cam.CAMERA_TOOLS:
+        props = tool["function"]["parameters"]["properties"]
+        assert not {"save_asset", "session_id", "client", "checkpoints", "allow_synthetic", "url"}.intersection(props)
+        assert tool["function"]["parameters"]["additionalProperties"] is False

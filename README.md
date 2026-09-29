@@ -2,7 +2,7 @@
 
 A chat-based NYC adventure agent being built by Jan and Kyle for a class project due October 7, 2026. Users provide a starting location and optionally a destination, time budget, required stops, transport preferences, and theme. The planned agent researches real places, creates a grounded fictional adventure, adapts as plans change, and captures traffic-camera souvenirs at verified pedestrian viewpoints.
 
-**Current status:** the supplied web tool-calling starter is imported. Its existing demonstration is a weather tool. Adventure features and deployment are not yet implemented or verified. This repository now includes the implementation handoff for the team and its coding agents.
+**Current status:** shared schemas, durable sessions, and adventure state tools are implemented; adventure planning, cameras, the new frontend, and deployment are in progress. See [docs/STATUS.md](docs/STATUS.md). This repository now includes the implementation handoff for the team and its coding agents.
 
 ## Start development
 
@@ -15,9 +15,9 @@ Read [the handoff entrypoint](docs/START_HERE.md). It links the [product plan](d
 
 Parallel coding sessions should use separate checkouts/worktrees and clearly assigned tasks. Shared schemas are the first integration milestone. Spotify soundtracks come only after the core experience is implemented and tested.
 
-## Run the existing starter
+## Run locally
 
-Use Python 3.10 or later and `uv`. The current starter uses Google application-default credentials and a configured Google Cloud project with access to its selected model. Final model choice is deferred.
+Use Python 3.10 or later and `uv`. The model call uses Google Application Default Credentials and the project `agentic-ai-msds` (see [DEPLOY.md](docs/DEPLOY.md)). Final model choice is deferred; set `SCAVAGENT_MODEL` to change it.
 
 ```sh
 uv sync
@@ -25,7 +25,11 @@ gcloud auth application-default login
 uv run app.py
 ```
 
-Open http://localhost:8000. Try: “Is it nice enough to go for a walk in New York?” The existing weather integration uses Open-Meteo. Confirm your Google Cloud project/billing/API configuration if the model call fails. These commands describe the imported starter; no successful authenticated run is asserted by the documentation handoff.
+Open http://localhost:8000. Sessions persist in `.data/scavagent.db`, so a conversation and its adventure progress survive a server restart. Other settings are listed in [.env.example](.env.example).
+
+To try progression before the planner exists, start with `SCAVAGENT_DEV_FIXTURES=1 uv run app.py` and ask for “the constrained_route test adventure”. It loads a labeled synthetic hunt; its places and clues are invented.
+
+Run the checks with `uv run pytest`. Deployment steps are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 The [original starter README](docs/STARTER_README.md) is preserved for provenance.
 

@@ -1,7 +1,7 @@
 import unittest
 
 from integrations.routes import get_route, get_walking_times
-from tests.fake_http import FakeHTTP
+from fake_http import FakeHTTP
 
 VALHALLA = "valhalla1.openstreetmap.de"
 OSRM = "routing.openstreetmap.de"

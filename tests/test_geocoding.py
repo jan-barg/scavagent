@@ -5,7 +5,7 @@ import requests
 
 from integrations import geocoding
 from integrations.geocoding import geocode_place, normalize_street, parse_intersection, street_pattern
-from tests.fake_http import FakeHTTP
+from fake_http import FakeHTTP
 
 OVERPASS = "overpass-api.de"
 OVERPASS_MIRROR = "maps.mail.ru"
