@@ -489,6 +489,7 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
 
     stop_beats = [b for b in story.beats if b.checkpoint_id in order]
     new_stop_beats = [b for b in new_beats if b.checkpoint_id in order]
+    finale = next((b for b in reversed(story.beats) if b.checkpoint_id is None), None)
     cast = [member if isinstance(member, Character) else Character(name=_cast_name(member))
             for member in story.cast if _cast_name(member)]
     briefing = (story.briefing or "").strip()
@@ -512,6 +513,11 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
             elif member.introduced_in not in order:
                 flag("CAST_UNINTRODUCED", f"{member.name} is introduced_in {member.introduced_in!r}, which is neither "
                                           "\"briefing\" nor a stop of this plan.")
+            elif not any(_member(name, cast) is member for b in stop_beats if b.checkpoint_id == member.introduced_in
+                         for name in b.characters):
+                flag("CAST_UNINTRODUCED", f"{member.name} is introduced_in {member.introduced_in}, but that stop's beat "
+                                          "does not list them. Add them to its characters, or introduce them in the "
+                                          "briefing.", member.introduced_in)
         appearing = {id(m) for b in story.beats for name in b.characters if (m := _member(name, cast))}
         for member in cast:
             if id(member) not in appearing:
@@ -552,7 +558,6 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
                 flag("CLUE_UNUSED", f"{beat.checkpoint_id}'s clue ({beat.clue}) is never used. List "
                                     f"{beat.checkpoint_id} in the uses of a later beat or the finale, and let that beat "
                                     "build on it.", beat.checkpoint_id)
-        finale = next((b for b in reversed(story.beats) if b.checkpoint_id is None), None)
         needed = min(2, len(plan.checkpoints))
         if finale is None:
             flag("SOLUTION_UNEARNED", f"The story has no finale. Add one in chat_beats whose uses lists the stops whose "
@@ -563,23 +568,28 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
                                       "(e.g. \"Locker 1021, under the name Roxy\").")
 
     # --- Codes, keys, and passwords come from puzzles the user solves ---
-    # A clue earns an object when the user solves the stop's chat_puzzle, the clue states that answer, and
-    # the clue names the object ("the locker code 1021"): then later beats may use "the code".
-    earned = []  # (position, kinds of object the clue names)
+    # A stop's clue is earned when the user solves its chat_puzzle and the clue states that answer. A beat may
+    # speak of a code (a key, a combination...) at such a stop, when it builds on an earned clue (its uses), or
+    # when an earlier earned clue names that kind of object ("the locker code 1021").
+    solved = {}  # beat_id -> position of the stop where the user earns its clue
+    named = []  # (position, kinds of object an earned clue names)
     for beat in stop_beats:
         activity = by_id[beat.checkpoint_id].activity
         if activity.type == "chat_puzzle" and activity.solution and beat.clue and _within(activity.solution, beat.clue):
-            earned.append((position(beat), {_object_kind(m.group(0)) for m in _EARNED_OBJECT.finditer(beat.clue)}))
-    texts = [(f"{b.beat_id} ({b.checkpoint_id or 'chat'})", b.checkpoint_id, position(b),
-              f"{b.summary} {b.reveals or ''} {b.clue or ''}") for b in (story.beats if whole else new_beats)]
+            solved[beat.beat_id] = position(beat)
+            named.append((position(beat), {_object_kind(m.group(0)) for m in _EARNED_OBJECT.finditer(beat.clue)}))
+    texts = [(f"{b.beat_id} ({b.checkpoint_id or 'chat'})", b, position(b), f"{b.summary} {b.reveals or ''} {b.clue or ''}")
+             for b in (story.beats if whole else new_beats)]
     if whole:
-        texts.append(("The solution", None, end, story.solution))
-    for label, checkpoint_id, at, text in texts:
+        texts.append(("The solution", finale, end, story.solution))  # it resolves what the finale builds on
+    for label, beat, at, text in texts:
+        built = beat is not None and (beat.beat_id in solved or any(solved.get(ref, end + 1) <= at for ref in beat.uses))
         for found in _EARNED_OBJECT.finditer(text):
-            if not any(p <= at and _object_kind(found.group(0)) in kinds for p, kinds in earned):
-                flag("OBJECT_UNEARNED", f"{label} mentions \"{found.group(0)}\", but no puzzle the user solves earns it. "
-                                        "Make it the clue of a chat_puzzle at this or an earlier stop (activity.solution "
-                                        "is the answer and the beat's clue states it), or leave it out.", checkpoint_id)
+            if not built and not any(p <= at and _object_kind(found.group(0)) in kinds for p, kinds in named):
+                flag("OBJECT_UNEARNED", f"{label} mentions \"{found.group(0)}\", but it builds on no puzzle the user "
+                                        "solves. List in its uses the stops whose chat_puzzle answers make it up (each "
+                                        "with activity.solution, stated in its beat's clue), or leave it out.",
+                     beat.checkpoint_id if beat is not None and label != "The solution" else None)
                 break
 
     # --- The theme, through each stop's own sourced claims ---

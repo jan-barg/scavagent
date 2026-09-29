@@ -168,7 +168,10 @@ def test_a_handler_needs_a_contact_channel():
 @pytest.mark.parametrize("change, detail", [
     (lambda d: d["stops"][1]["beat"]["characters"].append("Detective Rook"), "not in story.cast"),
     (lambda d: (d["story"]["cast"].append({"name": "Detective Rook", "role": "rival", "introduced_in": "stop_2"}),
-                d["stops"][0]["beat"]["characters"].append("Detective Rook")), "introduced only at stop_2"),
+                d["stops"][0]["beat"]["characters"].append("Detective Rook"),
+                d["stops"][1]["beat"]["characters"].append("Detective Rook")), "introduced only at stop_2"),
+    (lambda d: (d["story"]["cast"].append({"name": "Viktor", "role": "double agent", "introduced_in": "stop_1"}),
+                d["chat_beats"][0]["characters"].append("Viktor")), "that stop's beat does not list them"),
     (lambda d: d["story"].update(briefing=BRIEFING.replace("Mara Quill", "Your contact")), "never names them"),
 ])
 def test_characters_are_introduced_before_they_act(change, detail):
@@ -227,14 +230,23 @@ def test_the_finale_builds_on_the_clues():
 
 
 def test_a_code_must_come_from_a_solved_puzzle():
-    handed_over = changed(lambda d: d["chat_beats"][0].update(summary="Mara: \"The vault code opens locker 1021.\""))
-    earned = changed(lambda d: (d["stops"][1]["beat"].update(clue="the locker code 1021"),
-                                d["chat_beats"][0].update(summary="Mara: \"The locker code 1021, under Roxy. Got it.\"")))
+    def observed_not_solved(d):  # stop_2 becomes an observation whose beat simply announces a code
+        d["stops"][1]["activity"] = {"type": "user_observation", "prompt": "Describe the facade.",
+                                     "answer_rule": "Any honest description.", "fallback": "Continue."}
+        d["stops"][1]["beat"].update(summary="Mara: \"The locker code is 1021.\"", uses=[])
 
-    result = evaluate(handed_over, 5, 6)
-    assert codes(result) == ["OBJECT_UNEARNED"]
-    assert '"code"' in messages(result)
-    assert evaluate(earned, 5, 6)["data"]["passes"]
+    def slipped_in_chat(d):  # a chat beat that builds on nothing hands over a combination
+        d["chat_beats"].insert(0, {"summary": "Mara: \"A source slipped us the safe combination.\"",
+                                   "characters": ["Mara Quill"]})
+
+    def built_from_clues(d):  # the finale builds on both solved puzzles, so it can call them a code
+        d["chat_beats"][0]["summary"] = "Mara: \"Roxy's code is locker 1021. We have the reel.\""
+
+    for change, word in [(observed_not_solved, '"code"'), (slipped_in_chat, '"combination"')]:
+        result = evaluate(changed(change), 5, 6)
+        assert codes(result) == ["OBJECT_UNEARNED"], change.__name__
+        assert word in messages(result)
+    assert evaluate(changed(built_from_clues), 5, 6)["data"]["passes"]
 
 
 def test_ordinary_senses_of_code_and_key_are_not_objects():
@@ -335,9 +347,10 @@ def test_a_link_rejected_before_says_so_and_offers_the_stops_source():
 
 def test_uses_name_stops_and_an_unknown_one_is_a_draft_error():
     by_number = evaluate(changed(lambda d: d["chat_beats"][0].update(uses=["1", "stop_2"])), 5, 6)
+    one_string = evaluate(changed(lambda d: d["chat_beats"][0].update(uses="stop_1, stop_2")), 5, 6)
     unknown = evaluate(changed(lambda d: d["chat_beats"][0].update(uses=["stop_7"])), 5, 6)
 
-    assert by_number["data"]["passes"]
+    assert by_number["data"]["passes"] and one_string["data"]["passes"]
     assert unknown["error"]["code"] == "INVALID_ARGUMENT" and "stop_1, stop_2" in unknown["error"]["message"]
 
 

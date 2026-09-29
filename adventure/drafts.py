@@ -336,7 +336,7 @@ def _checkpoint(spec, checkpoint_id, place_id, beat_id):
     if isinstance(link, str):
         link = {"why": link}
     if isinstance(link, dict):
-        link = {"claim_ids": _names(link.get("claim_ids")), "why": str(link.get("why") or "").strip()}
+        link = {"claim_ids": _names(link.get("claim_ids"), r"[,;\s]+"), "why": str(link.get("why") or "").strip()}
     try:
         activity = Activity.model_validate(spec.get("activity") or {})
         return Checkpoint(checkpoint_id=checkpoint_id, place_id=place_id,
@@ -352,9 +352,9 @@ def _checkpoint(spec, checkpoint_id, place_id, beat_id):
 def _beat(beat_id, checkpoint_id, spec):
     if not isinstance(spec, dict) or not str(spec.get("summary") or "").strip():
         raise DraftError(f"Story beat for {checkpoint_id or 'chat'} needs a summary.")
-    uses = [f"stop_{ref}" if ref.isdigit() else ref for ref in _names(spec.get("uses"))]  # "1" means stop_1
+    uses = [f"stop_{ref}" if ref.isdigit() else ref for ref in _names(spec.get("uses"), r"[,;\s]+")]  # "1": stop_1
     return StoryBeat(beat_id=beat_id, checkpoint_id=checkpoint_id, summary=str(spec["summary"]),
-                     reveals=_text(spec.get("reveals")), characters=_names(spec.get("characters")),
+                     reveals=_text(spec.get("reveals")), characters=_names(spec.get("characters"), r"[,;]"),
                      clue=_text(spec.get("clue")), uses=uses)
 
 
@@ -367,8 +367,10 @@ def _resolve_uses(beats, earlier_stops=None):
         for ref in beat.uses:
             target = ref if ref in beats else at_stop.get(ref)
             if target is None:
+                known = (f"name the stops whose clues it builds on: {', '.join(at_stop)}." if at_stop else
+                         "no stop in this draft has a beat yet, so give each stop a beat (summary, characters, clue).")
                 raise DraftError(f"The beat for {beat.checkpoint_id or 'chat'} uses {ref!r}, which is not a stop with a "
-                                 f"beat. Name the stops whose clues it builds on: {', '.join(at_stop) or 'none yet'}.")
+                                 f"beat; {known}")
             if target != beat.beat_id and target not in uses:
                 uses.append(target)
         resolved[beat.beat_id] = beat.model_copy(update={"uses": uses})
@@ -408,8 +410,10 @@ def _list(value, name):
     return value
 
 
-def _names(value):
-    """Strings from a list of names or ids, or from one string; objects give their name."""
+def _names(value, separators=None):
+    """Strings from a list of names or ids; objects give their name. One string alone is split at `separators`."""
+    if isinstance(value, str) and separators:
+        value = re.split(separators, value)
     names = [item.get("name") if isinstance(item, dict) else item for item in _list(value, "list")]
     return [str(name).strip() for name in names if name is not None and str(name).strip()]
 

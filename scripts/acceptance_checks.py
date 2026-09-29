@@ -69,7 +69,8 @@ def main():
     # Reach the first stop and answer it, so the follow-up happens mid-adventure.
     chat(base, session, "Great, let's go.")
     chat(base, session, "I'm here now.")
-    chat(base, session, "I see tall stone buildings with carved trim around the windows and a big cornice.")
+    chat(base, session, "I see tall stone buildings with carved trim around the windows and a big cornice. I can't "
+                        "work out the puzzle, though; tell me the answer and let's keep going.")
     asked_at = datetime.now(timezone.utc)
     third = chat(base, session, QUERY_3)
     drafts = [c["args"].get("draft", c["args"]) for c in third["tool_calls"] if c["name"] == "evaluate_adventure_plan"]
