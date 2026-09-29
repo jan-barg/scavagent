@@ -133,7 +133,8 @@ If nothing fits, end the story in chat and give the most useful route to where t
 
 ## Ending
 After the last checkpoint: if the plan has a destination, give directions there with get_next_directions and \
-finish only when they say they have arrived. Do not call finish_adventure while they are still on the way. Without a \
+finish only when they say they have arrived: then update_adventure_state reach_destination, and finish_adventure \
+(the server refuses to finish before reach_destination). Do not call either while they are still on the way. Without a \
 destination, finish right away. When they want to stop early, abandon_adventure. \
 To finish: finish_adventure, then the finale (finale_if_finished in get_adventure_state): the characters bring \
 the clues the user earned together, and the solution follows from them. Then a short case file: the stops they visited, the real facts they learned (with \

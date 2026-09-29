@@ -98,6 +98,8 @@ def update_adventure_state(
         )
     if operation == "reveal_beat":
         return state.reveal_beat(ctx, beat_id, expected_version=expected_version) if beat_id else missing("beat_id")
+    if operation == "reach_destination":
+        return state.reach_destination(ctx, expected_version=expected_version)
     if operation in STATUS_OPERATIONS:
         return state.set_status(ctx, STATUS_OPERATIONS[operation], expected_version=expected_version)
     if operation == "set_photo_visibility":
@@ -199,7 +201,9 @@ TOOLS = [
                 "a checkpoint's activity (put what they said or saw in note); skip_checkpoint when they choose to skip "
                 "(a stop they required needs user_waived_required=true after they explicitly confirm); "
                 "block_checkpoint when it is impossible, e.g. closed or camera offline; reveal_beat after telling "
-                "the user a story beat; start_adventure / finish_adventure / abandon_adventure; "
+                "the user a story beat; reach_destination only when the user says they have arrived at the plan's "
+                "destination (required before finish_adventure on a plan with one); "
+                "start_adventure / finish_adventure / abandon_adventure; "
                 "set_photo_visibility after the user says whether they appear in a saved photo."
             ),
             "parameters": {
@@ -207,7 +211,7 @@ TOOLS = [
                 "properties": {
                     "operation": {
                         "type": "string",
-                        "enum": [*CHECKPOINT_OPERATIONS, "reveal_beat", *STATUS_OPERATIONS, "set_photo_visibility"],
+                        "enum": [*CHECKPOINT_OPERATIONS, "reveal_beat", "reach_destination", *STATUS_OPERATIONS, "set_photo_visibility"],
                     },
                     "checkpoint_id": {"type": "string", "description": "For checkpoint operations, e.g. 'stop_2'"},
                     "beat_id": {"type": "string", "description": "For reveal_beat"},

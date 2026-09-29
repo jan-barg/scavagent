@@ -551,7 +551,37 @@ def test_finishing_reveals_the_solution_only_at_the_end(active):
     for stop in ("stop_1", "stop_2", "stop_3"):
         tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id=stop)
     assert state.state_summary(active.record)["solution_if_finished"]
+    tools.update_adventure_state(active, "reach_destination")
     assert tools.update_adventure_state(active, "finish_adventure")["data"]["status"] == "completed"
+
+
+def test_an_adventure_with_a_destination_finishes_only_after_the_user_arrives(active):
+    # Grader query 3 once ended the adventure while the user said they still had to reach the destination.
+    tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
+    too_soon = tools.update_adventure_state(active, "reach_destination")
+    assert "stop_2" in too_soon["error"]["message"]  # The stops come before the destination
+    for stop in ("stop_2", "stop_3"):
+        tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id=stop)
+
+    on_the_way = tools.update_adventure_state(active, "finish_adventure")
+    assert "reach_destination" in on_the_way["error"]["next_step"] and active.record.adventure.status == "active"
+    assert state.state_summary(active.record)["destination_reached"] is False
+
+    assert tools.update_adventure_state(active, "reach_destination")["ok"]
+    assert state.state_summary(active.record)["destination_reached"] is True
+    assert tools.update_adventure_state(active, "finish_adventure")["data"]["status"] == "completed"
+
+
+def test_a_new_route_means_the_destination_is_not_reached_yet(active):
+    fixture = load_scenario("revision_after_skip")
+    tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
+    tools.update_adventure_state(active, "reveal_beat", beat_id="beat_1")
+    for stop in ("stop_2", "stop_3"):
+        tools.update_adventure_state(active, "skip_checkpoint", checkpoint_id=stop)
+    assert tools.update_adventure_state(active, "reach_destination")["ok"]
+
+    assert state.save_plan(active, passing(fixture.revised_plan))["ok"]  # The user changes where to end up
+    assert active.record.adventure.destination_reached_at is None
 
 
 def test_stops_are_completed_in_plan_order_and_finishing_needs_them_all_resolved(active):
@@ -565,6 +595,7 @@ def test_stops_are_completed_in_plan_order_and_finishing_needs_them_all_resolved
     # Skipping ahead is still allowed (for example "skip the next optional stop"), and resolves the route.
     assert tools.update_adventure_state(active, "skip_checkpoint", checkpoint_id="stop_3")["ok"]
     tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_2")
+    tools.update_adventure_state(active, "reach_destination")
     assert tools.update_adventure_state(active, "finish_adventure")["data"]["status"] == "completed"
 
 
@@ -609,6 +640,7 @@ def test_new_adventure_after_finishing_keeps_photos_but_resets_progress(active):
     photo = active.save_asset(b"x", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
     for stop in ("stop_1", "stop_2", "stop_3"):
         tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id=stop)
+    tools.update_adventure_state(active, "reach_destination")
     assert tools.update_adventure_state(active, "finish_adventure")["ok"]
 
     state.save_plan(active, load_scenario("start_only").plan)

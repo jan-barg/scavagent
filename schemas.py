@@ -379,6 +379,7 @@ class AdventureState(Record):
     user_reports: list[UserReport] = []
     latest_location: LocationContext | None = None
     photo_asset_ids: list[Id] = []
+    destination_reached_at: AwareDatetime | None = None  # When the user said they reached the plan's destination
     updated_at: AwareDatetime | None = None
 
     @model_validator(mode="after")

@@ -137,6 +137,24 @@ def test_an_empty_model_reply_is_asked_for_once_more(client, monkeypatch):
     assert "didn't get an answer" in client.post("/chat", json={"message": "hi"}).json()["response"]
 
 
+def test_a_turn_that_runs_out_of_tool_rounds_still_answers(client, monkeypatch):
+    # A live run spent its last round saving a plan, and the user got the limit message instead of the briefing.
+    calls = []
+
+    def busy_model(**kwargs):
+        calls.append(kwargs.get("tool_choice"))
+        if kwargs.get("tool_choice") == "none":
+            return reply(FakeMessage(content="Your briefing: the case of the missing tape.", tool_calls=None))
+        return reply(FakeMessage(content=None, tool_calls=[tool_call(f"c{len(calls)}", "get_weather", '{"location": "NYC"}')]))
+
+    monkeypatch.setattr(app_module.litellm, "completion", busy_model)
+    body = client.post("/chat", json={"message": "plan something"}).json()
+
+    assert body["response"] == "Your briefing: the case of the missing tape."
+    assert calls == [None] * app_module.MAX_TOOL_ROUNDS + ["none"]  # One last call, with tools switched off
+    assert len(body["tool_calls"]) == app_module.MAX_TOOL_ROUNDS
+
+
 def test_bad_tool_calls_become_actionable_failures(client, monkeypatch):
     script(
         monkeypatch,
