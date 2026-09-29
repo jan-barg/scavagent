@@ -91,7 +91,7 @@ const SESSION_KEY = "scavagent.session_id";
 const PENDING_KEY = "scavagent.pending_message.v1";
 const LOCATION_MAX_AGE = 90_000;
 let sessionId = readStored(SESSION_KEY);
-if (!sessionId || sessionId.length > 128) sessionId = null;
+if (!sessionId || !/^[A-Za-z0-9._-]{1,128}$/.test(sessionId)) sessionId = null;
 let pending = readPending();
 let pendingUser = null;
 let pendingReply = null;
@@ -106,7 +106,7 @@ function readPending() {
     const value = JSON.parse(readStored(PENDING_KEY));
     if (value && typeof value.message === "string" && value.message.length <= 8000 &&
         typeof value.client_message_id === "string" && /^[0-9a-f-]{36}$/i.test(value.client_message_id) &&
-        (value.session_id === null || typeof value.session_id === "string") && value.session_id === sessionId) return value;
+        (value.session_id === null || value.session_id === sessionId)) return value;
   } catch { /* Ignore corrupt or unavailable browser storage. */ }
   return null;
 }
@@ -246,15 +246,8 @@ async function restore() {
         if (data.session_id !== sessionId || !Array.isArray(data.messages)) throw new Error("Invalid history");
         const history = data.messages.filter(m => m && ["user", "assistant"].includes(m.role) && typeof m.text === "string").slice(-100);
         for (const message of history) addMessage(message.role, message.text, message.tool_calls);
-        // If a response was lost after the server committed, replay the SAME ID
-        // and replace its latest visible reply rather than adding duplicate bubbles.
-        if (pending) {
-          let index = history.length - 1;
-          if (history[index]?.role === "assistant") index -= 1;
-          if (history[index]?.role === "user" && history[index].text === pending.message) {
-            pendingUser = messages.children[index]; pendingReply = messages.children[index + 1] || null;
-          }
-        }
+        // History has no request IDs. Keep a pending turn separate instead of
+        // guessing which saved turn it belongs to from repeated text like "ready".
       }
       statusLine.textContent = messages.children.length ? "Your trail is here. Pick up wherever you left off." : "Tell me where you are, and we’ll start from there.";
     } catch { statusLine.textContent = "History couldn’t load. You can still send a message to reconnect."; }
@@ -270,8 +263,13 @@ async function send(event) {
   if (busy) return;
   const text = input.value.trim();
   if (!pending && !text) return;
-  if (!pending) {
-    pending = { message:text, session_id:sessionId, client_message_id:uuid() };
+  if (!sessionId) {
+    sessionId = uuid();
+    store(SESSION_KEY, sessionId);
+  }
+  if (!pending || pending.session_id === null) {
+    // Upgrade older pending messages without changing their text or request ID.
+    pending = pending ? { ...pending, session_id:sessionId } : { message:text, session_id:sessionId, client_message_id:uuid() };
     store(PENDING_KEY, JSON.stringify(pending));
   }
   busy = true; input.value = ""; refreshControls();
@@ -290,8 +288,7 @@ async function send(event) {
       throw new Error("Chat unavailable");
     }
     const data = await response.json();
-    if (typeof data.response !== "string" || typeof data.session_id !== "string" || !data.session_id || data.session_id.length > 128 || !Array.isArray(data.tool_calls)) throw new Error("Invalid reply");
-    sessionId = data.session_id; store(SESSION_KEY, sessionId);
+    if (typeof data.response !== "string" || data.session_id !== payload.session_id || !Array.isArray(data.tool_calls)) throw new Error("Invalid reply");
     updateReply(pendingReply, data);
     pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
     input.placeholder = "What’s our next move?";
