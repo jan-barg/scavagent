@@ -39,6 +39,12 @@ TOOL_MAP = {
 SESSION_TOOLS = {"get_adventure_state", "update_adventure_state", "load_dev_adventure", "capture_camera_checkpoint"}
 ```
 
+## `pyproject.toml` and `uv.lock`: add `gtfs-realtime-bindings`
+
+Why: live subway arrivals (`integrations/mta.py`) come from the MTA's GTFS-realtime feeds, which are protobuf. The official Google bindings decode them; version 2.2.0 works with the installed protobuf 6. Added with `uv add gtfs-realtime-bindings`: one line in `pyproject.toml` (`"gtfs-realtime-bindings>=2.2.0"` in `dependencies`) and the matching `uv.lock` entries. If `uv.lock` conflicts while merging, take either side and run `uv lock` again.
+
+Original: `pyproject.toml` and `uv.lock` at the base commit had no `gtfs-realtime-bindings`.
+
 ## `app.py`: use the agent prompt; allow more tool rounds
 
 Why: the interim prompt said "Kyle's agent work replaces it"; `agent.py` now holds the planning, guiding, adapting, and ending instructions. Planning a researched adventure takes more rounds than the starter's 8 (geocode, find, research, evaluate, fix, evaluate, save, reply), so the limit is 12. `TURN_SECONDS` still bounds every turn.
