@@ -99,6 +99,7 @@ def test_a_turn_cut_short_is_stored_with_the_reply_the_user_saw(client, monkeypa
     seen = script(
         monkeypatch,
         FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+        FakeMessage(content=None, tool_calls=None), FakeMessage(content=None, tool_calls=None),  # Last call, tools off
         FakeMessage(content="Here you go.", tool_calls=None),
     )
     first = client.post("/chat", json={"message": "weather?"}).json()
@@ -106,8 +107,8 @@ def test_a_turn_cut_short_is_stored_with_the_reply_the_user_saw(client, monkeypa
 
     assert "tool-call limit" in first["response"]
     # The next turn sees the tool result, then what the user was told, then their new message.
-    assert [m["role"] for m in seen[1][1:]] == ["user", "assistant", "tool", "assistant", "user"]
-    assert seen[1][-2] == {"role": "assistant", "content": first["response"]}
+    assert [m["role"] for m in seen[3][1:]] == ["user", "assistant", "tool", "assistant", "user"]
+    assert seen[3][-2] == {"role": "assistant", "content": first["response"]}
 
 
 def test_an_empty_reply_is_not_stored_but_the_fallback_the_user_saw_is(client, monkeypatch):
@@ -250,3 +251,16 @@ def test_malformed_tool_arguments_do_not_break_the_rest_of_the_conversation(clie
     for context in seen[1:]:
         sent = [call["function"]["arguments"] for m in context for call in m.get("tool_calls") or []]
         assert sent and all(isinstance(json.loads(a), dict) for a in sent)
+
+
+def test_claude_answers_after_the_last_tool_round_with_tools_off(client, vertex_claude, monkeypatch):
+    replies, sent = vertex_claude
+    monkeypatch.setattr(app_module, "MAX_TOOL_ROUNDS", 1)
+    replies += [
+        (200, anthropic_reply({"type": "thinking", "thinking": "", "signature": "SIG"},
+                              {"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {"location": "NYC"}},
+                              stop_reason="tool_use")),
+        (200, anthropic_reply({"type": "text", "text": "Your briefing."})),
+    ]
+    assert client.post("/chat", json={"message": "plan"}).json()["response"] == "Your briefing."
+    assert "tool_choice" not in sent[0] and sent[1]["tool_choice"] == {"type": "none"}  # Claude 5.5 accepts none

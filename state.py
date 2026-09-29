@@ -576,7 +576,7 @@ def save_plan(
         problem = _revision_problem(active_plan(record), plan, state, set(waived_required_ids))
         if problem:
             return tool_error("INVALID_ARGUMENT", problem, retryable=False, next_step="Revise the plan and try again.")
-        base = state
+        base = state.model_copy(update={"destination_reached_at": None})  # A new route: not there yet
     else:
         # A fresh adventure: earlier progress belonged to another plan. Photos and location stay.
         base = AdventureState(
@@ -720,12 +720,33 @@ def set_status(ctx: ToolContext, status: str, *, expected_version: int | None = 
         return tool_error("INVALID_ARGUMENT", f"Checkpoint {state.current_checkpoint_id} and any after it are unresolved.",
                           retryable=False,
                           next_step="Complete or skip the remaining stops, or abandon_adventure if the user is stopping early.")
+    if status == "completed" and plan.request.destination and state.destination_reached_at is None:
+        return tool_error("INVALID_ARGUMENT", f"The user has not reached the destination ({plan.request.destination.place_text or 'the end point'}) yet.",
+                          retryable=False,
+                          next_step="Give directions with get_next_directions. When the user says they have arrived, call "
+                                    "reach_destination, then finish_adventure.")
     if state.status != status:
         update = {"status": status}
         if status in ("completed", "abandoned"):
             update["current_checkpoint_id"] = None
         state = _commit(ctx, state.model_copy(update=update))
     return tool_ok({"status": state.status, "state_version": state.version})
+
+
+def reach_destination(ctx: ToolContext, *, expected_version: int | None = None) -> dict:
+    """Record that the user says they have reached the plan's destination, after the last stop."""
+    if conflict := _version_conflict(ctx, expected_version):
+        return conflict
+    state, plan = ctx.record.adventure, active_plan(ctx.record)
+    if plan is None or state.status != "active" or plan.request.destination is None:
+        return tool_error("INVALID_ARGUMENT", "There is no adventure under way with a destination.", retryable=False,
+                          next_step="Without a destination, finish_adventure after the last stop.")
+    if state.current_checkpoint_id is not None:
+        return tool_error("INVALID_ARGUMENT", f"Checkpoint {state.current_checkpoint_id} comes before the destination.",
+                          retryable=False, next_step=f"Complete or skip {state.current_checkpoint_id} first.")
+    if state.destination_reached_at is None:
+        state = _commit(ctx, state.model_copy(update={"destination_reached_at": ctx.now()}))
+    return tool_ok({"destination_reached": True, "state_version": state.version})
 
 
 def set_photo_visibility(ctx: ToolContext, asset_id: str, visibility: str) -> dict:
@@ -765,13 +786,19 @@ def state_summary(record: SessionRecord) -> dict:
     outcome = {i: "completed" for i in state.completed_ids}
     outcome |= {i: "skipped" for i in state.skipped_ids} | {i: "blocked" for i in state.blocked_ids}
     current = next((c for c in plan.checkpoints if c.checkpoint_id == state.current_checkpoint_id), None)
+    # Story design v2 (Kyle): the last chat beat is the finale. Other unrevealed chat beats, and the beats of
+    # stops the user skipped or could not reach, hold clues still to tell in chat.
+    finale = next((b for b in reversed(plan.story.beats) if b.checkpoint_id is None), None)
+    missed = set(state.skipped_ids) | set(state.blocked_ids)
     summary |= {
         "plan_id": plan.plan_id,
         "plan_version": plan.version,
         "theme": plan.request.theme,
         "deadline": plan.request.deadline.isoformat() if plan.request.deadline else None,
         "destination": plan.request.destination.place_text if plan.request.destination else None,
+        "destination_reached": state.destination_reached_at is not None,
         "premise": plan.story.premise,
+        "cast": [c if isinstance(c, str) else c.model_dump(mode="json") for c in plan.story.cast],
         "checkpoints": [
             {"checkpoint_id": c.checkpoint_id, "required_by_user": c.required_by_user,
              "activity_type": c.activity.type, "camera_checkpoint_id": c.camera_checkpoint_id,
@@ -789,5 +816,9 @@ def state_summary(record: SessionRecord) -> dict:
             None,
         ),
         "solution_if_finished": plan.story.solution if state.current_checkpoint_id is None else None,
+        "clues_to_tell_in_chat": [b.model_dump(mode="json") for b in plan.story.beats
+                                  if b is not finale and b.beat_id not in state.revealed_beat_ids
+                                  and (b.checkpoint_id is None or b.checkpoint_id in missed)],
+        "finale_if_finished": finale.model_dump(mode="json") if finale and state.current_checkpoint_id is None else None,
     }
     return summary

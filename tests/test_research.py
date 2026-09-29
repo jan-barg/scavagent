@@ -1,3 +1,5 @@
+import pytest
+
 from fake_http import FakeHTTP
 from integrations.research import LPC_BUILDINGS_PAGE, find_places, research_place
 from schemas import PlaceEvidence, ToolResult
@@ -87,6 +89,62 @@ def test_designated_landmarks_are_not_crowded_out_by_nearer_articles():
     ids = [c["place_id"] for c in result["data"]["candidates"]]
     assert len(ids) == 6
     assert "lpc:LP-00289" in ids and "lpc:LP-01658" in ids
+
+
+# Wikipedia's search needs every word of a query, so a live "music rock historic landmark" near 96th
+# Street and 2nd Avenue matched 2 unrelated articles where "music" alone matched 24.
+BOWERY_AND_SPRING = (40.7211, -73.9942)
+BOWERY_BALLROOM = article(1, "Bowery Ballroom", 40.72041, -73.99366, "Music venue in Manhattan")
+CBGB = article(2, "CBGB", 40.72514, -73.99199, "Former music club in Manhattan")
+
+
+def search_answer(*pages):
+    return (200, {"query": {"search": [{"pageid": p["pageid"], "title": p["title"]} for p in pages]}})
+
+
+def searched(http):
+    return [c["params"]["srsearch"].split(" ", 1)[1] for c in http.calls if c["params"].get("list") == "search"]
+
+
+def test_each_key_term_is_searched_on_its_own_and_places_matching_more_come_first():
+    mission = landmark("Bowery Mission", "LP-02494", 40.72197, -73.99284, "227 Bowery")
+    answers = {WIKIPEDIA: [search_answer(BOWERY_BALLROOM), search_answer(CBGB, BOWERY_BALLROOM),
+                           (200, {"query": {"pages": [BOWERY_BALLROOM, CBGB]}})],
+               LPC_SITES: [(200, [mission])]}
+    with FakeHTTP(answers) as http:
+        result = find_places(*BOWERY_AND_SPRING, query="Strokes rock historic landmark")
+
+    assert searched(http) == ["Strokes", "rock"]  # the generic words match nearly every building
+    candidates = result["data"]["candidates"]
+    assert [c["name"] for c in candidates] == ["Bowery Ballroom", "CBGB", "Bowery Mission"]
+    assert [c["matched_terms"] for c in candidates] == [["Strokes", "rock"], ["rock"], []]
+    assert result["data"]["terms"] == ["Strokes", "rock"]
+
+
+def test_when_nothing_nearby_mentions_the_terms_the_nearest_places_come_with_a_warning():
+    nearby = (200, {"query": {"geosearch": [{"pageid": 1, "title": "Bowery Ballroom"}]}})
+    answers = {WIKIPEDIA: [search_answer(), search_answer(), nearby, (200, {"query": {"pages": [BOWERY_BALLROOM]}})],
+               LPC_SITES: [(200, [])]}
+    with FakeHTTP(answers):
+        result = find_places(*BOWERY_AND_SPRING, query="Strokes Casablancas")
+
+    assert result["ok"]
+    assert "Nothing within 800 m mentions 'Strokes' or 'Casablancas'" in result["warnings"][0]
+    assert result["data"]["candidates"][0]["matched_terms"] == []
+
+
+@pytest.mark.parametrize("query, terms", [
+    ('"music venue" jazz, jazz', ['"music venue"', "jazz"]),
+    ("landmark historic building", ["landmark historic building"]),  # nothing more specific: searched as typed
+])
+def test_quoted_phrases_stay_whole_and_repeats_are_searched_once(query, terms):
+    answers = {WIKIPEDIA: [*[search_answer(BOWERY_BALLROOM)] * len(terms), (200, {"query": {"pages": [BOWERY_BALLROOM]}})],
+               LPC_SITES: [(200, [])]}
+    with FakeHTTP(answers) as http:
+        result = find_places(*BOWERY_AND_SPRING, query=query)
+
+    assert searched(http) == terms
+    assert result["data"]["candidates"][0]["matched_terms"] == terms
 
 
 def test_point_outside_the_city_is_rejected_before_any_request():

@@ -46,9 +46,10 @@ PLACE_TOOLS = [
             "name": "find_places",
             "description": (
                 "Find real places near a point that could become adventure stops: places documented on Wikipedia "
-                "and designated NYC landmarks, nearest first, each with a place_id for research_place. distance_m "
-                "is straight-line. Use query to lean toward a theme word ('architecture', 'jazz'); omit it for a "
-                "general search. Results are leads, not proof that a place suits an activity or is open."
+                "and designated NYC landmarks, each with a place_id for research_place. distance_m is straight-line. "
+                "Without a query, nearest first. With query, each key term is searched separately and each candidate "
+                "lists the matched_terms its article mentions, most matches first; a warning says when nothing "
+                "nearby matches. Results are leads, not proof that a place suits an activity or is open."
             ),
             "parameters": {
                 "type": "object",
@@ -56,7 +57,9 @@ PLACE_TOOLS = [
                     "lat": {"type": "number"},
                     "lng": {"type": "number"},
                     "radius_m": {"type": "integer", "description": "Search radius in meters, 100-2000. Default 800."},
-                    "query": {"type": "string", "description": "Optional theme word or phrase."},
+                    "query": {"type": "string", "description": (
+                        "Optional key terms of a real-subject theme, e.g. 'Strokes rock \"music venue\"' or 'jazz'. "
+                        "Quote a phrase to keep it whole. Skip generic words like 'historic' or 'landmark'.")},
                     "limit": {"type": "integer", "description": "Maximum candidates, 1-25. Default 15."},
                 },
                 "required": ["lat", "lng"],

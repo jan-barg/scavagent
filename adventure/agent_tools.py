@@ -14,7 +14,7 @@ import state
 from pydantic import ValidationError
 
 from adventure.drafts import STATED_FIELDS, DraftError, build_new_plan, build_revision, parse_minutes, parse_time
-from adventure.validation import evaluate_plan
+from adventure.validation import evaluate_plan, unsourced_links
 from integrations import cameras
 from integrations.common import distance_m, in_nyc
 from integrations.routes import get_route
@@ -41,6 +41,9 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
     now = ctx.now().replace(microsecond=0)
     active, progress = state.active_plan(ctx.record), ctx.record.adventure
     lookup, dev = camera_lookup(), dev_mode()
+    # Links earlier drafts were told to drop: a repeat says so, so the model stops resending it.
+    rejected = {url for entry in ctx.record.drafts.values() if entry.plan.validation and not entry.plan.validation.ok
+                for url in unsourced_links(entry.plan)}
     try:
         if kind == "check":
             return _check_under_way(active, progress, draft, now, lookup, dev)
@@ -49,10 +52,12 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
                 return tool_error("INVALID_ARGUMENT", "No adventure is under way to revise.", retryable=False,
                                   next_step="Plan a new adventure with kind 'new'.")
             plan, waived, warnings = build_revision(draft, active, progress, now, lookup)
-            context = {"state": progress, "previous": active, "waived_required_ids": waived}
+            context = {"state": progress, "previous": active, "waived_required_ids": waived, "rejected_links": rejected}
         elif kind == "new":
             plan, warnings = build_new_plan(draft, now, lookup)
-            waived, context = [], {}
+            waived = []
+            context = {"stop_count_stated": "stop_count" in (draft.get("user_stated") or []),
+                       "user_text": _user_words(ctx, draft), "rejected_links": rejected}
         else:
             return tool_error("INVALID_ARGUMENT", f"Unknown kind {kind!r}.", retryable=False,
                               next_step="Use kind 'new', 'revision', or 'check'.")
@@ -71,10 +76,11 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
     if summary["passes"] and (summary["slack_minutes"] or 0) >= UNUSED_MINUTES:
         summary["suggestions"].append(f"{summary['slack_minutes']:.0f} of the user's minutes are unused; consider "
                                       "adding a stop near the route before saving.")
-    summary["next_step"] = ("Call save_adventure_plan with this draft_id. In your reply, also say what the user asked "
-                            "for that this plan leaves out, such as a camera stop no verified position fits."
-                            if summary["passes"] else
-                            "Fix every violation (see suggestions), then evaluate again. Do not present this plan.")
+    summary["next_step"] = ("Call save_adventure_plan with this draft_id. Then reply with the briefing, the number of "
+                            "stops, about how long it takes, and the first stop, and ask if they are ready. Also say "
+                            "what the user asked for that this plan leaves out, such as a camera stop no verified "
+                            "position fits." if summary["passes"] else
+                            "Fix every violation (each message says how), then evaluate again. Do not present this plan.")
     return tool_ok({"draft_id": plan.plan_id, "kind": kind, **summary, "plan": overview(plan, evaluation.timeline)},
                    warnings=warnings, freshness=_freshness(plan, now))
 
@@ -190,7 +196,8 @@ def _check_under_way(active, progress, draft, now, lookup, dev):
             deadline = now + timedelta(minutes=parse_minutes(changes["duration_minutes"], "duration_minutes"))
         if deadline is not None:
             plan = AdventurePlan.model_validate({**plan.model_dump(), "request": {**plan.request.model_dump(), "deadline": deadline}})
-        evaluation = evaluate_plan(plan, now=now, start_at=now, camera_lookup=lookup, allow_synthetic=dev)
+        evaluation = evaluate_plan(plan, now=now, start_at=now, camera_lookup=lookup, allow_synthetic=dev,
+                                   story_checks=False)  # re-timing only: the story passed when it was saved
     summary = evaluation.summary()
     summary["next_step"] = ("The remaining route still fits." if summary["passes"] else
                             "Revise the remaining route (kind 'revision') or tell the user which limit cannot be met.")
@@ -206,6 +213,13 @@ def _evaluated(plan, now, lookup, dev, context):
     plan = plan.model_copy(update={"estimated_total_minutes": evaluate(plan).report.estimated_total_minutes})
     evaluation = evaluate(plan)
     return plan.model_copy(update={"validation": evaluation.report}), evaluation
+
+
+def _user_words(ctx, draft):
+    """The user's own words, so the evaluator can tell real people they name from invented characters."""
+    earlier = [m["content"] for m in ctx.record.messages[-20:]
+               if m.get("role") == "user" and isinstance(m.get("content"), str)]
+    return "\n".join([*earlier, str(draft.get("user_request") or "")])
 
 
 def _usable_location(latest, now):
@@ -274,8 +288,16 @@ _LOCATION = {
 _BEAT = {
     "type": "object",
     "properties": {
-        "summary": {"type": "string", "description": "The invented plot development you tell the user."},
-        "reveals": {"type": "string", "description": "The clue it gives toward the solution."},
+        "summary": {"type": "string", "description": "The invented scene you tell the user, in the story's voice."},
+        "reveals": {"type": "string", "description": "What it reveals toward the solution."},
+        "characters": {"type": "array", "items": {"type": "string"},
+                       "description": "Cast names in this beat. At a stop, the first one contacts the user on arrival."},
+        "clue": {"type": "string", "description": "At a stop: the concrete clue the user now holds (a number, word, "
+                                                  "name, or direction), e.g. \"locker 1021\"; from a chat_puzzle, it "
+                                                  "states the solution."},
+        "uses": {"type": "array", "items": {"type": "string"},
+                 "description": "Earlier stops whose clues this beat builds on, e.g. [\"stop_1\"]. Stops are numbered "
+                                "stop_1, stop_2, ... in visiting order. The finale uses the stop clues."},
     },
     "required": ["summary"],
 }
@@ -287,14 +309,16 @@ _ACTIVITY = {
             "enum": ["user_observation", "chat_puzzle", "verified_feature", "camera_capture"],
             "description": (
                 "user_observation: the user describes something they notice there; chat_puzzle: a fictional clue "
-                "or choice given in chat, solvable from what you tell them; verified_feature: a physical detail "
-                "backed by physical_feature evidence; camera_capture: a DOT camera photo at a verified position."
+                "or choice given in chat, solvable from what you tell them, with its answer as solution; "
+                "verified_feature: a physical detail backed by physical_feature evidence; camera_capture: a DOT "
+                "camera photo at a verified position."
             ),
         },
         "prompt": {"type": "string", "description": "What you ask the user when they arrive."},
         "answer_rule": {"type": "string", "description": "How to judge their reply. Be generous."},
         "hints": {"type": "array", "items": {"type": "string"}, "description": "Progressive hints; a puzzle needs one."},
         "fallback": {"type": "string", "description": "How they continue if they cannot do it."},
+        "solution": {"type": "string", "description": "chat_puzzle: the exact answer, kept from the user until solved."},
         "evidence_ids": {"type": "array", "items": {"type": "string"},
                          "description": "claim_ids of physical_feature claims. Research claims about history or "
                                         "architecture do not count."},
@@ -317,6 +341,16 @@ _STOP = {
         "window_end": {"type": "string", "description": "ISO closing time."},
         "activity": _ACTIVITY,
         "beat": _BEAT,
+        "theme_link": {
+            "type": "object",
+            "description": "With a theme the user stated: how this place ties to it, through its own research.",
+            "properties": {
+                "claim_ids": {"type": "array", "items": {"type": "string"},
+                              "description": "claim_ids research_place returned for this place."},
+                "why": {"type": "string", "description": "One sentence in the story's voice."},
+            },
+            "required": ["claim_ids", "why"],
+        },
         "move_beat_id": {"type": "string", "description": "Revision only: an unrevealed beat to reveal here instead."},
         "research_focus": {"type": "string", "description": "The focus you researched this place with, if any."},
     },
@@ -331,7 +365,8 @@ PLANNING_TOOLS = [
                 "Check an adventure before offering it. kind 'new' builds your draft into a plan: it looks up each "
                 "stop's place, routes every leg (walking or subway/bus), and then checks timing against the deadline or "
                 "time budget with contingency, required stops and hours, allowed modes, physical tasks against "
-                "evidence, camera positions, and story beats. kind 'revision' replaces the remaining route of the "
+                "evidence, camera positions, and the story: briefing and cast, a clue at every stop that the finale "
+                "builds on, and theme links. kind 'revision' replaces the remaining route of the "
                 "adventure under way and also checks that completed stops and revealed clues are kept. kind 'check' "
                 "re-times the adventure under way from now, optionally against a new deadline, without changing it. "
                 "Returns passes, concrete violations, a timeline, slack, and suggestions; a passing draft gets a "
@@ -369,12 +404,26 @@ PLANNING_TOOLS = [
                             "current_location": {**_LOCATION, "description": "revision: where the user is now, if you know better than their last location."},
                             "waived_required_ids": {"type": "array", "items": {"type": "string"},
                                                     "description": "revision: required stops the user explicitly agreed to drop."},
+                            "user_request": {"type": "string", "description": "new: the user's request, in their words."},
                             "story": {
                                 "type": "object",
                                 "description": "new: the fiction. A revision keeps the existing story.",
-                                "properties": {"premise": {"type": "string"}, "cast": {"type": "array", "items": {"type": "string"}},
-                                               "solution": {"type": "string"}},
-                                "required": ["premise", "solution"],
+                                "properties": {
+                                    "premise": {"type": "string", "description": "The mystery, in one line."},
+                                    "briefing": {"type": "string", "description": (
+                                        "The opening scene, 3-6 sentences in second person: who the user is, who "
+                                        "they work with and how that person reaches them, what is at stake, and how "
+                                        "a stop works.")},
+                                    "cast": {"type": "array", "description": "Invented characters; never a real person.",
+                                             "items": {"type": "object", "properties": {
+                                                 "name": {"type": "string"},
+                                                 "role": {"type": "string", "description": "e.g. handler, rival, informant."},
+                                                 "contact": {"type": "string", "description": "How they reach the user: radio, phone, telegram."},
+                                                 "introduced_in": {"type": "string", "description": "\"briefing\", or the stop where they first appear."}},
+                                                 "required": ["name", "role"]}},
+                                    "solution": {"type": "string", "description": "How the case resolves, from the clues."},
+                                },
+                                "required": ["premise", "briefing", "cast", "solution"],
                             },
                             "stops": {"type": "array", "items": _STOP,
                                       "description": "new: every stop in visiting order. revision: the remaining stops."},
