@@ -18,9 +18,10 @@ from schemas import LatLng
 
 GRID_DEG = 29.0  # Manhattan's grid is rotated this far clockwise from true north
 GRID_TOLERANCE_DEG = 12.0
-CORNER_M = 20.0  # within this of both centerlines, a spot is a corner
+CORNER_SLACK_M = 8.0  # within this of both streets' sidewalk lines, a spot is a corner
 LANE_M, PARKING_M, HALF_SIDEWALK_M = 3.2, 2.4, 2.5
 CARDINALS = ("north", "east", "south", "west")
+ALT_NAME_TAGS = ("alt_name", "official_name", "old_name", "short_name")
 
 
 @dataclass(frozen=True)
@@ -72,13 +73,15 @@ def describe(center: LatLng, streets, point: LatLng):
     off = local_xy(center, point)
     across = {s: _dot(off, _normal(s.direction)) for s in (a, b)}
     side = {s: cardinal(tuple(math.copysign(1, across[s]) * c for c in _normal(s.direction)), grid) for s in (a, b)}
-    if abs(across[a]) <= CORNER_M and abs(across[b]) <= CORNER_M:
+    # Judge by sidewalks, not centerlines: a wide avenue's sidewalk can lie 35 m from its center, farther than a
+    # cross street's centerline, and a spot on that sidewalk is still on the avenue.
+    if all(abs(across[s]) <= s.sidewalk_m + CORNER_SLACK_M for s in (a, b)):
         ns, ew = sorted((side[a], side[b]), key=lambda w: w in ("east", "west"))
         corner = f"{ns}{ew}" if {ns, ew} & {"north", "south"} and {ns, ew} & {"east", "west"} else ns
         text = f"{corner} corner of {a.name} and {b.name}"
         return {"side_of_street": text, "on": a.name, "cross": b.name, "along_m": 0, "corner": True,
                 "stop_name": f"{a.name} and {b.name}, {corner} corner"}
-    on, cross = (a, b) if abs(across[a]) < abs(across[b]) else (b, a)
+    on, cross = sorted((a, b), key=lambda s: (abs(abs(across[s]) - s.sidewalk_m), abs(across[s])))
     along = round(abs(across[cross]) / 5) * 5
     text = f"{side[on]} side of {on.name}, about {along} m {side[cross]} of {cross.name}"
     return {"side_of_street": text, "on": on.name, "cross": cross.name, "along_m": along, "corner": False,
@@ -112,7 +115,10 @@ def locate(center: LatLng, on: Street, cross: Street, side: str, direction: str,
 
 def camera_streets(name):
     """The two normalized street names in a DOT camera name such as "Park Ave @ E 116 Street"."""
-    parts = [p.strip() for p in name.replace("(", "@").split("@")[:2]]
+    name = re.sub(r"\s*\(.*?\)|\s+-\s.*$|-\s*quad\b.*$|\bupper level\b", "", name, flags=re.IGNORECASE)
+    parts = [p.strip() for p in name.split("@")]
+    if len(parts) != 2 or any("/" in p for p in parts):
+        return None  # three-way names ("Broadway @ 6 Ave / 33 St") must not become one invented street
     out = []
     for part in parts:
         for guess in (part, part + " avenue", part + " street"):
@@ -123,23 +129,33 @@ def camera_streets(name):
     return out if len(out) == 2 else None
 
 
-def intersection_streets(camera_name, mount: LatLng, radius_m=250):
+def intersection_streets(camera_name, mount: LatLng, radius_m=250, urls=None):
     """(center, [Street, Street]) for a camera's intersection: one Overpass query around its mount."""
     names = camera_streets(camera_name)
     if not names:
         raise ValueError(f"Cannot read two streets from {camera_name!r}")
     patterns = [geocoding.street_pattern(n) for n in names]
     near = f"(around:{radius_m},{mount.lat},{mount.lng})"
-    a, b = (p.replace("\\", "\\\\") for p in patterns)  # escape for the QL string
-    query = (f'[out:json][timeout:25];way{near}["highway"]["name"~"{a}",i]->.a;'
-             f'way{near}["highway"]["name"~"{b}",i]->.b;node(w.a)(w.b)->.x;.x out;.a out tags geom;.b out tags geom;')
+    def ways(pattern, into):
+        # Honorary co-names can take over "name" (2nd Avenue in East Harlem is "México-Tenochtitlan Avenue"),
+        # so also match alternate names, which may hold several values separated by ";".
+        listed = "(^|;) *" + pattern[1:-1] + " *(;|$)"
+        tags = [("name", pattern)] + [(tag, listed) for tag in ALT_NAME_TAGS]
+        union = "".join(f'way{near}["highway"]["{tag}"~"{rx.replace(chr(92), chr(92) * 2)}",i];' for tag, rx in tags)
+        return f"({union})->.{into};"
+    query = (f"[out:json][timeout:25];{ways(patterns[0], 'a')}{ways(patterns[1], 'b')}"
+             "node(w.a)(w.b)->.x;.x out;.a out tags geom;.b out tags geom;")
     body, error = None, None
-    for url in geocoding.OVERPASS_URLS:
+    for url in urls or geocoding.OVERPASS_URLS:
         try:
             body = fetch_json("overpass", "POST", url, data={"data": query}, timeout=30)
-            break
         except UpstreamError as e:  # rate limits and overload are common; try the mirror
             error = e
+            continue
+        if "error" in str(body.get("remark", "")).lower():  # an overloaded server answers 200 with no data
+            body, error = None, body["remark"][:120]
+            continue
+        break
     if body is None:
         raise ValueError(f"OpenStreetMap (Overpass) did not answer: {error}")
     elements = body.get("elements", [])
@@ -150,14 +166,47 @@ def intersection_streets(camera_name, mount: LatLng, radius_m=250):
     nearest = min(nodes, key=lambda n: math.hypot(*local_xy(mount, n)))
     group = [n for n in nodes if math.hypot(*local_xy(nearest, n)) <= 60]
     center = LatLng(lat=sum(n.lat for n in group) / len(group), lng=sum(n.lng for n in group) / len(group))
-    ways = [e for e in elements if e.get("type") == "way" and e.get("geometry")]
+    found = [e for e in elements if e.get("type") == "way" and e.get("geometry")]
     streets = []
     for name, pattern in zip(names, patterns):
-        mine = [w for w in ways if re.search(pattern, w.get("tags", {}).get("name", ""), re.IGNORECASE)]
+        mine = [w for w in found if _named(w.get("tags", {}), pattern)]
         if not mine:
             raise ValueError(f"No OpenStreetMap geometry for {name} near the camera")
         streets.append(street_from_ways(geocoding._display(name), center, mine))
     return center, streets
+
+
+AVENUE_WORDS = re.compile(  # Manhattan's north-south grid avenues, not any name the parser guessed "avenue" for
+    r"^(\d+(st|nd|rd|th) avenue|avenue of the americas|park avenue( south)?|lexington avenue|madison avenue|"
+    r"amsterdam avenue|columbus avenue|york avenue|west end avenue|broadway|central park west|rockefeller plaza|"
+    r"lenox avenue|malcolm x boulevard|adam clayton powell jr boulevard|frederick douglass boulevard|"
+    r"st nicholas avenue|saint nicholas avenue|manhattan avenue|convent avenue|edgecombe avenue)$", re.IGNORECASE)
+NUMBERED_STREET = re.compile(r"^((east|west) )?\d+(st|nd|rd|th) street$|^central park south$", re.IGNORECASE)
+
+
+def grid_streets(camera_name, mount: LatLng):
+    """Fallback when OpenStreetMap has no shared node: the regular grid around the camera's listed position.
+
+    Only for an avenue meeting a numbered street. The pins it gives are approximate (the listed position is
+    not the intersection's center), so callers must say so.
+    """
+    names = camera_streets(camera_name)
+    if not names:
+        raise ValueError(f"Cannot read two streets from {camera_name!r}")
+    display = [geocoding._display(n) for n in names]
+    kinds = ["avenue" if AVENUE_WORDS.search(n) else "street" if NUMBERED_STREET.search(n) else None for n in display]
+    if sorted(k or "" for k in kinds) != ["avenue", "street"]:
+        raise ValueError(f"{camera_name!r} is not an avenue meeting a numbered street")
+    g = math.radians(GRID_DEG)
+    along = {"avenue": (math.sin(g), math.cos(g)), "street": (math.cos(g), -math.sin(g))}
+    sidewalk = {"avenue": 12.0, "street": 8.0}
+    return mount, [Street(d, along[k], sidewalk[k]) for d, k in zip(display, kinds)]
+
+
+def _named(tags, pattern):
+    """Whether a way's name, or one of its alternate names, matches the street pattern."""
+    names = [tags.get("name", "")] + [n.strip() for tag in ALT_NAME_TAGS for n in tags.get(tag, "").split(";")]
+    return any(re.search(pattern, n, re.IGNORECASE) for n in names if n)
 
 
 def street_from_ways(display, center, ways):

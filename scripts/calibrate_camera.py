@@ -182,6 +182,8 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
            "note": "Evidence stills are kept outside Git; the hashes identify them."}
     if notes.get("workbench_spot_id"):
         log["workbench_spot_id"] = notes["workbench_spot_id"]
+    if mount is not None:
+        log["camera_mount"] = LatLng.model_validate(mount).model_dump()
     if notes.get("from_draft"):
         log["drafted_by"] = {"by": "Claude, from the still and OpenStreetMap street geometry", "draft_id": notes["from_draft"]}
     if notes.get("derived_fields"):
@@ -314,9 +316,13 @@ def main(argv=None):
     elif args.command == "import-spots":
         updated, taken, failed = catalogue, {c["checkpoint_id"] for c in catalogue["checkpoints"]}, 0
         imported = {e.get("workbench_spot_id") for e in catalogue.get("field_log", [])}
+        excluded = {e["workbench_spot_id"]: e["reason"] for e in catalogue.get("excluded_workbench_spots", [])}
         for path in sorted(Path(args.spots_dir).rglob("*.json")):
             if path.stem in imported:
                 continue  # already in the catalogue; re-importing must not duplicate it
+            if path.stem in excluded:
+                print(f"Skipped {path.name}: excluded ({excluded[path.stem]})", file=sys.stderr)
+                continue
             spot = json.loads(path.read_text())
             spot = spot.get("data", spot)  # an exported document may wrap its fields
             if problem := review_problem(spot):

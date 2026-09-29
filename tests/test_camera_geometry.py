@@ -77,3 +77,64 @@ def test_camera_names_become_two_streets():
 def test_described_distances_stay_within_the_import_limit():
     pin = geo.locate(CENTER, STREET, AVENUE, "north", "east", 30)
     assert cameras._distance(pin, CENTER) < 250
+
+
+def test_an_overloaded_overpass_answer_falls_back_to_the_next_server(monkeypatch):
+    """An overloaded server answers 200 with an error remark and no data; that is not 'no intersection'."""
+    center = CENTER
+    def way(name, pts):
+        return {"type": "way", "tags": {"name": name}, "geometry": [{"lat": p.lat, "lon": p.lng} for p in pts]}
+    good = {"elements": [
+        {"type": "node", "lat": center.lat, "lon": center.lng},
+        way("Park Avenue", [grid_point(0, -80), grid_point(0, 80)]),
+        way("East 116th Street", [grid_point(-80, 0), grid_point(80, 0)]),
+    ]}
+    answers = {"https://busy": {"elements": [], "remark": "runtime error: Query timed out"}, "https://ok": good}
+    monkeypatch.setattr(geo, "fetch_json", lambda provider, method, url, **kw: answers[url])
+    found, streets = geo.intersection_streets("Park Ave @ E 116 Street", center, urls=["https://busy", "https://ok"])
+    assert [s.name for s in streets] == ["Park Avenue", "East 116th Street"]
+    assert cameras._distance(found, center) < 1
+
+    answers["https://ok"] = answers["https://busy"]
+    with pytest.raises(ValueError, match="did not answer"):
+        geo.intersection_streets("Park Ave @ E 116 Street", center, urls=["https://busy", "https://ok"])
+
+
+def test_a_street_is_found_under_its_alternate_name():
+    pattern = geo.geocoding.street_pattern("2nd avenue")
+    assert geo._named({"name": "México-Tenochtitlan Avenue", "alt_name": "2nd Avenue"}, pattern)
+    assert geo._named({"name": "Honorary Way", "official_name": "Plaza X;Second Avenue"}, pattern)
+    assert not geo._named({"name": "México-Tenochtitlan Avenue", "alt_name": "22nd Avenue"}, pattern)
+
+
+def test_camera_name_suffixes_are_ignored():
+    assert geo.camera_streets("7 Ave @ 43 St - 64.186 - PTZ") == ["7th avenue", "43rd street"]
+    assert geo.camera_streets("Broadway @ 46 St- Quad North") == ["broadway", "46th street"]
+    assert geo.camera_streets("Rockefeller Plz @ 48 St (between 5 Ave and 6 Ave)") == ["rockefeller plaza", "48th street"]
+
+
+def test_the_grid_fallback_places_spots_like_the_mapped_grid():
+    center, (avenue, street) = geo.grid_streets("Broadway @ 46 St", CENTER)
+    assert center == CENTER and geo.on_grid([avenue, street])
+    pin = geo.locate(center, street, avenue, "north", "east", 30)
+    assert geo.describe(center, [avenue, street], pin)["side_of_street"] == "north side of 46th Street, about 30 m east of Broadway"
+    with pytest.raises(ValueError, match="not an avenue meeting"):
+        geo.grid_streets("E 63 St @ QBB", CENTER)
+
+
+def test_a_three_street_camera_name_is_not_turned_into_one_invented_street():
+    assert geo.camera_streets("Broadway @ 6 Ave / 33 St") is None
+    with pytest.raises(ValueError, match="Cannot read two streets"):
+        geo.grid_streets("Broadway @ 6 Ave / 33 St", CENTER)
+
+
+def test_a_spot_on_a_wide_avenues_sidewalk_is_described_on_the_avenue():
+    """1st Avenue at 40th Street is ~70 m wide (tunnel plus service roads): its sidewalk is 35 m from its center."""
+    avenue = geo.Street("1st Avenue", (math.sin(G), math.cos(G)), 35.0)
+    street = geo.Street("40th Street", (-math.cos(G), math.sin(G)), 8.0)
+    along = geo.locate(CENTER, avenue, street, "east", "north", 30)
+    assert geo.describe(CENTER, [avenue, street], along)["side_of_street"] == \
+        "east side of 1st Avenue, about 30 m north of 40th Street"
+    near_corner = geo.locate(CENTER, avenue, street, "east", "north", 8)
+    assert geo.describe(CENTER, [avenue, street], near_corner)["side_of_street"] == \
+        "northeast corner of 1st Avenue and 40th Street"
