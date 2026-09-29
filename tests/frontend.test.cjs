@@ -12,8 +12,9 @@ const PENDING = "scavagent.pending_message.v1";
 const MESSAGE_ID = "123e4567-e89b-42d3-a456-426614174000";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-class Element {
+class Element extends EventTarget {
   constructor(tag = "div") {
+    super();
     this.tagName = tag; this.children = []; this.value = ""; this.style = {};
     this.className = ""; this.scrollHeight = 44; this.listeners = {}; this._text = ""; this.textChanges = [];
     this.classList = {
@@ -28,7 +29,7 @@ class Element {
   append(...nodes) { nodes.forEach(node => this.appendChild(node)); }
   replaceChildren(...nodes) { this.children = []; this._text = ""; this.append(...nodes); }
   setAttribute(key, value) { this[key] = value; }
-  addEventListener(key, value) { this.listeners[key] = value; }
+  addEventListener(key, value) { this.listeners[key] = value; super.addEventListener(key, value); }
   remove() { this.parent.children = this.parent.children.filter(node => node !== this); }
   querySelector(selector) { return this.children.find(node => node.className.split(" ").includes(selector.slice(1))) || null; }
   insertBefore(node, before) { node.parent = this; this.children.splice(this.children.indexOf(before), 0, node); }
@@ -397,17 +398,21 @@ for (const status of [408, 429, 503]) {
   });
 }
 
-test("a permanent 4xx stops immediately and leaves the rejected text editable", async () => {
-  const h = harness({}, [response({}, 422)]);
-  h.elements.message.value = "plan a walk";
-  await h.run("send()");
-  assert.equal(h.elements.status.textContent, "The reply didn’t arrive. Press Send to retry the same message.");
-  assert.equal(h.elements.message.value, "plan a walk");
-  assert.equal(h.elements.message.readOnly, false);
-  assert.equal(h.elements.send.disabled, false);
-  await h.clock.advance(270000);
-  assert.equal(posted(h).length, 1);
-});
+for (const status of [400, 422, 499]) {
+  test("permanent HTTP " + status + " explains the rejection and leaves the text editable", async () => {
+    const h = harness({}, [response({}, status)]);
+    h.elements.message.value = "plan a walk";
+    await h.run("send()");
+    assert.equal(h.elements.status.textContent, "That message wasn’t accepted. Edit it and send again.");
+    assert.equal(h.elements.message.value, "plan a walk");
+    assert.equal(h.elements.message.readOnly, false);
+    assert.equal(h.elements.message.disabled, false);
+    assert.equal(h.elements.send.disabled, false);
+    assert(h.storage.has(PENDING));
+    await h.clock.advance(270000);
+    assert.equal(posted(h).length, 1);
+  });
+}
 
 
 test("reload clears a completed pending ID without posting or duplicating its history", async () => {
@@ -542,18 +547,27 @@ test("tool activity discloses valid calls beyond its twelve-row limit", () => {
 });
 
 
-test("manual retry after a permanent 4xx retains the request ID and a single user bubble", async () => {
-  const h = harness({}, [response({}, 422), answer]);
-  h.elements.message.value = "plan a walk";
-  await h.run("send()");
-  const first = posted(h)[0];
-  assert(h.storage.has(PENDING));
-  assert.equal(h.elements.message.readOnly, false);
-  await h.run("send()");
-  assert.deepEqual(posted(h)[1], first);
-  assert.equal(h.elements.messages.children.length, 2);
-  assert(!h.storage.has(PENDING));
-});
+for (const edit of [false, true]) {
+  test("manual resend after a permanent 4xx " + (edit ? "gives edited text a new ID" : "retains the ID and a single user bubble"), async () => {
+    const h = harness({}, [response({}, 422), answer]);
+    h.elements.message.value = "plan a walk";
+    await h.run("send()");
+    const first = posted(h)[0];
+    assert(h.storage.has(PENDING));
+    assert.equal(h.elements.message.readOnly, false);
+    if (edit) h.elements.message.value = "Start at Columbus Circle";
+    await h.run("send()");
+    if (edit) {
+      assert.equal(posted(h)[1].message, "Start at Columbus Circle");
+      assert.notEqual(posted(h)[1].client_message_id, first.client_message_id);
+      assert.equal(posted(h)[1].session_id, first.session_id);
+    } else {
+      assert.deepEqual(posted(h)[1], first);
+    }
+    assert.equal(h.elements.messages.children.length, edit ? 3 : 2);
+    assert(!h.storage.has(PENDING));
+  });
+}
 
 test("many unclosed Markdown links render promptly as literal text", () => {
   const h = harness();
@@ -605,3 +619,47 @@ test("a completed pending ID outside the last 100 displayed history entries is s
   assert.equal(h.elements.message.readOnly, false);
   assert.equal(h.elements.message.disabled, false);
 });
+
+
+for (const phase of ["request", "retry wait"]) {
+  test("submit events during a " + phase + " cannot start another chat request", async () => {
+    let finishFirst;
+    const firstRequest = new Promise(resolve => { finishFirst = resolve; });
+    const h = harness({}, [() => firstRequest, answer]);
+    h.elements.message.value = "plan a walk";
+    const initialSubmit = new Event("submit", { cancelable: true });
+    assert.equal(h.elements.composer.dispatchEvent(initialSubmit), false);
+    await settled();
+    assert.equal(posted(h).length, 1);
+    const first = posted(h)[0];
+    const pending = h.storage.get(PENDING);
+    if (phase === "retry wait") {
+      finishFirst(response({}, 409));
+      await settled();
+      assert.equal(h.elements.status.textContent, "Still working on your plan…");
+    }
+    assert.equal(h.elements.message.disabled, true);
+    assert.equal(h.elements.send.disabled, true);
+    // Programmatic submissions bypass disabled controls. Keep text nonempty so
+    // the empty-input return cannot conceal a missing busy guard.
+    h.elements.message.value = "another message";
+    const extraSubmit = new Event("submit", { cancelable: true });
+    assert.equal(h.elements.composer.dispatchEvent(extraSubmit), false);
+    await settled();
+    assert.equal(posted(h).length, 1);
+    assert.equal(h.storage.get(PENDING), pending);
+    assert.equal(h.maxActiveRequests(), 1);
+    h.elements.message.value = "";
+    if (phase === "request") {
+      finishFirst(response({}, 409));
+      await settled();
+    }
+    await h.clock.advance(4999);
+    assert.equal(posted(h).length, 1);
+    await h.clock.advance(1);
+    assert.deepEqual(posted(h), [first, first]);
+    assert.equal(h.maxActiveRequests(), 1);
+    assert.equal(h.elements.messages.children.length, 2);
+    assert(!h.storage.has(PENDING));
+  });
+}
