@@ -79,6 +79,20 @@ Stories: all three models now write briefings, casts with a handler and a channe
 - agent.py's worked example (a freelance tape tracker, Mara Quill, a stolen reel, a locker code, Roxy) is Jan's music query. Opus and Sonnet both reused Mara Quill there, and on a new jazz prompt Opus opened with "You're a freelance tape tracker" and Sonnet built an archivist, a radio, and a locker code. The example is shaping every music story; a different example scenario would fix that.
 - With v2, Opus's longest turn was 144 s, inside the 240-second limit.
 
+## Split: Sonnet 5.5 plans, Flash-Lite guides (September 29, night)
+
+`SCAVAGENT_PLANNER_MODEL=anthropic/claude-sonnet-5-5` with `SCAVAGENT_MODEL=vertex_ai/gemini-3.5-flash-lite` (commit `e5e7024`). Sonnet takes turns with no adventure under way; Flash-Lite takes the rest; a Flash-Lite reply that tries to evaluate or save a plan is dropped and Sonnet redoes the turn.
+
+| Run | Sonnet alone | Split |
+|---|---|---|
+| Acceptance + Jan/Kyle queries (10 turns) | $0.84, 26/26 | $0.67, 26/26 |
+| Jazz walkthrough, 1 min between turns (plan, 6 guide turns, a replan, a last message) | $0.32 | $0.37 |
+
+- Guide turns on Flash-Lite cost $0.002–0.014 against $0.017–0.107 on Sonnet, and are as fast or faster.
+- A replan costs more in the split ($0.19 against $0.05–0.10): Sonnet has none of the Flash-Lite turns cached, so it writes the whole conversation at the one-hour rate. In the walkthrough the replan also finished the adventure, and the last message then went to Sonnet ($0.07), because finished adventures route to the planner.
+- Quality: Flash-Lite delivers the saved beats (the handler's radio, the question, "hold on to that") but plainer, it gave stop 1's question before the user arrived, and it built its own Wikipedia links with fake anchors (the evaluator cannot see chat replies). After the handover Sonnet noticed those links, but it also wrongly retracted one of its own sourced links, whose research had left the context window.
+- Fixes before using the split: route finished adventures to the guide (a new plan escalates anyway); write the planner's cache at the five-minute rate on an escalation; drop links in replies that are not in the session's sources. Estimated effect: a walkthrough with one replan about $0.23 against $0.32, one without about $0.13 against $0.27.
+
 ## Claude notes
 
 - Claude runs through Anthropic's API (`anthropic/claude-...`), not Vertex (no quota for this project). The app sends adaptive thinking at effort `medium` (override with `SCAVAGENT_REASONING_EFFORT`), a 32K output cap, automatic prompt caching, and the instructions as a separately cached block (one hour); tool choice stays `auto`. Thinking blocks are replayed only within their own turn, as Claude 5.5's preserved-thinking rules require when the server context changes every turn.
