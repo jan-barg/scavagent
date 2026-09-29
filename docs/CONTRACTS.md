@@ -54,7 +54,7 @@ Use stable IDs throughout and timezone-aware timestamps. Interpret user-facing N
 - Photos: a camera tool calls `ctx.save_asset(data, content_type, camera_id, checkpoint_id, source_url, retrieved_at, frame_time=None)`, which stores bytes, attaches the photo to progress, saves the session immediately (so the frame survives a turn that dies later), and returns a `PhotoAsset` with `media_url = /media/{asset_id}`. The camera tool must not attach it again.
 - `PhotoAsset.checkpoint_id` is the `CameraCheckpoint` id, not the adventure stop id (agreed September 28). A plan stop links to it through `Checkpoint.camera_checkpoint_id`, which `get_adventure_state` lists per stop, so the recap can match photos to stops.
 - `/media/{asset_id}` is a capability URL: the unguessable asset id alone grants access, so a plain `<img>` works after reload. It is not checked against the session.
-- HTTP: `POST /chat` (request adds optional `location` and `client_message_id`), `GET /history?session_id=` returning `{"session_id", "messages": [{"role", "text", "tool_calls"?, "at"}]}`, `GET /media/{asset_id}`, `POST /clear?session_id=`.
+- HTTP: `POST /chat` (request adds optional `location` and `client_message_id`), `GET /history?session_id=` returning `{"session_id", "messages": [{"role", "text", "tool_calls"?, "at", "client_message_id"?}]}` (the id is on both the user entry and its reply when the client sent one, so a reloaded page can tell its pending message was already answered), `GET /media/{asset_id}`, `POST /clear?session_id=`.
 
 ## Preserve `/chat`
 

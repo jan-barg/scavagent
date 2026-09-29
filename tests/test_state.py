@@ -78,6 +78,18 @@ def test_retried_message_returns_the_first_reply_without_rerunning(monkeypatch):
     assert len(app_module.store.load("retry-test").transcript) == 2
 
 
+def test_history_tells_a_reloaded_page_which_message_was_answered(monkeypatch):
+    monkeypatch.setattr(app_module, "store", state.MemoryStore())
+    script(monkeypatch, FakeMessage(content="Hi.", tool_calls=None), FakeMessage(content="Hello again.", tool_calls=None))
+    client = TestClient(app_module.app)
+    client.post("/chat", json={"message": "ready", "session_id": "ids", "client_message_id": "m-1"})
+    client.post("/chat", json={"message": "ready", "session_id": "ids"})  # A client that sends no id
+
+    history = client.get("/history", params={"session_id": "ids"}).json()["messages"]
+    assert [(m["role"], m.get("client_message_id")) for m in history] == [
+        ("user", "m-1"), ("assistant", "m-1"), ("user", None), ("assistant", None)]
+
+
 def test_retry_while_the_first_turn_is_still_running_does_not_run_it_again(monkeypatch):
     monkeypatch.setattr(app_module, "store", state.MemoryStore())
     client = TestClient(app_module.app)
