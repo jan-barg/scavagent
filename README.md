@@ -24,7 +24,7 @@ At verified viewpoints it can save an NYC DOT traffic-camera still of you as a s
 2. "I'm at Central Park West and West 86th Street. I have 45 minutes, need to finish at West 72nd Street and Broadway, and must pass West 81st Street and Columbus Avenue. Walking only, architecture theme, and include a camera stop if one fits."
 3. A follow-up once an adventure is under way (for example after query 2, "ready", and reaching the first stop): "Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination."
 
-Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at viewpoints a person has checked in the field; where none fits, Scavagent says so (as in query 2 until a viewpoint is verified). `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
+Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at standing spots a person has approved: 147 in Manhattan (Upper East/West Side and Midtown), each matched on the live camera image and map imagery rather than tested in person, which Scavagent tells the user while offering a retake. In query 2 the camera stop is the viewpoint at Broadway and West 72nd Street, next to the finish; where no spot fits, Scavagent says so. `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
 
 ## Tools
 
@@ -33,7 +33,7 @@ Full descriptions, sources, and configuration are in [docs/TOOLS.md](docs/TOOLS.
 | Tool | What it does |
 |---|---|
 | `evaluate_adventure_plan` | **Kyle's original tool.** Builds the agent's draft into a routed plan and checks it before the user sees it: timing against the user's limits, required stops and their order, travel modes, sourced facts and links, and the story rules (briefing, introduced characters, clues that add up, theme links, no real people as characters). A plan that fails can't be saved. |
-| `find_camera_checkpoints`, `capture_camera_checkpoint` | **Jan's original tool.** Finds NYC DOT traffic cameras at pedestrian standing positions calibrated in the field (not the camera's mounting point). When the user says they're in position, it saves the live still as a souvenir, at most once per message, and shows it again in the finale. |
+| `find_camera_checkpoints`, `capture_camera_checkpoint` | **Jan's original tool.** Finds NYC DOT traffic cameras at pedestrian standing positions a person verified on the camera image and map, or in the field (never the camera's mounting point). When the user says they're in position, it saves the live still as a souvenir, at most once per message, and shows it again in the finale. |
 | `geocode_place`, `find_places`, `research_place` | Resolve typed places, find candidate stops, and gather sourced facts (Wikipedia revisions, NYC LPC records). |
 | `get_route`, `get_walking_times`, `get_next_directions` | Walking routes (OpenStreetMap Valhalla) and subway/bus legs (Google Routes), directions to the next stop. |
 | `get_transit_arrivals` | Live subway arrivals and service alerts (MTA GTFS-realtime). |
