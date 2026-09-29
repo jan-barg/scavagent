@@ -115,7 +115,7 @@ function harness(initial = {}, replies = [], options = {}) {
   };
   vm.createContext(context);
   vm.runInContext(source, context);
-  return { elements, storage, requests, writes, geo, document, clock, maxActiveRequests: () => maxActiveRequests, run: code => vm.runInContext(code, context) };
+  return { elements, storage, requests, writes, geo, document, clock, maxActiveRequests: () => maxActiveRequests, run: (code, options) => vm.runInContext(code, context, options) };
 }
 const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 const answer = call => response({ response: "Saved reply", session_id: JSON.parse(call.request.body).session_id, tool_calls: [] });
@@ -170,8 +170,8 @@ test("lost first response survives reload with the same session, text and reques
   assert.equal(first.location.source, "browser");
   const reload = harness(Object.fromEntries(firstTab.storage), [restored(first.session_id), answer]);
   await settled();
-  await reload.run("send()");
   const retry = posted(reload)[0];
+  assert.equal(posted(reload).length, 1);
   assert.equal(retry.session_id, first.session_id);
   assert.equal(retry.client_message_id, first.client_message_id);
   assert.equal(retry.message, first.message);
@@ -186,7 +186,7 @@ test("409 keeps the pending turn for an automatic retry with a refreshed locatio
   await settled();
   const first = posted(h)[0];
   assert(h.storage.has(PENDING));
-  assert.equal(h.elements.message.readOnly, true);
+  assert.equal(h.elements.message.disabled, true);
   assert.equal(posted(h).length, 1);
   h.geo.at(-1)[0]({ coords: { latitude: 40.79, longitude: -73.96, accuracy: 8 }, timestamp: h.clock.now() });
   await h.clock.advance(5000);
@@ -205,8 +205,7 @@ for (const existingSession of [null, "existing-session"]) {
     if (existingSession) initial[SESSION] = existingSession;
     const h = harness(initial, [...(existingSession ? [restored(existingSession)] : []), new Error("Response lost")]);
     await settled();
-    void h.run("send()");
-    await settled(); // Reload while the migrated message is awaiting its reply.
+    // Reload while the automatically migrated message is awaiting its reply.
     const sent = posted(h)[0];
     if (existingSession) assert.equal(sent.session_id, existingSession);
     else assert.match(sent.session_id, UUID);
@@ -216,7 +215,6 @@ for (const existingSession of [null, "existing-session"]) {
     assert.equal(JSON.parse(h.storage.get(PENDING)).session_id, sent.session_id);
     const reload = harness(Object.fromEntries(h.storage), [restored(sent.session_id), answer]);
     await settled();
-    await reload.run("send()");
     assert.deepEqual(posted(reload)[0], sent);
   });
 }
@@ -243,7 +241,6 @@ test("repeated pending text does not replace an older restored turn", async () =
     [PENDING]: JSON.stringify({ message: "ready", session_id: session, client_message_id: MESSAGE_ID }),
   }, [restored(session, [{ role: "user", text: "ready" }, { role: "assistant", text: "Earlier reply", tool_calls: [] }]), answer]);
   await settled();
-  await h.run("send()");
   assert.equal(h.elements.messages.children.length, 4);
   assert(h.elements.messages.children[1].textContent.includes("Earlier reply"));
   assert(h.elements.messages.children[3].textContent.includes("Saved reply"));
@@ -345,6 +342,8 @@ test("409s exhaust the 4.5-minute window then preserve the pending turn for manu
   assert.equal(h.storage.get(PENDING), pending);
   assert.equal(h.elements.send.disabled, false);
   assert.equal(h.elements.message.value, "plan a walk");
+  assert.equal(h.elements.message.readOnly, false);
+  assert.equal(h.elements.message.disabled, false);
   assert.equal(h.elements.messages.children.length, 1);
   await h.clock.advance(30000);
   assert.equal(posted(h).length, 54); // No requests continue beyond the window.
@@ -408,4 +407,201 @@ test("a permanent 4xx stops immediately and leaves the rejected text editable", 
   assert.equal(h.elements.send.disabled, false);
   await h.clock.advance(270000);
   assert.equal(posted(h).length, 1);
+});
+
+
+test("reload clears a completed pending ID without posting or duplicating its history", async () => {
+  const session = "saved-session";
+  const h = harness({
+    [SESSION]: session,
+    [PENDING]: JSON.stringify({ message: "ready", session_id: session, client_message_id: MESSAGE_ID }),
+  }, [restored(session, [
+    { role: "user", text: "ready", client_message_id: "older-message" },
+    { role: "assistant", text: "Earlier reply", client_message_id: "older-message" },
+    { role: "user", text: "ready", client_message_id: MESSAGE_ID },
+    { role: "assistant", text: "Already saved reply", client_message_id: MESSAGE_ID },
+  ])]);
+  await settled();
+  assert.equal(posted(h).length, 0);
+  assert.equal(h.elements.messages.children.length, 4);
+  assert.equal(h.elements.messages.textContent.split("Already saved reply").length - 1, 1);
+  assert(!h.storage.has(PENDING));
+  assert.equal(h.elements.message.value, "");
+  assert.equal(h.elements.message.readOnly, false);
+  assert.equal(h.elements.message.disabled, false);
+  await h.clock.advance(270000);
+  assert.equal(posted(h).length, 0);
+});
+
+for (const userInHistory of [false, true]) {
+  test("reload automatically resumes an unfinished pending ID " + (userInHistory ? "with only its user entry" : "absent from history"), async () => {
+    const session = "saved-session";
+    const pending = { message: "ready", session_id: session, client_message_id: MESSAGE_ID };
+    const history = userInHistory ? [{ role: "user", text: "ready", client_message_id: MESSAGE_ID }] : [];
+    const h = harness({ [SESSION]: session, [PENDING]: JSON.stringify(pending) }, [restored(session, history), response({}, 409), answer]);
+    await settled();
+    assert.deepEqual(posted(h), [pending]);
+    assert.equal(h.elements.status.textContent, "Still working on your plan…");
+    await h.run("send()"); // A manual submit cannot overlap recovery.
+    assert.equal(posted(h).length, 1);
+    await h.clock.advance(5000);
+    assert.deepEqual(posted(h), [pending, pending]);
+    assert.equal(h.maxActiveRequests(), 1);
+    assert.equal(h.elements.messages.children.length, 2);
+    assert.equal(h.elements.messages.children[0].querySelector(".content").textContent, "ready");
+    assert.equal(h.elements.messages.children[1].querySelector(".content").textContent, "Saved reply");
+    assert(!h.elements.status.textChanges.some(value => value.includes("Press Send")));
+    assert(!h.storage.has(PENDING));
+    assert.equal(h.elements.message.value, "");
+    assert.equal(h.elements.message.readOnly, false);
+    assert.equal(h.elements.message.disabled, false);
+  });
+}
+
+test("unavailable history still resumes the pending turn automatically", async () => {
+  const pending = { message: "ready", session_id: "saved-session", client_message_id: MESSAGE_ID };
+  const h = harness({ [SESSION]: pending.session_id, [PENDING]: JSON.stringify(pending) }, [new Error("Offline history"), answer]);
+  await settled();
+  assert.deepEqual(posted(h), [pending]);
+  assert.equal(h.elements.messages.children.length, 2);
+  assert(!h.storage.has(PENDING));
+  assert.equal(h.elements.message.readOnly, false);
+  assert.equal(h.elements.message.disabled, false);
+});
+
+test("after automatic recovery expires, edited text sends as a new turn", async () => {
+  const h = harness({}, [...Array.from({ length: 54 }, () => response({}, 409)), answer]);
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await h.clock.advance(270000);
+  await sending;
+  assert(h.storage.has(PENDING));
+  assert.equal(h.elements.message.readOnly, false);
+  assert.equal(h.elements.message.disabled, false);
+  h.elements.message.value = "Actually, start at Columbus Circle";
+  await h.run("send()");
+  assert.equal(posted(h).at(-1).message, "Actually, start at Columbus Circle");
+  assert.notEqual(posted(h).at(-1).client_message_id, posted(h)[0].client_message_id);
+  assert.equal(posted(h).at(-1).session_id, posted(h)[0].session_id);
+  assert(!h.storage.has(PENDING));
+});
+
+test("Markdown links retain balanced and nested URL parentheses and surrounding text", () => {
+  const h = harness();
+  const wiki = "https://en.wikipedia.org/wiki/Pythian_Temple_(New_York_City)";
+  const nested = "https://example.org/a_(b_(c))?q=(d)";
+  h.run(`renderText(input, ${JSON.stringify(`Visit [the temple](${wiki}), then [nested](${nested}). **Next**`)}, true)`);
+  const nodes = h.elements.message.children;
+  assert.deepEqual(nodes.filter(node => node.tagName === "a").map(node => node.href), [wiki, nested]);
+  assert.equal(h.elements.message.textContent, "Visit the temple, then nested. Next");
+  assert(nodes.some(node => node.tagName === "strong" && node.textContent === "Next"));
+  for (const link of nodes.filter(node => node.tagName === "a")) {
+    assert.equal(link.rel, "noopener noreferrer");
+    assert.equal(link.target, "_blank");
+  }
+});
+
+test("unbalanced link parentheses stay literal and unsafe Markdown stays inert", () => {
+  const h = harness();
+  const unbalanced = "[broken](https://example.org/a_(b)";
+  h.run(`renderText(input, ${JSON.stringify(unbalanced)}, true)`);
+  assert.equal(h.elements.message.textContent, unbalanced);
+  assert(!h.elements.message.children.some(node => node.tagName === "a"));
+  h.run('renderText(input, "[bad](javascript:alert(1)) ![bad](https://evil.invalid/media/x) <script>alert(1)</script> `code`", true)');
+  assert(!h.elements.message.children.some(node => ["a", "img", "script"].includes(node.tagName)));
+  assert(h.elements.message.textContent.includes("<script>alert(1)</script>"));
+  assert(h.elements.message.children.some(node => node.tagName === "code" && node.textContent === "code"));
+  h.run('renderText(input, "![saved](/media/frame_(1))", true)');
+  assert.equal(h.elements.message.children.find(node => node.tagName === "img").src, "http://localhost:8876/media/frame_(1)");
+});
+
+test("tool activity reports unsuccessful plan checks as failed even when the tool ran successfully", () => {
+  const h = harness();
+  const calls = [
+    ...Array.from({ length: 8 }, () => ({ name: "evaluate_adventure_plan", result: { ok: true, data: { passes: false } } })),
+    { name: "evaluate_adventure_plan", result: { ok: true, data: { passes: true } } },
+    { name: "get_weather", result: { ok: false } },
+    { name: "find_camera_checkpoints" },
+  ];
+  const list = h.run(`toolActivity(${JSON.stringify(calls)})`);
+  assert.deepEqual(list.children.map(node => node.textContent), [
+    ...Array(8).fill("Route check · failed"), "Route check · complete", "Local weather · unavailable", "Camera positions · checked",
+  ]);
+});
+
+test("tool activity discloses valid calls beyond its twelve-row limit", () => {
+  const h = harness();
+  const calls = Array.from({ length: 15 }, () => ({ name: "get_weather", result: { ok: true } }));
+  const list = h.run(`toolActivity(${JSON.stringify([null, { name: 1 }, ...calls])})`);
+  assert.equal(list.children.length, 13);
+  assert(list.children.slice(0, 12).every(node => node.textContent === "Local weather · complete"));
+  assert.equal(list.children[12].textContent, "+3 more");
+  const full = h.run(`toolActivity(${JSON.stringify(calls.slice(0, 12))})`);
+  assert.equal(full.children.length, 12);
+  assert(!full.textContent.includes("more"));
+});
+
+
+test("manual retry after a permanent 4xx retains the request ID and a single user bubble", async () => {
+  const h = harness({}, [response({}, 422), answer]);
+  h.elements.message.value = "plan a walk";
+  await h.run("send()");
+  const first = posted(h)[0];
+  assert(h.storage.has(PENDING));
+  assert.equal(h.elements.message.readOnly, false);
+  await h.run("send()");
+  assert.deepEqual(posted(h)[1], first);
+  assert.equal(h.elements.messages.children.length, 2);
+  assert(!h.storage.has(PENDING));
+});
+
+test("many unclosed Markdown links render promptly as literal text", () => {
+  const h = harness();
+  const malformed = "[a](".repeat(9500);
+  const text = malformed + " [valid](https://example.org/ok)";
+  // Regression guard for rescanning the remaining 38 KB at every broken link.
+  h.run(`renderText(input, ${JSON.stringify(text)}, true)`, { timeout: 1000 });
+  assert.equal(h.elements.message.textContent, malformed + " valid");
+  const links = h.elements.message.children.filter(node => node.tagName === "a");
+  assert.equal(links.length, 1);
+  assert.equal(links[0].href, "https://example.org/ok");
+});
+
+test("a route check whose verdict was trimmed from history is not reported as passing", () => {
+  const h = harness();
+  const list = h.run('toolActivity([{name:"evaluate_adventure_plan",result:{ok:true,note:"trimmed"}}])');
+  assert.equal(list.children[0].textContent, "Route check · checked");
+});
+
+test("a stalled history body times out before automatically recovering the pending turn", async () => {
+  const pending = { message: "ready", session_id: "saved-session", client_message_id: MESSAGE_ID };
+  const stalled = call => ({
+    ok: true, status: 200,
+    json: () => new Promise((_, reject) => call.request.signal.addEventListener("abort", () => reject(new Error("Body aborted")), { once: true })),
+  });
+  const h = harness({ [SESSION]: pending.session_id, [PENDING]: JSON.stringify(pending) }, [stalled, answer]);
+  await h.clock.advance(10000);
+  assert(h.requests[0].request.signal.aborted);
+  assert.deepEqual(posted(h), [pending]);
+  assert.equal(h.elements.messages.children.length, 2);
+  assert(!h.storage.has(PENDING));
+  assert.equal(h.elements.message.disabled, false);
+});
+
+test("a completed pending ID outside the last 100 displayed history entries is still acknowledged", async () => {
+  const session = "saved-session";
+  const history = [
+    { role: "user", text: "ready", client_message_id: MESSAGE_ID },
+    { role: "assistant", text: "Already saved reply", client_message_id: MESSAGE_ID },
+    ...Array.from({ length: 100 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", text: "Later message " + i, client_message_id: "later-" + Math.floor(i / 2) })),
+  ];
+  const pending = { message: "ready", session_id: session, client_message_id: MESSAGE_ID };
+  const h = harness({ [SESSION]: session, [PENDING]: JSON.stringify(pending) }, [restored(session, history)]);
+  await settled();
+  assert.equal(posted(h).length, 0);
+  assert.equal(h.elements.messages.children.length, 100);
+  assert(!h.storage.has(PENDING));
+  assert.equal(h.elements.message.value, "");
+  assert.equal(h.elements.message.readOnly, false);
+  assert.equal(h.elements.message.disabled, false);
 });
