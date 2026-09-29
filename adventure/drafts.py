@@ -40,6 +40,7 @@ MAX_STOPS = 8
 DEFAULT_DWELL_MINUTES = 5
 DEFAULT_THEME = "a playful NYC mystery"
 LOCATION_FRESH_MINUTES = 15  # a browser location this recent can start a revision's route
+DEPART_WINDOW = timedelta(hours=2)  # a departure further from now is most likely a UTC/local mix-up
 STATED_FIELDS = ("destination", "deadline", "duration_minutes", "required_stops", "allowed_modes", "theme")
 
 
@@ -85,7 +86,11 @@ def build_new_plan(draft: dict, now: datetime, camera_lookup: CameraLookup | Non
               *[_point(c.checkpoint_id, places[c.place_id].point, c.dwell_minutes) for c in checkpoints]]
     if request.destination is not None:
         points.append(_point("destination", request.destination.point))
-    legs, warnings = _route(points, request, draft.get("depart_at") or now)
+    depart = parse_time(draft.get("depart_at")) or now
+    if abs(depart - now) > DEPART_WINDOW:
+        raise DraftError(f"depart_at {depart.isoformat()} is {abs(depart - now).total_seconds() / 3600:.1f} hours from now. "
+                         "Omit it to start now; tool timestamps ending in Z are UTC, not New York time.")
+    legs, warnings = _route(points, request, depart)
 
     plan = _plan(
         plan_id=f"plan_{uuid.uuid4().hex[:12]}", version=1, request=request, places=list(places.values()),

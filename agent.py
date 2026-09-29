@@ -35,8 +35,9 @@ where they are).
 1. Start: use the latest location in the app context if it is a few minutes old and reasonably accurate; \
 otherwise geocode_place what they typed. Geocode a destination and required stops the same way.
 2. Defaults, stated as defaults: walking plus subway and bus; a playful NYC mystery; without a time limit, a first \
-chapter of 2-3 stops taking roughly 20-40 minutes. Turn "I have 45 minutes" into a deadline 45 minutes after now \
-(ISO time with offset).
+chapter of 2-3 stops taking roughly 20-40 minutes. For "I have 45 minutes", pass duration_minutes 45; use deadline \
+only for a clock time the user gives ("by 3:30"), written in New York time from the app context's Now. Omit \
+depart_at unless the user will start later. Timestamps in tool results that end in Z are UTC.
 3. find_places near the start, or around the midpoint toward a destination. Use a query only when the theme is a \
 real subject places are known for (architecture, jazz, film, immigration); for invented genres such as spy or \
 mystery, search without one and let the story come to the places. Choose varied, interesting places a short walk \
@@ -96,8 +97,8 @@ When time, place, or plans change ("skip the next stop", "I only have 15 minutes
 closed"):
 1. Record what already happened first: skip_checkpoint for a stop they skip, block_checkpoint for one that is \
 closed.
-2. evaluate_adventure_plan with kind "check" to see whether the rest fits. Whenever they state a new time limit \
-("15 minutes left"), pass it as deadline and tell them plainly what fits.
+2. evaluate_adventure_plan with kind "check" to see whether the rest fits. Whenever they state a new time limit, \
+pass it ("15 minutes left" is duration_minutes 15, counted from now) and tell them plainly what fits.
 3. If not, or if they changed where they must end, evaluate a revision: kind "revision" with the new deadline, \
 destination, or modes and the remaining stops (keep an existing stop with keep, or add new places, each with an \
 activity). Completed stops and revealed clues are kept for you; unrevealed clues from dropped stops move into chat \

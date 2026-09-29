@@ -4,7 +4,15 @@ Kyle's workstream edited files Jan owns only where the agent could not work end 
 
 **Base:** `origin/main` at `9b54995` (Merge pull request #4, camera registration), merged into `kyle/workstream` on 2026-09-29.
 
-**Restore Jan's originals of every file below:** `git checkout 9b54995 -- tools.py app.py`, or revert the commits named in each section. The planning and research modules (`agent.py`, `adventure/`, `integrations/tool_specs.py`, and the other adapters) are Kyle's own files and are unaffected.
+**Restore the originals of every file below:** `git checkout 9b54995 -- tools.py app.py pyproject.toml uv.lock README.md`, or revert the commits named in each section. Kyle's own files (`agent.py`, `adventure/`, `integrations/` other than `cameras.py`, `scripts/`, `docs/TOOLS.md`, `fixtures/integrations/`, and Kyle's tests) are unaffected.
+
+| File | Commit on `kyle/workstream` | Revert |
+|---|---|---|
+| `tools.py`, `app.py` | `3f687b2` Register Kyle's tools and use the agent prompt | `git revert 3f687b2` |
+| `pyproject.toml`, `uv.lock` | `ba4c953` Add gtfs-realtime-bindings | `git revert ba4c953`, then `uv lock` |
+| `README.md` (grader examples section only) | the commit that adds this row | restore the section below |
+
+Later commits registered more of Kyle's tools only inside Kyle's own lists (`PLACE_TOOLS`, `PLANNING_TOOLS`), so `tools.py` did not change again.
 
 ## `tools.py`: register Kyle's tools
 
@@ -73,3 +81,17 @@ SYSTEM_PROMPT = (
 )
 MAX_TOOL_ROUNDS = 8
 ```
+
+## `README.md`: grader examples section
+
+Why: Kyle leads the grader examples. The section now says the examples run end to end locally, notes the camera limitation, and links the acceptance checks and `docs/TOOLS.md`. The rest of the README is unchanged.
+
+Original section at the base commit:
+
+```markdown
+## Planned grader examples
+
+These are implementation acceptance targets, not currently supported adventure behavior. Finalize the starting locations after selecting the field-tested pilot area.
+```
+
+(The three numbered examples are unchanged.)

@@ -354,3 +354,12 @@ def test_minutes_left_mid_adventure_count_from_now():
 
     check = evaluate_adventure_plan(ctx, {"kind": "check", "duration_minutes": 5})
     assert [v["code"] for v in check["data"]["violations"]] == ["DEADLINE_EXCEEDED"]
+
+
+def test_a_departure_hours_away_is_rejected_as_a_time_zone_mix_up():
+    # A live run labeled a UTC tool timestamp as New York time and planned a walk four hours ahead.
+    shifted = draft(depart_at=(NOW + timedelta(hours=4)).astimezone(timezone.utc).replace(tzinfo=None).isoformat() + "-04:00")
+    result = evaluate(session(), shifted, 5, 9)
+
+    assert result["error"]["code"] == "INVALID_ARGUMENT"
+    assert "UTC" in result["error"]["message"]
