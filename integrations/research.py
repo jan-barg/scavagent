@@ -17,6 +17,7 @@ Nothing here shows that a physical detail is visible today, so no claim has kind
 import hashlib
 import math
 import re
+import time
 from collections import defaultdict
 from datetime import datetime
 
@@ -44,6 +45,7 @@ SAME_PLACE_M = 120  # a landmark record and an article this close, with matching
 BUILDING_SEARCH_M = 80  # article coordinates can sit a little off the building footprint
 MAX_INTRO_CLAIMS = 4
 MAX_FOCUS_CLAIMS = 8
+REMEMBER_SECONDS = 3600  # the planner builds stops from what the tools returned this long ago or less
 NAME_NOISE = {"the", "apartments", "apartment", "building", "manhattan", "new", "york", "city"}
 
 CLAIMS_NOTE = "Claims are quoted or transcribed from the cited source; they are not independently verified."
@@ -58,6 +60,8 @@ ARCHITECTURAL = re.compile(r"\b(architect\w*|design\w*|facade|façade|style|stor
 _HEADING = re.compile(r"^(={2,6})\s*(.*?)\s*\1\s*$", re.MULTILINE)
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(])")
 _ABBREVIATION_END = re.compile(r"\b(?:[A-Z]|St|Ave|Jr|Sr|Mr|Mrs|Dr|Co|Inc|No|Mt|Ft|ca|c)\.$")
+
+_remembered = {}  # place_id -> (expires at, {"name", "point", "address", "evidence"})
 
 
 def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
@@ -111,6 +115,8 @@ def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
     kept = {id(c) for c in designated}
     nearest = [c for c in candidates if id(c) not in kept][: limit - len(designated)]
     candidates = sorted(designated + nearest, key=lambda c: c["distance_m"])
+    for candidate in candidates:
+        _remember(candidate["place_id"], name=candidate["name"], point=candidate["point"], address=candidate["address"])
     if not candidates:
         matching = f" matching {query!r}" if query else ""
         return tool_error("NO_MATCH", f"No candidate places within {radius_m} m{matching}.", retryable=False,
@@ -130,13 +136,45 @@ def research_place(place_id, focus=None):
     focus = " ".join(str(focus or "").split())[:60] or None
     try:
         if kind == "wiki" and key.isdigit():
-            return _research_article(int(key), focus)
-        if kind == "lpc" and re.fullmatch(r"LP-\d+[A-Z]?", key):
-            return _research_landmark(key)
+            result = _research_article(int(key), focus)
+        elif kind == "lpc" and re.fullmatch(r"LP-\d+[A-Z]?", key):
+            result = _research_landmark(key)
+        else:
+            return tool_error("INVALID_ARGUMENT", f"Unknown place_id {place_id!r}.", retryable=False,
+                              next_step="Use a place_id returned by find_places, such as 'wiki:9238071' or 'lpc:LP-01521'.")
     except UpstreamError as e:
         return upstream_failure(e, "Try again shortly, or research another candidate.")
-    return tool_error("INVALID_ARGUMENT", f"Unknown place_id {place_id!r}.", retryable=False,
-                      next_step="Use a place_id returned by find_places, such as 'wiki:9238071' or 'lpc:LP-01521'.")
+    if result["ok"]:
+        evidence = result["data"]["evidence"]
+        _remember(evidence["place_id"], name=evidence["name"], point=evidence["point"], address=evidence["address"],
+                  evidence=evidence)
+    return result
+
+
+def remembered_place(place_id):
+    """What find_places and research_place returned about a place within the last hour: name, point,
+    address, and evidence with the claims of every research focus merged. None if nothing is known.
+
+    The planner builds stops from this, so a plan can cite only claims the tools actually returned."""
+    entry = _remembered.get(place_id)
+    if entry is None or entry[0] < time.monotonic():
+        return None
+    return entry[1]
+
+
+def _remember(place_id, *, name, point, address, evidence=None):
+    known = remembered_place(place_id) or {"evidence": None}
+    merged = known["evidence"]
+    if evidence is not None:
+        if merged is None:
+            merged = evidence
+        else:
+            claims = {c["claim_id"]: c for c in [*merged["claims"], *evidence["claims"]]}
+            merged = {**evidence, "claims": list(claims.values())}
+    _remembered[place_id] = (time.monotonic() + REMEMBER_SECONDS, {
+        "name": name or known.get("name"), "point": point or known.get("point"),
+        "address": address or known.get("address"), "evidence": merged,
+    })
 
 
 # --- Candidates ---

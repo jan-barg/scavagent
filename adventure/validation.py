@@ -63,7 +63,7 @@ class Evaluation:
     def summary(self) -> dict:
         local = ZoneInfo(NYC_TIMEZONE)
         return {
-            "ok": self.report.ok,
+            "passes": self.report.ok,
             "violations": [v.model_dump(mode="json") for v in self.report.violations],
             "estimated_total_minutes": self.report.estimated_total_minutes,
             "travel_minutes": round(self.travel_minutes, 1),
@@ -84,15 +84,17 @@ def evaluate_plan(
     now: datetime,
     state: AdventureState | None = None,
     previous: AdventurePlan | None = None,
+    origin: str | None = None,
     start_at: datetime | None = None,
     waived_required_ids: list[str] | tuple = (),
     camera_lookup: CameraLookup | None = None,
     allow_synthetic: bool = False,
 ) -> Evaluation:
-    """Evaluate a new plan, or with `previous` and `state`, a revision of the active one.
+    """Evaluate a new plan; with `previous` and `state`, a revision of the active one; or with
+    `origin` and `state`, an adventure under way, from the stop the user last left.
 
     `start_at` is when the remaining route begins: by default the first leg's departure for a
-    new plan and `now` for a revision. `waived_required_ids` are required checkpoints the user
+    new plan and `now` otherwise. `waived_required_ids` are required checkpoints the user
     explicitly dropped. `camera_lookup` returns the catalogue record for a camera checkpoint id.
     `allow_synthetic` accepts fixture routes and cameras (development only).
     """
@@ -102,8 +104,10 @@ def evaluate_plan(
         violations.append(Violation(code=code, message=message, checkpoint_id=checkpoint_id))
 
     request = plan.request
-    # Progress belongs to the plan being revised; a new plan starts clean even if ids repeat.
-    state = state if previous is not None else None
+    # Progress belongs to the plan under way; a new plan starts clean even if ids repeat.
+    retiming = origin is not None  # re-checking an adventure under way, not a new or revised plan
+    under_way = previous is not None or retiming
+    state = state if under_way else None
     resolved = set()
     if state is not None:
         resolved = set(state.completed_ids) | set(state.skipped_ids) | set(state.blocked_ids)
@@ -113,7 +117,7 @@ def evaluate_plan(
     local = ZoneInfo(NYC_TIMEZONE)
 
     # --- Route: the legs must connect the visiting order ---
-    origin = "current_location" if previous is not None else "start"
+    origin = origin or ("current_location" if previous is not None else "start")
     order = [origin, *(c.checkpoint_id for c in remaining)]
     if request.destination is not None:
         order.append("destination")
@@ -126,7 +130,7 @@ def evaluate_plan(
             flag("ROUTE_GAP", f"Two legs connect {leg.from_id} to {leg.to_id}.")
         legs_by_pair[(leg.from_id, leg.to_id)] = leg
     for leg in plan.legs:
-        if (leg.from_id, leg.to_id) not in pairs:
+        if (leg.from_id, leg.to_id) not in pairs and not (retiming and leg.to_id in resolved):  # already walked
             flag("ROUTE_GAP", f"Leg {leg.leg_id} ({leg.from_id} -> {leg.to_id}) is not part of the visiting order "
                               f"{' -> '.join(order)}.")
     for a, b in pairs:
@@ -136,7 +140,7 @@ def evaluate_plan(
     # --- Timeline ---
     first_leg = legs_by_pair.get(pairs[0]) if pairs else None
     if start_at is None:
-        start_at = now if previous is not None or first_leg is None or first_leg.depart_at is None else first_leg.depart_at
+        start_at = now if under_way or first_leg is None or first_leg.depart_at is None else first_leg.depart_at
     allowed_modes = set(request.allowed_modes) | ({"walk"} if "transit" in request.allowed_modes else set())
     by_id = {c.checkpoint_id: c for c in remaining}
     clock, travel, dwell, timeline = start_at, 0.0, 0.0, []
@@ -194,7 +198,7 @@ def evaluate_plan(
         if contingency < needed:
             flag("CONTINGENCY_TOO_SMALL", f"With a time limit, keep at least {needed} minutes of contingency "
                                           f"(the plan keeps {contingency:g}).")
-    if abs(plan.estimated_total_minutes - total) > ESTIMATE_TOLERANCE_MINUTES:
+    if not retiming and abs(plan.estimated_total_minutes - total) > ESTIMATE_TOLERANCE_MINUTES:
         flag("ESTIMATE_MISMATCH", f"The plan states {plan.estimated_total_minutes:g} minutes, but its legs, waits, and "
                                   f"dwell add up to {total:.0f} (contingency counted separately).")
 
