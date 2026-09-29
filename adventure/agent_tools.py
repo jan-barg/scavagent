@@ -245,7 +245,7 @@ def overview(plan: AdventurePlan, timeline: list[dict]) -> dict:
 def camera_lookup():
     """Catalogue records by checkpoint id, from integrations.cameras' validated catalogue loader."""
     try:
-        records = cameras._checkpoints(None, dev_mode())
+        records = cameras.load_checkpoints(allow_synthetic=dev_mode())
     except (OSError, ValueError, TypeError, KeyError):
         records = []
     return {record.checkpoint_id: record for record in records}.get

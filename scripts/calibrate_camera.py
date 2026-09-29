@@ -178,8 +178,19 @@ def add_to_catalogue(catalogue, checkpoint, log):
             candidate.setdefault("calibrated_as", [])
             if checkpoint.checkpoint_id not in candidate["calibrated_as"]:
                 candidate["calibrated_as"].append(checkpoint.checkpoint_id)
-    cameras._checkpoints(updated["checkpoints"], False)  # same validation the finder applies
     return updated
+
+
+def write_catalogue(updated, path=None):
+    """Write the catalogue, then load it the way the app does; restore the old file if that fails."""
+    path = Path(path or cameras.CATALOGUE_PATH)
+    previous = path.read_text()
+    path.write_text(json.dumps(updated, indent=2, ensure_ascii=False) + "\n")
+    try:
+        cameras.load_checkpoints()
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        path.write_text(previous)
+        raise NotesError(f"The catalogue would not load ({error}); left it unchanged.") from None
 
 
 def live_mount(camera_id):
@@ -235,8 +246,10 @@ def main(argv=None):
             sys.exit(f"Not added: {error}")
         print(json.dumps(checkpoint.model_dump(mode="json", exclude_none=True), indent=2))
         if args.write:
-            updated = add_to_catalogue(catalogue, checkpoint, log)
-            cameras.CATALOGUE_PATH.write_text(json.dumps(updated, indent=2, ensure_ascii=False) + "\n")
+            try:
+                write_catalogue(add_to_catalogue(catalogue, checkpoint, log))
+            except NotesError as error:
+                sys.exit(f"Not added: {error}")
             print(f"Added {checkpoint.checkpoint_id} to {cameras.CATALOGUE_PATH}", file=sys.stderr)
 
 

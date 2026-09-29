@@ -166,6 +166,16 @@ def _checkpoints(provided, allow_synthetic):
     return records
 
 
+def load_checkpoints(allow_synthetic=False):
+    """Every validated catalogue record, plus the labeled fixtures when allow_synthetic is True.
+
+    Public read access for the planner and scripts. Disabled and unverified records are included;
+    callers decide eligibility. A missing or invalid catalogue raises (OSError, ValueError, TypeError,
+    KeyError) instead of reading as empty.
+    """
+    return _checkpoints(None, allow_synthetic is True)
+
+
 def _eligible(checkpoint, allow_synthetic):
     return checkpoint.enabled and (
         checkpoint.verification_status == "field_verified"
