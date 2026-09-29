@@ -96,3 +96,10 @@ These are implementation acceptance targets, not currently supported adventure b
 ```
 
 (The three numbered examples are unchanged.)
+
+## Jan's edits to Kyle-owned files (after merging PR #6)
+
+- `adventure/agent_tools.py`: evaluated drafts moved from the module-level `_drafts` dict into the session record (`ctx.record.remember_draft(...)`, `ctx.record.drafts`, with `state.EvaluatedDraft`). Why: on Cloud Run a restart, scale-to-zero, or another instance between evaluate and save lost the draft, and expired drafts were never pruned. The per-session check is now implicit; `DRAFT_SECONDS` is gone because `DRAFT_FRESH` (10 minutes) already refuses older drafts. `reset_for_tests()` stays as a no-op for the existing fixture.
+- `adventure/agent_tools.py`: `evaluate_adventure_plan` now answers `INVALID_ARGUMENT` ("too large to keep") when `remember_draft` refuses a plan over `state.MAX_DRAFT_BYTES`.
+- `tests/test_planning_tools.py`: two added tests (`test_a_draft_evaluated_before_a_restart_can_still_be_saved`, `test_a_plan_too_large_to_store_is_refused_with_a_fix`), and `test_minutes_left_mid_adventure_count_from_now` now fakes the routing call of its final "check" (it reached the live Valhalla server; the suite now passes with the network blocked).
+- Kyle's items 3 and 4 from `docs/STATUS.md` are done in Jan's files: model-call retries in `app.py`; completion in plan order and finishing only with every stop resolved in `state.py`. Destination arrival itself is still not tracked in state.

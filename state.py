@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Callable, Literal, Protocol
 
 from pydantic import Field
 
@@ -39,6 +39,14 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 MAX_STORED_MESSAGES = 200
 MAX_TRANSCRIPT_ENTRIES = 200
 MAX_CACHED_REPLIES = 20
+MAX_DRAFTS = 3  # Evaluated plans waiting to be saved
+# The whole record is one JSON string in one Firestore document, which holds at most 1 MiB. A planning turn
+# stores about 30 kB three times over (model messages, chat transcript, cached reply), so a long adventure
+# reaches the limit well before the count caps above. trim() keeps the record under this budget.
+MAX_RECORD_BYTES = 800_000
+MAX_DRAFT_BYTES = 200_000  # One evaluated plan larger than this is refused rather than stored
+MIN_KEPT_REPLIES = 3  # Replies kept for resends even when trimming for size
+COMPACT_BYTES = 4_000  # Last resort: a stored tool argument or result bigger than this becomes a short note
 # A claim older than this belongs to a turn that has stopped: app.run_agent starts no model call after
 # its own shorter deadline. (Cloud Run's request timeout does not stop the code, so it cannot be relied on.)
 IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
@@ -46,6 +54,23 @@ IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _stored_bytes(value) -> int:
+    """UTF-8 bytes, as Firestore counts them (a character can take up to four)."""
+    return len((value if isinstance(value, str) else json.dumps(value)).encode())
+
+
+class RecordTooLarge(Exception):
+    """The session cannot fit one Firestore document even after trimming."""
+
+
+class EvaluatedDraft(Record):
+    """A plan evaluate_adventure_plan checked in this session, waiting for save_adventure_plan."""
+
+    kind: Literal["new", "revision"]
+    plan: AdventurePlan
+    waived_required_ids: list[str] = []
 
 
 class SessionRecord(Record):
@@ -62,11 +87,23 @@ class SessionRecord(Record):
     # client_message_id -> {camera checkpoint id: asset id} for photos taken while answering a message that has
     # no stored reply yet. If that turn dies and the message runs again, the camera tool reuses the photo.
     captures: dict[str, dict[str, str]] = {}
+    # draft id -> an evaluated plan not saved yet, oldest first. Kept here rather than in process memory,
+    # so a save still finds it after a restart or on another Cloud Run instance.
+    drafts: dict[str, EvaluatedDraft] = {}
 
     @classmethod
     def new(cls, session_id: str) -> "SessionRecord":
         now = utc_now()
         return cls(session_id=session_id, created_at=now, updated_at=now)
+
+    def remember_draft(self, draft_id: str, draft: EvaluatedDraft) -> bool:
+        """Keep an evaluated plan for save_adventure_plan. False, and nothing kept, if it alone is too large."""
+        if _stored_bytes(draft.model_dump_json()) > MAX_DRAFT_BYTES:
+            return False
+        self.drafts = {**{k: v for k, v in self.drafts.items() if k != draft_id}, draft_id: draft}
+        while len(self.drafts) > MAX_DRAFTS:
+            self.drafts.pop(next(iter(self.drafts)))
+        return True
 
     def remember_reply(self, client_message_id: str, reply: dict) -> None:
         self.replies[client_message_id] = reply
@@ -74,14 +111,81 @@ class SessionRecord(Record):
         while len(self.replies) > MAX_CACHED_REPLIES:
             self.replies.pop(next(iter(self.replies)))
 
+    def size(self) -> int:
+        return _stored_bytes(self.model_dump_json())
+
     def trim(self) -> None:
-        """Bound stored history, cutting only at a user message so tool calls keep their results."""
+        """Bound stored history by count and by size, or raise RecordTooLarge rather than leave it oversized.
+
+        History is cut only at a user message, so tool calls keep their results. Over the size budget the
+        cheapest losses come first: unsaved drafts (the model can evaluate again), older cached replies, the
+        oldest model turns, the oldest chat entries, superseded plans, and finally the bulk of stored tool
+        arguments and results. The active plan, photos, and progress are never dropped.
+        """
         if len(self.messages) > MAX_STORED_MESSAGES:
-            cut = len(self.messages) - MAX_STORED_MESSAGES
-            while cut < len(self.messages) and self.messages[cut].get("role") != "user":
-                cut += 1
-            self.messages = self.messages[cut:]
+            self._drop_messages_before(len(self.messages) - MAX_STORED_MESSAGES)
         self.transcript = self.transcript[-MAX_TRANSCRIPT_ENTRIES:]
+        for shrink in (self._drop_oldest_draft, self._drop_oldest_reply, self._drop_oldest_turn,
+                       self._drop_oldest_chat_entries, self._drop_superseded_plan, self._compact_tool_payloads):
+            # Each step must actually shrink the record, or trimming moves on; so this always ends.
+            while (before := self.size()) > MAX_RECORD_BYTES and shrink() and self.size() < before:
+                pass
+        if self.size() > MAX_RECORD_BYTES:
+            raise RecordTooLarge(f"{self.size()} bytes after trimming")
+
+    def _drop_messages_before(self, cut: int) -> None:
+        while cut < len(self.messages) and self.messages[cut].get("role") != "user":
+            cut += 1
+        self.messages = self.messages[cut:]
+
+    def _drop_oldest_draft(self) -> bool:
+        return bool(self.drafts) and self.drafts.pop(next(iter(self.drafts))) is not None
+
+    def _drop_oldest_reply(self) -> bool:
+        return len(self.replies) > MIN_KEPT_REPLIES and self.replies.pop(next(iter(self.replies))) is not None
+
+    def _drop_oldest_turn(self) -> bool:
+        if not any(m.get("role") == "user" for m in self.messages[1:]):
+            return False
+        self._drop_messages_before(1)
+        return True
+
+    def _drop_oldest_chat_entries(self) -> bool:
+        if len(self.transcript) <= 2:
+            return False
+        self.transcript = self.transcript[2:]
+        return True
+
+    def _drop_superseded_plan(self) -> bool:
+        old = next((plan_id for plan_id in self.plans if plan_id != self.adventure.active_plan_id), None)
+        return old is not None and self.plans.pop(old) is not None
+
+    def _compact_tool_payloads(self) -> bool:
+        """Replace big stored tool arguments and results with a note; the reply already sent kept them."""
+        def note(value):
+            return {"omitted": f"{_stored_bytes(value)} bytes not stored"}
+
+        changed = False
+        for message in self.messages:
+            if message.get("role") == "tool" and _stored_bytes(message.get("content") or "") > COMPACT_BYTES:
+                message["content"], changed = json.dumps(note(message["content"])), True
+            for call in message.get("tool_calls") or []:
+                function = call.get("function") or {}
+                if _stored_bytes(function.get("arguments") or "") > COMPACT_BYTES:
+                    function["arguments"], changed = json.dumps(note(function["arguments"])), True
+        traces = [c for entry in self.transcript for c in entry.get("tool_calls") or []]
+        traces += [c for reply in self.replies.values() for c in reply.get("tool_calls") or []]
+        for call in traces:
+            if _stored_bytes(call.get("args")) > COMPACT_BYTES:
+                call["args"], changed = note(call["args"]), True
+            result = call.get("result")
+            if isinstance(result, dict) and _stored_bytes(result) > COMPACT_BYTES:
+                # Keep ok and the error's code: the chat history shows each tool's outcome.
+                error = result.get("error")
+                if isinstance(error, dict):
+                    error = {"code": error.get("code"), "message": str(error.get("message", ""))[:200]}
+                call["result"], changed = {"ok": result.get("ok"), "error": error, **note(result)}, True
+        return changed
 
 
 # --- Storage backends ---
@@ -389,6 +493,7 @@ class ToolContext:
             update={"photo_asset_ids": [*self.record.adventure.photo_asset_ids, asset_id]}
         ))
         try:
+            self.record.trim()  # Drafts added this turn could otherwise push the record past one document
             self.store.save(self.record)
         except Exception:
             # Not saved: detach it here too, so the end of the turn cannot keep a photo the tool reported as failed.
@@ -555,6 +660,15 @@ def resolve_checkpoint(
             retryable=False,
             next_step="Continue with the current checkpoint.",
         )
+    if outcome == "completed" and checkpoint_id != state.current_checkpoint_id:
+        # Stops are routed in order; completing a later one would leave the route and the story out of step.
+        current = state.current_checkpoint_id
+        return tool_error(
+            "INVALID_ARGUMENT",
+            f"{checkpoint_id} is not the current checkpoint ({current or 'none'}).",
+            retryable=False,
+            next_step=f"Complete or skip {current} first." if current else "Every checkpoint is already resolved.",
+        )
     if outcome == "skipped" and checkpoint.required_by_user and not user_waived_required:
         return tool_error(
             "INVALID_ARGUMENT",
@@ -602,6 +716,10 @@ def set_status(ctx: ToolContext, status: str, *, expected_version: int | None = 
     if status == "active" and not (plan.validation and plan.validation.ok):
         return tool_error("PLAN_INFEASIBLE", "The active plan has not passed evaluation.", retryable=True,
                           next_step="Evaluate the plan and save a passing version before starting.")
+    if status == "completed" and state.current_checkpoint_id is not None:
+        return tool_error("INVALID_ARGUMENT", f"Checkpoint {state.current_checkpoint_id} and any after it are unresolved.",
+                          retryable=False,
+                          next_step="Complete or skip the remaining stops, or abandon_adventure if the user is stopping early.")
     if state.status != status:
         update = {"status": status}
         if status in ("completed", "abandoned"):
