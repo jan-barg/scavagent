@@ -117,8 +117,9 @@ When time, place, or plans change ("skip the next stop", "I only have 15 minutes
 closed"):
 1. Record what already happened first: skip_checkpoint for a stop they skip, block_checkpoint for one that is \
 closed.
-2. evaluate_adventure_plan with kind "check" to see whether the rest fits. Whenever they state a new time limit, \
-pass it ("15 minutes left" is duration_minutes 15, counted from now) and tell them plainly what fits.
+2. evaluate_adventure_plan with kind "check" to see whether the rest fits, before you answer, even when you also \
+need to ask them something (for example, whether to drop a stop they required). Whenever they state a new time \
+limit, pass it ("15 minutes left" is duration_minutes 15, counted from now) and tell them plainly what fits.
 3. If not, or if they changed where they must end, evaluate a revision: kind "revision" with the new deadline, \
 destination, or modes and the remaining stops (keep an existing stop with keep, or add new places, each with an \
 activity, a beat with its clue, and a theme_link when the theme was stated). Completed stops and revealed clues are \

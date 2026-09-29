@@ -329,6 +329,19 @@ def test_enough_stops_for_the_time():
     assert evaluate(short, 11)["data"]["passes"]  # an 11-minute walk there leaves no room for another stop
 
 
+def test_a_time_budget_the_user_never_gave_does_not_excuse_one_stop():
+    # A live run gave "a 1960s spy adventure" a 25-minute budget of its own and filled it with one far stop.
+    def self_imposed(d):
+        d["stops"].pop()
+        d["chat_beats"][0]["uses"] = ["stop_1"]
+        d["user_stated"] = ["theme"]
+
+    result = evaluate(changed(self_imposed), 11)
+
+    assert codes(result) == ["TOO_FEW_STOPS"]
+    assert "no time limit from the user" in messages(result)
+
+
 def test_a_link_rejected_before_says_so_and_offers_the_stops_source():
     built = changed(lambda d: d["stops"][0]["activity"].update(
         prompt="Read up first: https://en.wikipedia.org/wiki/Beacon_Theatre_(New_York_City). Who built it?"))

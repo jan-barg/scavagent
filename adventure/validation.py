@@ -613,13 +613,18 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
 
     # --- Enough story for the time ---
     if whole and not stop_count_stated:
-        needed = 3 if available is not None and available >= 60 else 2 if available is None or available >= 20 else 1
-        room = slack is None or slack >= ROOM_FOR_A_STOP_MINUTES
+        # Only a limit the user gave can leave no room for more; a budget the planner chose is not a reason.
+        limited = ((request.duration_minutes and "duration_minutes" not in request.defaulted_fields)
+                   or (request.deadline and "deadline" not in request.defaulted_fields))
+        needed = 2 if not limited else 3 if available >= 60 else 2 if available >= 20 else 1
+        room = not limited or slack is None or slack >= ROOM_FOR_A_STOP_MINUTES
         if len(plan.checkpoints) < needed and room:
-            time = f"{available:.0f} available minutes, {slack:.0f} unused" if available is not None else "no time limit"
+            time = (f"{available:.0f} available minutes, {slack:.0f} unused" if limited else
+                    "no time limit from the user, so a first chapter")
             flag("TOO_FEW_STOPS", f"{len(plan.checkpoints)} stop(s) for {time}: plan at least {needed}. Add a researched "
-                                  "stop near the route (ride transit between far-apart stops). If the user asked for "
-                                  "fewer stops, include \"stop_count\" in user_stated.")
+                                  "stop near the route (ride transit between far-apart stops), and drop any time limit "
+                                  "the user did not give. If the user asked for fewer stops, include \"stop_count\" in "
+                                  "user_stated.")
 
 
 def _cast_name(member):
