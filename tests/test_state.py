@@ -459,6 +459,21 @@ def test_one_enormous_turn_is_stored_in_brief_but_sent_in_full(monkeypatch):
     assert call["result"]["ok"] is True and "bytes not stored" in call["result"]["omitted"]
 
 
+def test_a_tool_failure_with_an_enormous_message_is_stored_in_brief(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    failure = tools.tool_error("UPSTREAM_UNAVAILABLE", "x" * 900_000, retryable=True, next_step="Try later.")
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_research", lambda: failure)
+    script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_research", "{}")]),
+           FakeMessage(content="The source is down.", tool_calls=None))
+
+    TestClient(app_module.app).post("/chat", json={"message": "research", "session_id": "err", "client_message_id": "m-1"})
+
+    saved = store.load("err")  # Trimming finished instead of looping, and the record fits
+    assert saved.size() <= state.MAX_RECORD_BYTES
+    assert saved.transcript[-1]["tool_calls"][0]["result"]["error"]["code"] == "UPSTREAM_UNAVAILABLE"
+
+
 def test_a_session_that_cannot_fit_says_so_and_keeps_its_last_saved_version(monkeypatch):
     store = state.MemoryStore()
     monkeypatch.setattr(app_module, "store", store)

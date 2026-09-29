@@ -127,7 +127,8 @@ class SessionRecord(Record):
         self.transcript = self.transcript[-MAX_TRANSCRIPT_ENTRIES:]
         for shrink in (self._drop_oldest_draft, self._drop_oldest_reply, self._drop_oldest_turn,
                        self._drop_oldest_chat_entries, self._drop_superseded_plan, self._compact_tool_payloads):
-            while self.size() > MAX_RECORD_BYTES and shrink():
+            # Each step must actually shrink the record, or trimming moves on; so this always ends.
+            while (before := self.size()) > MAX_RECORD_BYTES and shrink() and self.size() < before:
                 pass
         if self.size() > MAX_RECORD_BYTES:
             raise RecordTooLarge(f"{self.size()} bytes after trimming")
@@ -179,8 +180,11 @@ class SessionRecord(Record):
                 call["args"], changed = note(call["args"]), True
             result = call.get("result")
             if isinstance(result, dict) and _stored_bytes(result) > COMPACT_BYTES:
-                # Keep ok and error: the chat history shows each tool's outcome.
-                call["result"], changed = {"ok": result.get("ok"), "error": result.get("error"), **note(result)}, True
+                # Keep ok and the error's code: the chat history shows each tool's outcome.
+                error = result.get("error")
+                if isinstance(error, dict):
+                    error = {"code": error.get("code"), "message": str(error.get("message", ""))[:200]}
+                call["result"], changed = {"ok": result.get("ok"), "error": error, **note(result)}, True
         return changed
 
 
