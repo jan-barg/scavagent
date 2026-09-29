@@ -21,6 +21,7 @@ GRID_TOLERANCE_DEG = 12.0
 CORNER_M = 20.0  # within this of both centerlines, a spot is a corner
 LANE_M, PARKING_M, HALF_SIDEWALK_M = 3.2, 2.4, 2.5
 CARDINALS = ("north", "east", "south", "west")
+ALT_NAME_TAGS = ("alt_name", "official_name", "old_name", "short_name")
 
 
 @dataclass(frozen=True)
@@ -130,9 +131,15 @@ def intersection_streets(camera_name, mount: LatLng, radius_m=250, urls=None):
         raise ValueError(f"Cannot read two streets from {camera_name!r}")
     patterns = [geocoding.street_pattern(n) for n in names]
     near = f"(around:{radius_m},{mount.lat},{mount.lng})"
-    a, b = (p.replace("\\", "\\\\") for p in patterns)  # escape for the QL string
-    query = (f'[out:json][timeout:25];way{near}["highway"]["name"~"{a}",i]->.a;'
-             f'way{near}["highway"]["name"~"{b}",i]->.b;node(w.a)(w.b)->.x;.x out;.a out tags geom;.b out tags geom;')
+    def ways(pattern, into):
+        # Honorary co-names can take over "name" (2nd Avenue in East Harlem is "México-Tenochtitlan Avenue"),
+        # so also match alternate names, which may hold several values separated by ";".
+        listed = "(^|;) *" + pattern[1:-1] + " *(;|$)"
+        tags = [("name", pattern)] + [(tag, listed) for tag in ALT_NAME_TAGS]
+        union = "".join(f'way{near}["highway"]["{tag}"~"{rx.replace(chr(92), chr(92) * 2)}",i];' for tag, rx in tags)
+        return f"({union})->.{into};"
+    query = (f"[out:json][timeout:25];{ways(patterns[0], 'a')}{ways(patterns[1], 'b')}"
+             "node(w.a)(w.b)->.x;.x out;.a out tags geom;.b out tags geom;")
     body, error = None, None
     for url in urls or geocoding.OVERPASS_URLS:
         try:
@@ -154,14 +161,20 @@ def intersection_streets(camera_name, mount: LatLng, radius_m=250, urls=None):
     nearest = min(nodes, key=lambda n: math.hypot(*local_xy(mount, n)))
     group = [n for n in nodes if math.hypot(*local_xy(nearest, n)) <= 60]
     center = LatLng(lat=sum(n.lat for n in group) / len(group), lng=sum(n.lng for n in group) / len(group))
-    ways = [e for e in elements if e.get("type") == "way" and e.get("geometry")]
+    found = [e for e in elements if e.get("type") == "way" and e.get("geometry")]
     streets = []
     for name, pattern in zip(names, patterns):
-        mine = [w for w in ways if re.search(pattern, w.get("tags", {}).get("name", ""), re.IGNORECASE)]
+        mine = [w for w in found if _named(w.get("tags", {}), pattern)]
         if not mine:
             raise ValueError(f"No OpenStreetMap geometry for {name} near the camera")
         streets.append(street_from_ways(geocoding._display(name), center, mine))
     return center, streets
+
+
+def _named(tags, pattern):
+    """Whether a way's name, or one of its alternate names, matches the street pattern."""
+    names = [tags.get("name", "")] + [n.strip() for tag in ALT_NAME_TAGS for n in tags.get(tag, "").split(";")]
+    return any(re.search(pattern, n, re.IGNORECASE) for n in names if n)
 
 
 def street_from_ways(display, center, ways):

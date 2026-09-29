@@ -98,3 +98,10 @@ def test_an_overloaded_overpass_answer_falls_back_to_the_next_server(monkeypatch
     answers["https://ok"] = answers["https://busy"]
     with pytest.raises(ValueError, match="did not answer"):
         geo.intersection_streets("Park Ave @ E 116 Street", center, urls=["https://busy", "https://ok"])
+
+
+def test_a_street_is_found_under_its_alternate_name():
+    pattern = geo.geocoding.street_pattern("2nd avenue")
+    assert geo._named({"name": "México-Tenochtitlan Avenue", "alt_name": "2nd Avenue"}, pattern)
+    assert geo._named({"name": "Honorary Way", "official_name": "Plaza X;Second Avenue"}, pattern)
+    assert not geo._named({"name": "México-Tenochtitlan Avenue", "alt_name": "22nd Avenue"}, pattern)
