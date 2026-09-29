@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -124,6 +125,7 @@ def recent(messages: list[dict]) -> list[dict]:
 
 app = FastAPI()
 store = state.store_from_env()
+logger = logging.getLogger("scavagent")
 
 
 def session_id_or_400(session_id: str | None) -> str:
@@ -139,34 +141,59 @@ def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
 
+def start_turn(session_id: str, client_message_id: str | None) -> tuple[SessionRecord, dict | None]:
+    """Load the session and claim this message, or return the reply it already got.
+
+    The claim is saved before the agent runs, so a retry that arrives mid-turn gets a 409
+    instead of running the tools, and any camera capture, a second time.
+    """
+    for _ in range(3):
+        record = store.load(session_id) or SessionRecord.new(session_id)
+        if not client_message_id:
+            return record, None
+        if client_message_id in record.replies:
+            return record, record.replies[client_message_id]
+        if not record.claim(client_message_id, state.utc_now()):
+            raise HTTPException(409, "Still working on that message. Send it again in a moment.")
+        try:
+            store.save(record)
+            return record, None
+        except VersionConflict:
+            continue  # Another turn saved this session first; look again.
+    raise HTTPException(409, "This conversation is busy. Send the message again in a moment.")
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     # Get or create the session. A client may choose its own id; the server makes one otherwise.
     session_id = session_id_or_400(request.session_id)
-    record = store.load(session_id) or SessionRecord.new(session_id)
 
     # A retried send returns the reply already given, without running tools twice.
-    if request.client_message_id and request.client_message_id in record.replies:
-        return record.replies[request.client_message_id]
+    record, replay = start_turn(session_id, request.client_message_id)
+    if replay is not None:
+        return replay
 
     now = state.utc_now()
     if request.location:
         state.update_location(record, request.location)
 
-    record.messages += [{"role": "user", "content": request.message}]
+    # The user's message joins the stored conversation only when the turn ends, so a save
+    # during the turn (a captured photo) never stores half a turn.
     context = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + app_context(record, now)}]
-    conversation = context + recent(record.messages)
-    new_from = len(conversation)
+    conversation = context + recent(record.messages + [{"role": "user", "content": request.message}])
+    new_from = len(conversation) - 1
 
     tool_calls = []
     try:
         response = run_agent(conversation, tool_calls, ToolContext(record=record, store=store))
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
+        # Provider errors can quote request details, so those go only to the server log.
         # Tools that already ran stay in the trace.
-        response = f"Model call failed: {type(e).__name__}: {str(e)[:300]}"
+        logger.exception("Model call failed")
+        response = f"Model call failed ({type(e).__name__}). Please try again in a moment."
 
-    # Keep what the model produced this turn, made plain JSON so any store can hold it.
+    # Keep this turn's messages, made plain JSON so any store can hold them.
     record.messages += json.loads(json.dumps(conversation[new_from:], default=str))
     reply = ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls).model_dump(mode="json")
     record.transcript += [

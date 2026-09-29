@@ -21,6 +21,11 @@ def tool_call(call_id, name, arguments):
     return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
 
 
+def reply(message):
+    """What litellm.completion returns around one message."""
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
 def script(monkeypatch, *steps):
     """Each step is a FakeMessage to return, or an exception to raise."""
     remaining = list(steps)
@@ -29,9 +34,9 @@ def script(monkeypatch, *steps):
     def completion(**kwargs):
         seen.append(json.loads(json.dumps(kwargs["messages"])))  # Must be JSON-serializable
         step = remaining.pop(0)
-        if isinstance(step, Exception):
+        if isinstance(step, BaseException):
             raise step
-        return SimpleNamespace(choices=[SimpleNamespace(message=step)])
+        return reply(step)
 
     monkeypatch.setattr(app_module.litellm, "completion", completion)
     return seen

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import app as app_module
 import state
 import tools
-from fakes import FakeMessage, script, tool_call
+from fakes import FakeMessage, reply, script, tool_call
 from fixtures import load_scenario
 from schemas import ValidationReport
 from state import SessionRecord, ToolContext
@@ -75,6 +75,59 @@ def test_retried_message_returns_the_first_reply_without_rerunning(monkeypatch):
 
     assert first == second and len(seen) == 1
     assert len(app_module.store.load("retry-test").transcript) == 2
+
+
+def test_retry_while_the_first_turn_is_still_running_does_not_run_it_again(monkeypatch):
+    monkeypatch.setattr(app_module, "store", state.MemoryStore())
+    client = TestClient(app_module.app)
+    body = {"message": "ready", "session_id": "in-flight", "client_message_id": "m-1"}
+    retries = []
+
+    def completion(**kwargs):
+        # The browser gave up waiting and sent the same message again while the model was thinking.
+        retries.append(client.post("/chat", json=body).status_code)
+        return reply(FakeMessage(content="Done once.", tool_calls=None))
+
+    monkeypatch.setattr(app_module.litellm, "completion", completion)
+    first = client.post("/chat", json=body).json()
+    later = client.post("/chat", json=body).json()
+
+    assert retries == [409]  # The model ran once; the mid-turn retry did not start a second turn
+    assert first["response"] == "Done once." and later == first
+
+
+class InstanceDied(BaseException):
+    """The Cloud Run instance stops mid-turn: nothing in the app gets to handle it."""
+
+
+def test_photo_from_a_turn_that_died_is_kept_and_the_message_can_run_again(monkeypatch):
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    capture = lambda ctx: tools.tool_ok(
+        {"asset_id": ctx.save_asset(b"jpeg", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW).asset_id})
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_capture", capture)
+    monkeypatch.setattr(tools, "SESSION_TOOLS", tools.SESSION_TOOLS | {"fake_capture"})
+    script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_capture", "{}")]), InstanceDied())
+    client = TestClient(app_module.app)
+    body = {"message": "ready at the corner", "session_id": "died", "client_message_id": "m-1"}
+
+    with pytest.raises(InstanceDied):
+        client.post("/chat", json=body)
+
+    saved = store.load("died")
+    assert list(saved.photos) == saved.adventure.photo_asset_ids and len(saved.photos) == 1
+    assert saved.messages == [] and saved.transcript == []  # No half turn was stored
+
+    # Until the claim expires the message is treated as still running; after that it runs again, once.
+    assert client.post("/chat", json=body).status_code == 409
+    saved.in_flight["m-1"] -= state.IN_FLIGHT_TIMEOUT
+    store.save(saved)
+    script(monkeypatch, FakeMessage(content="Got the shot.", tool_calls=None))
+    assert client.post("/chat", json=body).json()["response"] == "Got the shot."
+
+    after = store.load("died")
+    assert [m["content"] for m in after.messages if m["role"] == "user"] == ["ready at the corner"]
+    assert len(after.photos) == 1 and after.in_flight == {}
 
 
 def test_unknown_history_and_malformed_session_ids_are_rejected(monkeypatch):
@@ -200,7 +253,7 @@ def test_finishing_reveals_the_solution_only_at_the_end(active):
 def test_saved_photo_is_served_later_and_tracked_in_progress(active, monkeypatch):
     monkeypatch.setattr(app_module, "store", active.store)
     photo = active.save_asset(
-        b"\xff\xd8jpeg-bytes", "image/jpeg", camera_id="cam-1", checkpoint_id="stop_3",
+        b"\xff\xd8jpeg-bytes", "image/jpeg", camera_id="cam-1", checkpoint_id="fixture_cam_cp_1",
         source_url="https://webcams.nyctmc.org/api/cameras/cam-1/image", retrieved_at=NOW,
     )
 
@@ -216,7 +269,7 @@ def test_saved_photo_is_served_later_and_tracked_in_progress(active, monkeypatch
 
 
 def test_new_adventure_after_finishing_keeps_photos_but_resets_progress(active):
-    photo = active.save_asset(b"x", "image/jpeg", "cam-1", "stop_3", None, NOW)
+    photo = active.save_asset(b"x", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
     tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")
     tools.update_adventure_state(active, "finish_adventure")
 
@@ -224,6 +277,15 @@ def test_new_adventure_after_finishing_keeps_photos_but_resets_progress(active):
     after = active.record.adventure
     assert after.status == "proposed" and after.completed_ids == []
     assert after.photo_asset_ids == [photo.asset_id]
+
+
+def test_the_model_can_match_a_photo_to_its_stop(active):
+    # PhotoAsset.checkpoint_id is the camera checkpoint; the plan's stop points at it.
+    active.save_asset(b"x", "image/jpeg", "fixture-camera-not-dot", "fixture_cam_cp_1", None, NOW)
+    summary = state.state_summary(active.record)
+    [photo] = summary["photos"]
+    [stop] = [c for c in summary["checkpoints"] if c["camera_checkpoint_id"] == photo["checkpoint_id"]]
+    assert stop["checkpoint_id"] == "stop_3"
 
 
 def test_old_location_age_is_reported_to_the_model():

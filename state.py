@@ -15,7 +15,7 @@ import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -37,6 +37,9 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 MAX_STORED_MESSAGES = 200
 MAX_TRANSCRIPT_ENTRIES = 200
 MAX_CACHED_REPLIES = 20
+# Cloud Run's default request timeout. A claim older than this belongs to a turn that can no longer finish,
+# so its message may run again. Keep the service's --timeout at or below this.
+IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
 
 
 def utc_now() -> datetime:
@@ -54,14 +57,24 @@ class SessionRecord(Record):
     plans: dict[str, AdventurePlan] = {}
     photos: dict[str, PhotoAsset] = {}
     replies: dict[str, dict] = {}  # client_message_id -> the ChatResponse already sent
+    in_flight: dict[str, datetime] = {}  # client_message_id -> when a turn started answering it
 
     @classmethod
     def new(cls, session_id: str) -> "SessionRecord":
         now = utc_now()
         return cls(session_id=session_id, created_at=now, updated_at=now)
 
+    def claim(self, client_message_id: str, now: datetime) -> bool:
+        """Mark a message as being answered. False while a live turn already has it."""
+        self.in_flight = {k: t for k, t in self.in_flight.items() if now - t < IN_FLIGHT_TIMEOUT}
+        if client_message_id in self.in_flight:
+            return False
+        self.in_flight[client_message_id] = now
+        return True
+
     def remember_reply(self, client_message_id: str, reply: dict) -> None:
         self.replies[client_message_id] = reply
+        self.in_flight.pop(client_message_id, None)
         while len(self.replies) > MAX_CACHED_REPLIES:
             self.replies.pop(next(iter(self.replies)))
 
@@ -246,7 +259,11 @@ class ToolContext:
         frame_time: datetime | None = None,
         provenance: str = "live_capture",
     ) -> PhotoAsset:
-        """Store image bytes and attach the photo record to this session's progress."""
+        """Store image bytes, attach the photo to this session's progress, and save the session now.
+
+        Saving here, not at the end of the turn, keeps a captured frame even if the turn dies before
+        it replies. The turn adds its messages only when it finishes, so this save never holds half a turn.
+        """
         asset_id = uuid.uuid4().hex
         self.store.put_asset(asset_id, data, content_type, self.record.session_id)
         photo = PhotoAsset(
@@ -265,6 +282,7 @@ class ToolContext:
         _commit(self, self.record.adventure.model_copy(
             update={"photo_asset_ids": [*self.record.adventure.photo_asset_ids, asset_id]}
         ))
+        self.store.save(self.record)
         return photo
 
 
@@ -527,7 +545,8 @@ def state_summary(record: SessionRecord) -> dict:
         "premise": plan.story.premise,
         "checkpoints": [
             {"checkpoint_id": c.checkpoint_id, "required_by_user": c.required_by_user,
-             "activity_type": c.activity.type, "outcome": outcome.get(c.checkpoint_id, "pending")}
+             "activity_type": c.activity.type, "camera_checkpoint_id": c.camera_checkpoint_id,
+             "outcome": outcome.get(c.checkpoint_id, "pending")}
             for c in plan.checkpoints
         ],
         "current_checkpoint": current.model_dump(mode="json") if current else None,

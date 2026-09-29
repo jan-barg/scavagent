@@ -53,6 +53,8 @@ gcloud run deploy scavagent --source . --region $REGION \
 
 This builds the `Dockerfile` with Cloud Build and prints the service URL. Put that URL in `submission.json` only after it answers a real `/chat` request.
 
+Keep the request timeout at the default 300 seconds or lower. The retry guard treats a message claimed more than `state.IN_FLIGHT_TIMEOUT` (5 minutes) ago as abandoned; a longer `--timeout` could let a retry run while the first turn is still alive.
+
 ## Continuous deployment from GitHub
 
 The assignment requires Cloud Run continuous deployment from `jan-barg/scavagent`. Connecting GitHub needs Jan's browser approval (Cloud Build GitHub App), so this step is done in the console:

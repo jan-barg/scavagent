@@ -40,12 +40,15 @@ def test_later_model_failure_keeps_earlier_tool_trace(client, monkeypatch):
     script(
         monkeypatch,
         FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
-        RuntimeError("quota exceeded"),
+        RuntimeError("quota exceeded for key AIza-not-a-real-key"),
     )
     body = client.post("/chat", json={"message": "walk?"}).json()
 
-    assert body["response"].startswith("Model call failed: RuntimeError")
+    assert body["response"].startswith("Model call failed (RuntimeError)")
     assert [c["name"] for c in body["tool_calls"]] == ["get_weather"]
+    # Provider error text can carry request details; it stays out of the reply and the saved chat.
+    history = client.get("/history", params={"session_id": body["session_id"]}).text
+    assert "AIza" not in body["response"] and "AIza" not in history
 
 
 def test_bad_tool_calls_become_actionable_failures(client, monkeypatch):
