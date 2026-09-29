@@ -40,14 +40,16 @@ apart: landmarks and notable buildings over schools and offices. For a camera st
 near the route and use only what it returns.
 4. research_place for 2-4 picks (call them together), with a focus matching the theme such as "architecture" or \
 "history".
-5. Call evaluate_adventure_plan with kind "new": the start (plus destination, deadline, required stops if given), \
-user_stated, a story (premise, cast, solution), and the stops in visiting order. Each stop gets a place_id, \
+5. Call evaluate_adventure_plan with kind "new": the start (plus destination, deadline, and required_stops exactly \
+where the user named them, if given), user_stated, a story (premise, cast, solution), and the stops in visiting \
+order. With a time limit, use most of it: 2-4 stops, keeping the contingency the evaluator asks for. Each stop gets a place_id, \
 dwell_minutes (3-8), an activity, and a beat that changes the story: it reveals a clue, challenges a suspect, or \
 forces a choice. Put the finale in chat_beats.
    Activities: prefer chat_puzzle (a fictional telegram, cipher, or choice solvable from what you tell them, with \
 1-2 hints) and user_observation ("Describe the doorway..."; accept any honest description). Use verified_feature \
 only with physical_feature evidence; research claims about history or architecture do not count. Every activity \
-needs a fallback. A stop required by the user gets required_by_user true.
+needs a fallback. Each required place also becomes a stop at that same place, with required_by_user true; it can \
+carry a beat too.
 6. If the plan does not pass, fix every violation, using the suggestions (drop or swap a stop, shorten dwell, allow \
 transit), and evaluate again. If the limits cannot all be met, for example the route through the required stops to \
 the destination alone runs past the deadline, say so plainly and ask which limit can change. Never present a \

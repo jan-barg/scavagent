@@ -287,3 +287,29 @@ def test_stale_transit_directions_are_looked_up_again(monkeypatch):
     data = result["data"]
     assert data["refreshed"] and data["modes"] == ["walk", "transit"]
     assert any("Take the A train" in line for line in data["instructions"])
+
+
+COLUMBUS_81 = {"place_text": "Columbus Avenue & West 81st Street", "lat": 40.78326, "lng": -73.97455}
+
+
+def test_a_nearby_landmark_cannot_stand_in_for_the_corner_the_user_required():
+    # The Beresford is on Central Park West, about 230 m from Columbus Avenue & West 81st Street.
+    stand_in = draft(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
+    stand_in["stops"][1]["required_by_user"] = True
+    result = evaluate(session(), stand_in, 5, 9)
+
+    assert {v["code"] for v in result["data"]["violations"]} == {"REQUIRED_STOP_MISSING", "REQUIRED_MISMARKED"}
+
+    at_the_corner = draft(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
+    at_the_corner["stops"].append({"place": {"name": "Columbus Avenue & West 81st Street", "lat": 40.78326, "lng": -73.97455},
+                                   "required_by_user": True, "dwell_minutes": 2,
+                                   "activity": activity(type="user_observation", hints=[])})
+    assert evaluate(session(), at_the_corner, 5, 9, 3)["data"]["passes"]
+
+
+def test_a_plan_leaving_much_of_the_users_time_unused_suggests_another_stop():
+    roomy = draft(deadline="2026-10-01T16:30:00-04:00", user_stated=["deadline", "allowed_modes"])
+    result = evaluate(session(), roomy, 5, 9)
+
+    assert result["data"]["passes"]
+    assert "unused" in result["data"]["suggestions"][-1]

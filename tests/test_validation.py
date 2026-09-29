@@ -287,3 +287,10 @@ def test_an_object_the_user_must_find_at_a_real_place_is_flagged_unless_evidence
     assert codes(evaluate(edit(BASE.plan, chalk))) == ["INVENTED_PROP"]
     assert codes(evaluate(edit(BASE.plan, found))) == ["INVENTED_PROP"]
     assert evaluate(edit(BASE.plan, observe)).report.ok
+
+
+def test_a_stop_marked_required_must_be_at_a_place_the_user_required():
+    def overclaim(data):
+        checkpoint(data, "stop_2")["required_by_user"] = True
+
+    assert codes(evaluate(edit(BASE.plan, overclaim))) == ["REQUIRED_MISMARKED"]

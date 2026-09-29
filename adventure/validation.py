@@ -5,8 +5,9 @@ the user's request and the product rules in docs/PLAN.md:
 
 - time: the finish, plus contingency, against a deadline or time budget; enough contingency; the
   stated total (travel, waits, and dwell, without contingency) matching the computed one;
-- the request: every required stop present, in the user's order, inside its time window, with at
-  least the dwell the user needs; only the travel modes the user allows;
+- the request: every required stop present at the place the user named, in the user's order,
+  inside its time window, with at least the dwell the user needs; no stop marked required that the
+  user did not require; only the travel modes the user allows;
 - route data: legs that connect the visiting order, transit timings that are neither stale nor
   already missed, no synthetic fixture data in a live plan;
 - activities: a physical task only with physical-feature evidence from its own place, no invented
@@ -237,6 +238,10 @@ def evaluate_plan(
             flag("WINDOW_MISSED", f"The plan is at {checkpoint.checkpoint_id} until "
                                   f"{_clock(arrive + timedelta(minutes=checkpoint.dwell_minutes))}, after it closes at "
                                   f"{_clock(stop.window_end)}.", checkpoint.checkpoint_id)
+    for checkpoint in required:
+        if not any(_same_place(stop.place, places.get(checkpoint.place_id)) for stop in request.required_stops):
+            flag("REQUIRED_MISMARKED", f"{checkpoint.checkpoint_id} is marked required but is not at any place the user "
+                                       "required; put the required stop where the user said.", checkpoint.checkpoint_id)
     fixed = sorted((s.order_index, positions[c.checkpoint_id], c.checkpoint_id) for s, c in matched
                    if s.order_index is not None)
     if [p for _, p, _ in fixed] != sorted(p for _, p, _ in fixed):

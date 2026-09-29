@@ -21,6 +21,7 @@ from schemas import AdventurePlan, Freshness, tool_error, tool_ok
 from state import ToolContext
 
 DRAFT_SECONDS = 1800
+UNUSED_MINUTES = 12  # a passing plan leaving this much of the user's time unused could add a stop
 TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
 LOCATION_FRESH = timedelta(minutes=10)
 OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from where they are
@@ -63,6 +64,9 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict) -> dict:
     plan = plan.model_copy(update={"validation": evaluation.report})
     _drafts[plan.plan_id] = (time.monotonic() + DRAFT_SECONDS, ctx.record.session_id, kind, plan, waived)
     summary = evaluation.summary()
+    if summary["passes"] and (summary["slack_minutes"] or 0) >= UNUSED_MINUTES:
+        summary["suggestions"].append(f"{summary['slack_minutes']:.0f} of the user's minutes are unused; consider "
+                                      "adding a stop near the route before saving.")
     summary["next_step"] = ("Call save_adventure_plan with this draft_id." if summary["passes"] else
                             "Fix every violation (see suggestions), then evaluate again. Do not present this plan.")
     return tool_ok({"draft_id": plan.plan_id, "kind": kind, **summary, "plan": overview(plan, evaluation.timeline)},
@@ -301,6 +305,17 @@ PLANNING_TOOLS = [
                                             "description": "Which of these the user actually said; the rest are defaults."},
                             "depart_at": {"type": "string", "description": "ISO time they leave; default now."},
                             "contingency_minutes": {"type": "number", "description": "Default 10% of travel and dwell, at least 2."},
+                            "required_stops": {
+                                "type": "array",
+                                "description": "new: every place the user said they must visit, as geocoded. Also add a "
+                                               "stop at each one, with required_by_user true.",
+                                "items": {"type": "object", "properties": {
+                                    "place_text": {"type": "string"}, "lat": {"type": "number"}, "lng": {"type": "number"},
+                                    "dwell_minutes": {"type": "number", "description": "Minutes the user needs there."},
+                                    "window_start": {"type": "string"}, "window_end": {"type": "string"},
+                                    "order_index": {"type": "integer", "description": "Only if the user fixed the order."}},
+                                    "required": ["lat", "lng"]},
+                            },
                             "current_location": {**_LOCATION, "description": "revision: where the user is now, if you know better than their last location."},
                             "waived_required_ids": {"type": "array", "items": {"type": "string"},
                                                     "description": "revision: required stops the user explicitly agreed to drop."},

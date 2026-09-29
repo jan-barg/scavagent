@@ -64,13 +64,21 @@ def build_new_plan(draft: dict, now: datetime, camera_lookup: CameraLookup | Non
     for beat in draft.get("chat_beats") or []:
         beats.append(_beat(f"beat_{len(beats) + 1}", None, beat))
 
-    required = []
-    for checkpoint, spec in zip(checkpoints, stops):
-        if checkpoint.required_by_user:
-            required.append(RequiredStop(
-                stop_id=f"req_{len(required) + 1}", place=_location_of(places[checkpoint.place_id], now),
-                dwell_minutes=checkpoint.dwell_minutes, window_start=parse_time(spec.get("window_start")),
-                window_end=parse_time(spec.get("window_end")), order_index=spec.get("order_index")))
+    # The places the user said they must visit, as geocoded; the evaluator checks the stops cover them.
+    required = [
+        RequiredStop(stop_id=f"req_{n}", place=_location(spec, "required stop", now),
+                     dwell_minutes=round(float(spec.get("dwell_minutes") or 0)),
+                     window_start=parse_time(spec.get("window_start")), window_end=parse_time(spec.get("window_end")),
+                     order_index=spec.get("order_index"))
+        for n, spec in enumerate(draft.get("required_stops") or [], 1)
+    ]
+    if not draft.get("required_stops"):  # older drafts marked required stops only on the stops themselves
+        for checkpoint, spec in zip(checkpoints, stops):
+            if checkpoint.required_by_user:
+                required.append(RequiredStop(
+                    stop_id=f"req_{len(required) + 1}", place=_location_of(places[checkpoint.place_id], now),
+                    dwell_minutes=checkpoint.dwell_minutes, window_start=parse_time(spec.get("window_start")),
+                    window_end=parse_time(spec.get("window_end")), order_index=spec.get("order_index")))
     request = AdventureRequest.model_validate({**request.model_dump(), "required_stops": required})
 
     points = [_point("start", request.start.point),
