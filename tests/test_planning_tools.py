@@ -340,3 +340,16 @@ def test_a_plan_leaving_much_of_the_users_time_unused_suggests_another_stop():
 
     assert result["data"]["passes"]
     assert "unused" in result["data"]["suggestions"][-1]
+
+
+def test_minutes_left_mid_adventure_count_from_now():
+    # Gemini 3.5 Flash sent "I have only 15 minutes left" as duration_minutes in a revision.
+    ctx = started_and_first_stop_done()
+    result = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_2"}], "duration_minutes": 15}, 9)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    save_adventure_plan(ctx, result["data"]["draft_id"])
+    assert state.active_plan(ctx.record).request.deadline == NOW + timedelta(minutes=15)
+
+    check = evaluate_adventure_plan(ctx, {"kind": "check", "duration_minutes": 5})
+    assert [v["code"] for v in check["data"]["violations"]] == ["DEADLINE_EXCEEDED"]

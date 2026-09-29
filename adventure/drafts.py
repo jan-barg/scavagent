@@ -238,8 +238,9 @@ def _revised_request(draft, old, waived, now):
         if deadline <= now:
             raise DraftError("The new deadline has already passed.")
         update["deadline"] = deadline
-    if draft.get("duration_minutes"):
-        update["duration_minutes"] = draft["duration_minutes"]
+    if draft.get("duration_minutes") and not draft.get("deadline"):
+        # Mid-adventure, "I have 15 minutes" counts from now, so it becomes a deadline.
+        update["deadline"] = now + timedelta(minutes=float(draft["duration_minutes"]))
     if draft.get("allowed_modes"):
         update["allowed_modes"] = draft["allowed_modes"]
     if draft.get("destination"):

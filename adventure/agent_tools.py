@@ -160,11 +160,15 @@ def _check_under_way(active, progress, draft, now, lookup, dev):
         return tool_error("INVALID_ARGUMENT", "There is no adventure to check.", retryable=False,
                           next_step="Plan a new adventure with kind 'new'.")
     plan = active
+    deadline = None
     if draft.get("deadline"):
         try:
             deadline = parse_time(draft["deadline"])
         except DraftError as e:
             return tool_error("INVALID_ARGUMENT", str(e), retryable=False, next_step="Pass an ISO time.")
+    elif draft.get("duration_minutes"):
+        deadline = now + timedelta(minutes=float(draft["duration_minutes"]))  # "15 minutes left" counts from now
+    if deadline is not None:
         plan = AdventurePlan.model_validate({**plan.model_dump(), "request": {**plan.request.model_dump(), "deadline": deadline}})
     done = set(progress.completed_ids) | set(progress.skipped_ids) | set(progress.blocked_ids)
     visited = [c.checkpoint_id for c in plan.checkpoints if c.checkpoint_id in done]
