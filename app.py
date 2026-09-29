@@ -32,6 +32,26 @@ CONTEXT_MESSAGES = 40  # Recent conversation sent to the model; the full plan st
 # Model choice is deferred; keep it configurable. Defaults to the starter's model.
 MODEL = os.environ.get("SCAVAGENT_MODEL", "vertex_ai/gemini-3.5-flash-lite")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
+# Optional reasoning effort (low, medium, high) for models that take one. Claude uses medium unless this is set.
+REASONING_EFFORT = os.environ.get("SCAVAGENT_REASONING_EFFORT") or None
+# Claude's output cap per call, thinking included. LiteLLM would otherwise ask for the model's 128K maximum.
+CLAUDE_MAX_TOKENS = 32_000
+# Reasoning a model returns alongside its reply (Claude's thinking blocks, Kimi's reasoning_content).
+REASONING_FIELDS = ("thinking_blocks", "reasoning_content")
+
+
+def model_options(model: str) -> dict:
+    """Extra litellm.completion arguments for the configured model."""
+    options = {"reasoning_effort": REASONING_EFFORT} if REASONING_EFFORT else {}
+    if model.split("/")[-1].startswith("claude"):
+        # Thinking is always on for Claude 5.5 models; effort is the control. Automatic prompt caching: every
+        # tool round re-sends the turn so far, and the cached part costs a tenth.
+        options = {"reasoning_effort": "medium", **options, "max_tokens": CLAUDE_MAX_TOKENS,
+                   "cache_control": {"type": "ephemeral"}}
+    return options
+
+
+MODEL_OPTIONS = model_options(MODEL)
 
 # --- The Harness ---
 
@@ -91,9 +111,9 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
 def complete(messages: list[dict], deadline: float):
     """One model reply, or None once the turn is out of time.
 
-    A rate-limited (429) or unavailable (503) call is retried after each wait in RETRY_DELAYS that still
-    fits before the deadline; after that the error propagates. A reply with neither text nor a tool call
-    is asked for once more.
+    A rate-limited (429), overloaded or failed (500/529), or unavailable (503) call is retried after each wait
+    in RETRY_DELAYS that still fits before the deadline; after that the error propagates. A reply with neither
+    text nor a tool call is asked for once more.
     """
     waits, asked_again = list(RETRY_DELAYS), False
     while (remaining := deadline - monotonic()) > 0:
@@ -104,8 +124,9 @@ def complete(messages: list[dict], deadline: float):
                 messages=messages,
                 tools=TOOLS,
                 timeout=remaining,
+                **MODEL_OPTIONS,
             ).choices[0].message
-        except (litellm.RateLimitError, litellm.ServiceUnavailableError):
+        except (litellm.RateLimitError, litellm.InternalServerError, litellm.ServiceUnavailableError):
             if not waits or waits[0] >= deadline - monotonic():
                 raise
             sleep(waits.pop(0))
@@ -148,6 +169,29 @@ def recent(messages: list[dict]) -> list[dict]:
     while start > 0 and messages[start].get("role") != "user":
         start -= 1
     return messages[start:]
+
+
+def without_reasoning(messages: list[dict]) -> list[dict]:
+    """Earlier turns without the model's reasoning, which is replayed only within the turn that produced it.
+
+    Claude binds each thinking block to the exact conversation before it, and the server context in the system
+    message changes every turn, so an older block would be rejected. Removing every earlier block is allowed.
+    Sessions stored before this change may still hold them.
+    """
+    return [{key: value for key, value in message.items() if key not in REASONING_FIELDS} for message in messages]
+
+
+def turn_messages(messages: list[dict], response: str) -> list[dict]:
+    """This turn's messages as stored: no reasoning, no empty replies, and ending with the reply the user saw.
+
+    A turn cut short (out of time or tool rounds, or a failed model call) otherwise ends on a tool result or
+    the user's message, and the model would not know what the user was told.
+    """
+    kept = [m for m in without_reasoning(messages) if m.get("role") != "assistant" or m.get("content") or m.get("tool_calls")]
+    last = kept[-1] if kept else {}
+    if last.get("role") != "assistant" or last.get("tool_calls") or not last.get("content"):
+        kept.append({"role": "assistant", "content": response})
+    return kept
 
 
 # --- FastAPI App ---
@@ -212,7 +256,7 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     # The user's message joins the stored conversation only when the turn ends, so a save
     # during the turn (a captured photo) never stores half a turn.
     context = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + app_context(record, now)}]
-    conversation = context + recent(record.messages + [{"role": "user", "content": request.message}])
+    conversation = context + recent(without_reasoning(record.messages) + [{"role": "user", "content": request.message}])
     new_from = len(conversation) - 1
 
     tool_calls = []
@@ -227,7 +271,7 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
         response = f"Model call failed ({type(e).__name__}). Please try again in a moment."
 
     # Keep this turn's messages, made plain JSON so any store can hold them.
-    record.messages += json.loads(json.dumps(conversation[new_from:], default=str))
+    record.messages += json.loads(json.dumps(turn_messages(conversation[new_from:], response), default=str))
     reply = ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls).model_dump(mode="json")
     stored = json.loads(json.dumps(reply))  # Trimming may shorten the stored copy; the reply sent stays whole
     # The message id lets a reloaded page tell that its pending message was already answered.
