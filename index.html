@@ -122,8 +122,8 @@ function uuid() {
 function scrollToLatest() { trail.scrollTop = trail.scrollHeight; }
 function refreshControls() {
   input.disabled = busy;
-  input.readOnly = Boolean(pending);
-  sendButton.disabled = busy || !(pending || input.value.trim());
+  input.readOnly = false;
+  sendButton.disabled = busy || !input.value.trim();
   input.style.height = "44px";
   input.style.height = Math.min(input.scrollHeight, 150) + "px";
 }
@@ -150,13 +150,29 @@ function renderText(target, text, allowMarkdown) {
   text = String(text).slice(0, 40_000);
   if (!allowMarkdown) { target.textContent = text; return; }
   // Tiny, DOM-built subset: images, links, bold, inline code. HTML stays plain text.
-  const tokens = /!\[([^\]\n]*)\]\(([^\s)]+)\)|\[([^\]\n]+)\]\(([^\s)]+)\)|\*\*([^*\n]+)\*\*|`([^`\n]+)`/g;
-  let end = 0;
-  for (const match of text.matchAll(tokens)) {
+  const tokens = /!\[([^\]\n]*)\]\(|\[([^\]\n]+)\]\(|\*\*([^*\n]+)\*\*|`([^`\n]+)`/g;
+  let end = 0, match;
+  while ((match = tokens.exec(text)) !== null) {
+    let rawUrl;
+    if (match[1] !== undefined || match[2] !== undefined) {
+      // A URL may contain nested parentheses; only the outer closing one ends it.
+      const start = tokens.lastIndex;
+      let cursor = start, depth = 1;
+      for (; cursor < text.length && !/\s/.test(text[cursor]); cursor += 1) {
+        if (text[cursor] === "(") depth += 1;
+        else if (text[cursor] === ")" && --depth === 0) break;
+      }
+      if (depth !== 0 || cursor === start) {
+        tokens.lastIndex = cursor; // Keep malformed text literal without rescanning it.
+        continue;
+      }
+      rawUrl = text.slice(start, cursor);
+      tokens.lastIndex = cursor + 1;
+    }
     target.appendChild(document.createTextNode(text.slice(end, match.index)));
     let node;
     if (match[1] !== undefined) {
-      const url = safeMediaUrl(match[2]);
+      const url = safeMediaUrl(rawUrl);
       if (url) {
         node = document.createElement("img"); node.src = url; node.alt = match[1] || "Saved adventure photo";
         node.loading = "lazy"; node.referrerPolicy = "no-referrer";
@@ -164,28 +180,33 @@ function renderText(target, text, allowMarkdown) {
         node.addEventListener("error", () => { node.hidden = true; note.textContent = "This saved photo couldn’t load. Tell me in chat and we’ll continue."; });
         target.append(node, note); node = null;
       } else { node = document.createTextNode(match[1] ? `[Image unavailable: ${match[1]}]` : "[Image unavailable]"); }
-    } else if (match[3] !== undefined) {
-      const url = safeLink(match[4]);
-      if (url) { node = document.createElement("a"); node.href = url; node.rel = "noopener noreferrer"; node.target = "_blank"; node.textContent = match[3]; }
-      else node = document.createTextNode(match[3]);
+    } else if (match[2] !== undefined) {
+      const url = safeLink(rawUrl);
+      if (url) { node = document.createElement("a"); node.href = url; node.rel = "noopener noreferrer"; node.target = "_blank"; node.textContent = match[2]; }
+      else node = document.createTextNode(match[2]);
     } else {
-      node = document.createElement(match[5] !== undefined ? "strong" : "code");
-      node.textContent = match[5] !== undefined ? match[5] : match[6];
+      node = document.createElement(match[3] !== undefined ? "strong" : "code");
+      node.textContent = match[3] !== undefined ? match[3] : match[4];
     }
     if (node) target.appendChild(node);
-    end = match.index + match[0].length;
+    end = tokens.lastIndex;
   }
   target.appendChild(document.createTextNode(text.slice(end)));
 }
 function toolActivity(calls) {
   const list = document.createElement("ul"); list.className = "activity"; list.setAttribute("aria-label", "Tool activity");
   const names = { find_camera_checkpoints:"Camera positions", capture_camera_checkpoint:"Save camera frame", get_weather:"Local weather", evaluate_adventure_plan:"Route check" };
-  for (const call of (Array.isArray(calls) ? calls : []).slice(0, 12)) {
-    if (!call || typeof call.name !== "string") continue;
+  const valid = (Array.isArray(calls) ? calls : []).filter(call => call && typeof call.name === "string");
+  for (const call of valid.slice(0, 12)) {
     const item = document.createElement("li");
     const label = names[call.name] || call.name.replaceAll("_", " ").slice(0, 60);
-    const outcome = call.result?.ok === true ? "complete" : call.result?.ok === false ? "unavailable" : "checked";
+    const outcome = call.result?.data?.passes === false ? "failed"
+      : call.result?.ok === false ? "unavailable"
+      : call.result?.ok === true && (call.name !== "evaluate_adventure_plan" || call.result?.data?.passes === true) ? "complete" : "checked";
     item.textContent = `${label} · ${outcome}`; list.appendChild(item);
+  }
+  if (valid.length > 12) {
+    const more = document.createElement("li"); more.textContent = `+${valid.length - 12} more`; list.appendChild(more);
   }
   return list;
 }
@@ -241,30 +262,42 @@ async function restore() {
   if (sessionId) {
     statusLine.textContent = "Picking up your trail…";
     try {
-      const response = await fetchWithTimeout(`/history?session_id=${encodeURIComponent(sessionId)}`, {}, 10_000);
-      if (response.status !== 404) {
+      const data = await fetchWithTimeout(`/history?session_id=${encodeURIComponent(sessionId)}`, {}, 10_000, async response => {
+        if (response.status === 404) return { session_id:sessionId, messages:[] };
         if (!response.ok) throw new Error("History unavailable");
-        const data = await response.json();
-        if (data.session_id !== sessionId || !Array.isArray(data.messages)) throw new Error("Invalid history");
-        const history = data.messages.filter(m => m && ["user", "assistant"].includes(m.role) && typeof m.text === "string").slice(-100);
-        for (const message of history) addMessage(message.role, message.text, message.tool_calls);
-        // History has no request IDs. Keep a pending turn separate instead of
-        // guessing which saved turn it belongs to from repeated text like "ready".
+        return response.json();
+      });
+      if (data.session_id !== sessionId || !Array.isArray(data.messages)) throw new Error("Invalid history");
+      const history = data.messages.filter(m => m && ["user", "assistant"].includes(m.role) && typeof m.text === "string");
+      // An assistant entry with this request ID confirms completion, even if
+      // the browser never received /chat's response. Text alone is ambiguous.
+      if (pending && history.some(m => m.role === "assistant" && m.client_message_id === pending.client_message_id)) {
+        pending = null; store(PENDING_KEY, null); input.value = "";
+      }
+      for (const message of history.slice(-100)) {
+        const article = addMessage(message.role, message.text, message.tool_calls);
+        if (pending && message.role === "user" && message.client_message_id === pending.client_message_id) pendingUser = article;
       }
       statusLine.textContent = messages.children.length ? "Your trail is here. Pick up wherever you left off." : "Tell me where you are, and we’ll start from there.";
     } catch { statusLine.textContent = "History couldn’t load. You can still send a message to reconnect."; }
   }
+  busy = false;
   if (pending) {
     input.value = pending.message;
-    statusLine.textContent = "A message is awaiting confirmation. Press Send to retry it.";
+    return send(); // Resume the same bounded, sequential retry flow automatically.
   }
-  busy = false; refreshControls(); scrollToLatest();
+  refreshControls(); scrollToLatest();
 }
 async function send(event) {
   event?.preventDefault();
   if (busy) return;
   const text = input.value.trim();
-  if (!pending && !text) return;
+  if (!text) return;
+  if (pending && text !== pending.message) {
+    // After recovery stops the composer is editable. Unchanged text retries
+    // the same ID; an intentional edit starts a new turn with its own ID.
+    pending = null; pendingUser = null; pendingReply = null;
+  }
   if (!sessionId) {
     sessionId = uuid();
     store(SESSION_KEY, sessionId);
@@ -314,10 +347,6 @@ async function send(event) {
     }
     if (pendingReply?.classList.contains("pending")) { pendingReply.remove(); pendingReply = null; }
     input.value = pending.message;
-    if (permanentFailure) {
-      // A rejected message can still be edited before the user sends it again.
-      pending = null; pendingUser = null; pendingReply = null; store(PENDING_KEY, null);
-    }
     statusLine.textContent = "The reply didn’t arrive. Press Send to retry the same message.";
   } finally { busy = false; refreshControls(); }
 }
