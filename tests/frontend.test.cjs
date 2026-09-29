@@ -96,6 +96,25 @@ test("first send persists a UUID session before its pending turn and uses it for
   assert.notEqual(second.client_message_id, first.client_message_id);
 });
 
+test("an invalid stored session is replaced before any request uses it", async () => {
+  const h = harness({ [SESSION]: "../x" }, [answer]);
+  await settled();
+  // Invalid IDs must not be sent to history during startup either.
+  assert.deepEqual(h.requests, []);
+  h.elements.message.value = "start";
+  await h.run("send()");
+  const [sent] = posted(h);
+  assert.match(sent.session_id, UUID);
+  assert.equal(h.storage.get(SESSION), sent.session_id);
+  assert.equal(h.requests[0].storage[SESSION], sent.session_id);
+  assert.equal(JSON.parse(h.requests[0].storage[PENDING]).session_id, sent.session_id);
+  const reload = harness(Object.fromEntries(h.storage), [restored(sent.session_id), answer]);
+  await settled();
+  reload.elements.message.value = "next";
+  await reload.run("send()");
+  assert.equal(posted(reload)[0].session_id, sent.session_id);
+});
+
 test("lost first response survives reload with the same session, text and request ID even if GPS disappears", async () => {
   const firstTab = harness({}, [new Error("Response lost")]);
   firstTab.geo[0][0]({ coords: { latitude: 40.78, longitude: -73.97, accuracy: 12 }, timestamp: Date.now() });
