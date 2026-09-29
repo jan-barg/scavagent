@@ -66,6 +66,11 @@ MODEL_OPTIONS = model_options(MODEL)
 # proposed or active. Unset, SCAVAGENT_MODEL does everything.
 PLANNER_MODEL = os.environ.get("SCAVAGENT_PLANNER_MODEL") or None
 PLANNING_TOOLS = {"evaluate_adventure_plan", "save_adventure_plan"}  # A guide that calls these hands the turn over
+# When a model can't answer (no credit, a key it rejects, unreachable, or still overloaded after one quick retry), this
+# one answers the turn instead, and turns skip the failed model for FALLBACK_COOLDOWN seconds. Empty turns it off.
+FALLBACK_MODEL = os.environ.get("SCAVAGENT_FALLBACK_MODEL", "vertex_ai/gemini-3.5-flash-lite") or None
+FALLBACK_COOLDOWN = 300
+_skip_until: dict[str, float] = {}  # model -> monotonic time before which turns go straight to its fallback
 
 # --- The Harness ---
 
@@ -79,12 +84,25 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
     receive `ctx`, which the server binds to the current session. With a `planner`, a reply from
     `model` that asks to evaluate or save a plan is dropped unrun, and the planner redoes the turn
     from the user's message (tools that already ran stay in the trace and in the session's state).
+    A model that can't answer (see `unusable`) hands the turn to its fallback the same way.
     """
     model = model or MODEL
     turn_start = len(messages)
     deadline = monotonic() + TURN_SECONDS
     for _ in range(MAX_TOOL_ROUNDS):
-        reply = complete(messages, deadline, model=model)
+        try:
+            reply = complete(messages, deadline, model=model)
+        except Exception as error:
+            fallback = fallback_for(model)
+            if not fallback or not unusable(error):
+                raise
+            logger.warning("%s can't answer (%s: %s); %s answers for the next %d s", model, type(error).__name__,
+                           str(error)[:300], fallback, FALLBACK_COOLDOWN)
+            _skip_until[model] = monotonic() + FALLBACK_COOLDOWN
+            del messages[turn_start:]
+            messages[0] = system_message(fallback)
+            model, planner = fallback, (planner if planner != fallback else None)
+            continue
         if reply is None:
             return "That took me too long, so I stopped. Please send your message again."
         if planner and any(call.function.name in PLANNING_TOOLS for call in reply.tool_calls or []):
@@ -147,12 +165,12 @@ def complete(messages: list[dict], deadline: float, tool_choice: str | None = No
     """One model reply, or None once the turn is out of time.
 
     A rate-limited (429), overloaded or failed (500/529), or unavailable (503) call is retried after each wait
-    in RETRY_DELAYS that still fits before the deadline; after that the error propagates. A reply with neither
-    text nor a tool call is asked for once more.
+    in RETRY_DELAYS that still fits before the deadline (only the first wait when a fallback model can take
+    over); after that the error propagates. A reply with neither text nor a tool call is asked for once more.
     """
     model = model or MODEL
     options = MODEL_OPTIONS if model == MODEL else model_options(model)
-    waits, asked_again = list(RETRY_DELAYS), False
+    waits, asked_again = list(RETRY_DELAYS[:1] if fallback_for(model) else RETRY_DELAYS), False
     while (remaining := deadline - monotonic()) > 0:
         try:
             reply = litellm.completion(
@@ -182,6 +200,25 @@ def retryable(error: Exception) -> bool:
     """
     return isinstance(error, (litellm.RateLimitError, litellm.InternalServerError, litellm.ServiceUnavailableError)) or (
         isinstance(error, litellm.APIError) and getattr(error, "status_code", None) in (500, 503, 529))
+
+
+def unusable(error: Exception) -> bool:
+    """The model can't answer right now: no credit, a key it rejects, no access, unreachable, or overloaded."""
+    if isinstance(error, (litellm.AuthenticationError, litellm.PermissionDeniedError, litellm.APIConnectionError)):
+        return True
+    if isinstance(error, litellm.BadRequestError) and "credit balance" in str(error).lower():
+        return True  # Anthropic answers 400 "Your credit balance is too low to access the Anthropic API"
+    return retryable(error)
+
+
+def fallback_for(model: str) -> str | None:
+    return FALLBACK_MODEL if FALLBACK_MODEL and model != FALLBACK_MODEL else None
+
+
+def usable_now(model: str) -> str:
+    """`model`, or its fallback while it is being skipped after failing."""
+    fallback = fallback_for(model)
+    return fallback if fallback and _skip_until.get(model, 0) > monotonic() else model
 
 
 # --- Context for each turn ---
@@ -353,14 +390,16 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     newest = user_message(request.message, app_context(record, now))
     # With a planner configured, it takes any turn with no adventure under way; the guide takes the rest.
     model = PLANNER_MODEL if PLANNER_MODEL and record.adventure.status not in ("proposed", "active") else MODEL
+    planner = PLANNER_MODEL if model != PLANNER_MODEL else None
+    model, planner = usable_now(model), planner and usable_now(planner)  # Skip a model that just failed
+    planner = planner if planner != model else None
     conversation = [system_message(model)] + recent(without_reasoning(record.messages) + [newest])
     new_from = len(conversation)  # The model's messages for this turn start after the newest message
 
     tool_calls = []
     try:
         ctx = ToolContext(record=record, store=store, message_id=request.client_message_id)
-        response = run_agent(conversation, tool_calls, ctx, model=model,
-                             planner=PLANNER_MODEL if model != PLANNER_MODEL else None)
+        response = run_agent(conversation, tool_calls, ctx, model=model, planner=planner)
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         # Provider errors can quote request details, so those go only to the server log.
