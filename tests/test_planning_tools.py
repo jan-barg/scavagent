@@ -182,12 +182,38 @@ def test_a_revision_keeps_the_finished_stop_and_moves_the_dropped_stops_clue_int
     assert plan.legs[0].from_id == "current_location"
 
 
-def test_only_a_pending_required_stop_can_be_waived():
+def test_only_a_required_stop_can_be_waived():
     ctx = started_and_first_stop_done()
     result = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_2"}], "waived_required_ids": ["stop_2"]}, 9)
 
     assert result["error"]["code"] == "INVALID_ARGUMENT"
-    assert "cannot be waived" in result["error"]["message"]
+    assert "nothing to waive" in result["error"]["message"]
+
+
+def test_after_the_user_skips_a_required_stop_a_revision_no_longer_requires_it():
+    corner = {"place": {"name": "Columbus Avenue & West 81st Street", "lat": 40.78326, "lng": -73.97455},
+              "required_by_user": True, "dwell_minutes": 2, "activity": activity(type="user_observation", hints=[])}
+    ctx = session()
+    plan_draft = draft(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
+    plan_draft["stops"].insert(1, corner)
+    save_adventure_plan(ctx, evaluate(ctx, plan_draft, 5, 4, 3)["data"]["draft_id"], start_now=True)
+    state.resolve_checkpoint(ctx, "stop_1", "completed")
+    state.resolve_checkpoint(ctx, "stop_2", "skipped", user_waived_required=True)
+
+    result = evaluate(ctx, {"kind": "revision", "stops": [{"keep": "stop_3"}]}, 6)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    save_adventure_plan(ctx, result["data"]["draft_id"])
+    assert state.active_plan(ctx.record).request.required_stops == []
+
+
+def test_draft_fields_sent_beside_the_draft_are_accepted():
+    ctx = session()
+    flattened = draft()
+    with FakeHTTP({VALHALLA: [walking(5, 9)]}):
+        result = evaluate_adventure_plan(ctx, **flattened)  # the model skipped the "draft" wrapper
+
+    assert result["data"]["passes"]
 
 
 def test_check_retimes_the_adventure_under_way_against_a_new_deadline():

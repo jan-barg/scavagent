@@ -101,12 +101,16 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
     completed = [c for c in old.checkpoints if c.checkpoint_id in state.completed_ids]
     resolved = set(state.completed_ids) | set(state.skipped_ids) | set(state.blocked_ids)
     pending = {c.checkpoint_id: c for c in old.checkpoints if c.checkpoint_id not in resolved}
+    required_ids = {c.checkpoint_id for c in old.checkpoints if c.required_by_user}
     waived = [str(w) for w in draft.get("waived_required_ids") or []]
     for checkpoint_id in waived:
-        if checkpoint_id not in pending or not pending[checkpoint_id].required_by_user:
-            raise DraftError(f"{checkpoint_id} is not a pending required stop, so it cannot be waived.")
+        if checkpoint_id not in required_ids:
+            raise DraftError(f"{checkpoint_id} is not a stop the user required, so there is nothing to waive.")
+    # Skipping a required stop took the user's explicit waiver (state.resolve_checkpoint enforces it),
+    # and a blocked one cannot be visited, so neither keeps its place among the required stops.
+    given_up = set(waived) | (required_ids & (set(state.skipped_ids) | set(state.blocked_ids)))
 
-    request = _revised_request(draft, old, waived, now)
+    request = _revised_request(draft, old, given_up, now)
     old_places = {p.place_id: p for p in old.places}
     places = {c.place_id: old_places[c.place_id] for c in completed}
     beats = {b.beat_id: b for b in old.story.beats}

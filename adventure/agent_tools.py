@@ -28,8 +28,12 @@ OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from w
 _drafts = {}  # plan_id -> (expires at, session_id, kind, plan, waived required ids)
 
 
-def evaluate_adventure_plan(ctx: ToolContext, draft: dict) -> dict:
-    """Build the draft into a routed plan and check it; or, with kind "check", re-time the adventure under way."""
+def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **fields) -> dict:
+    """Build the draft into a routed plan and check it; or, with kind "check", re-time the adventure under way.
+
+    Draft fields sent beside `draft` instead of inside it are accepted too; models often flatten them.
+    """
+    draft = {**fields, **(draft or {})} if isinstance(draft, dict) or draft is None else draft
     if not isinstance(draft, dict):
         return tool_error("INVALID_ARGUMENT", "draft must be an object.", retryable=False,
                           next_step="Pass the draft fields listed in the tool schema.")
