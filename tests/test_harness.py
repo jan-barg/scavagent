@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import app as app_module
 import state
 import tools
-from fakes import FakeMessage, script, tool_call
+from fakes import FakeMessage, reply, script, tool_call
 
 
 @pytest.fixture
@@ -49,6 +49,23 @@ def test_later_model_failure_keeps_earlier_tool_trace(client, monkeypatch):
     # Provider error text can carry request details; it stays out of the reply and the saved chat.
     history = client.get("/history", params={"session_id": body["session_id"]}).text
     assert "AIza" not in body["response"] and "AIza" not in history
+
+
+def test_a_turn_starts_no_model_call_after_its_deadline(client, monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
+    timeouts = []
+
+    def slow_model(**kwargs):  # Each call takes 100 s and asks for another tool
+        timeouts.append(kwargs["timeout"])
+        clock[0] += 100
+        return reply(FakeMessage(content=None, tool_calls=[tool_call(f"c{len(timeouts)}", "get_weather", '{"location": "NYC"}')]))
+
+    monkeypatch.setattr(app_module.litellm, "completion", slow_model)
+    body = client.post("/chat", json={"message": "walk?"}).json()
+
+    assert timeouts == [240, 140, 40]  # Each call may use only the time left; none starts after 240 s
+    assert "too long" in body["response"] and len(body["tool_calls"]) == 3
 
 
 def test_bad_tool_calls_become_actionable_failures(client, monkeypatch):

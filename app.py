@@ -4,6 +4,7 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
+from time import monotonic
 from zoneinfo import ZoneInfo
 
 import litellm
@@ -32,6 +33,9 @@ SYSTEM_PROMPT = (
     "plainly instead of inventing a route."
 )
 MAX_TOOL_ROUNDS = 8
+# A turn starts no model call after this, and each call gets only the time left. Tools bound their own time.
+# Kept well under state.IN_FLIGHT_TIMEOUT, so a message whose claim has expired has no turn still working on it.
+TURN_SECONDS = 240
 CONTEXT_MESSAGES = 40  # Recent conversation sent to the model; the full plan stays in storage
 # Model choice is deferred; keep it configurable. Defaults to the starter's model.
 MODEL = os.environ.get("SCAVAGENT_MODEL", "vertex_ai/gemini-3.5-flash-lite")
@@ -47,12 +51,17 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
     so the caller keeps the trace even if a later model call raises. Session tools
     receive `ctx`, which the server binds to the current session.
     """
+    deadline = monotonic() + TURN_SECONDS
     for _ in range(MAX_TOOL_ROUNDS):
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return "That took me too long, so I stopped. Please send your message again."
         reply = litellm.completion(
             model=MODEL,
             vertex_location=VERTEX_LOCATION,
             messages=messages,
             tools=TOOLS,
+            timeout=remaining,
         ).choices[0].message
 
         # Append assistant's reply (text, tool calls, or both) to the context.
@@ -144,23 +153,21 @@ def index():
 def start_turn(session_id: str, client_message_id: str | None) -> tuple[SessionRecord, dict | None]:
     """Load the session and claim this message, or return the reply it already got.
 
-    The claim is saved before the agent runs, so a retry that arrives mid-turn gets a 409
+    The claim is stored before the agent runs, so a resend that arrives mid-turn gets a 409
     instead of running the tools, and any camera capture, a second time.
     """
-    for _ in range(3):
-        record = store.load(session_id) or SessionRecord.new(session_id)
-        if not client_message_id:
-            return record, None
-        if client_message_id in record.replies:
+    record = store.load(session_id)
+    if client_message_id:
+        if record and client_message_id in record.replies:
             return record, record.replies[client_message_id]
-        if not record.claim(client_message_id, state.utc_now()):
+        if not store.claim(session_id, client_message_id, state.utc_now()):
             raise HTTPException(409, "Still working on that message. Send it again in a moment.")
-        try:
-            store.save(record)
-            return record, None
-        except VersionConflict:
-            continue  # Another turn saved this session first; look again.
-    raise HTTPException(409, "This conversation is busy. Send the message again in a moment.")
+        # The first turn may have finished between the load and the claim.
+        record = store.load(session_id)
+        if record and client_message_id in record.replies:
+            store.release(session_id, client_message_id)
+            return record, record.replies[client_message_id]
+    return record or SessionRecord.new(session_id), None
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -207,11 +214,14 @@ def chat(request: ChatRequest):
     try:
         store.save(record)
     except VersionConflict:
-        # Another message for this session finished first. Its progress stands; this turn is dropped.
+        # Another message for this session saved first. Its progress stands; this turn's reply is not stored.
         reply["response"] = (
-            "Another message in this conversation was handled at the same time, so I didn't save this one. "
-            "Please send it again."
+            "Another message in this conversation was handled at the same time, so this reply wasn't saved. "
+            "Anything already recorded, such as a photo, is kept. Please send your message again."
         )
+    finally:
+        if request.client_message_id:
+            store.release(session_id, request.client_message_id)
     return reply
 
 

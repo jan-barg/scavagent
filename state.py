@@ -8,12 +8,14 @@ Backends: SQLite for local development (default), Firestore + Cloud Storage on
 Cloud Run (SCAVAGENT_STORE=firestore), and memory for tests.
 """
 
+import hashlib
 import json
 import os
 import re
 import sqlite3
 import threading
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -37,8 +39,8 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 MAX_STORED_MESSAGES = 200
 MAX_TRANSCRIPT_ENTRIES = 200
 MAX_CACHED_REPLIES = 20
-# Cloud Run's default request timeout. A claim older than this belongs to a turn that can no longer finish,
-# so its message may run again. Keep the service's --timeout at or below this.
+# A claim older than this belongs to a turn that has stopped: app.run_agent starts no model call after
+# its own shorter deadline. (Cloud Run's request timeout does not stop the code, so it cannot be relied on.)
 IN_FLIGHT_TIMEOUT = timedelta(minutes=5)
 
 
@@ -57,24 +59,14 @@ class SessionRecord(Record):
     plans: dict[str, AdventurePlan] = {}
     photos: dict[str, PhotoAsset] = {}
     replies: dict[str, dict] = {}  # client_message_id -> the ChatResponse already sent
-    in_flight: dict[str, datetime] = {}  # client_message_id -> when a turn started answering it
 
     @classmethod
     def new(cls, session_id: str) -> "SessionRecord":
         now = utc_now()
         return cls(session_id=session_id, created_at=now, updated_at=now)
 
-    def claim(self, client_message_id: str, now: datetime) -> bool:
-        """Mark a message as being answered. False while a live turn already has it."""
-        self.in_flight = {k: t for k, t in self.in_flight.items() if now - t < IN_FLIGHT_TIMEOUT}
-        if client_message_id in self.in_flight:
-            return False
-        self.in_flight[client_message_id] = now
-        return True
-
     def remember_reply(self, client_message_id: str, reply: dict) -> None:
         self.replies[client_message_id] = reply
-        self.in_flight.pop(client_message_id, None)
         while len(self.replies) > MAX_CACHED_REPLIES:
             self.replies.pop(next(iter(self.replies)))
 
@@ -99,24 +91,40 @@ class Store(Protocol):
     def load(self, session_id: str) -> SessionRecord | None: ...
     def save(self, record: SessionRecord) -> None: ...
     def delete(self, session_id: str) -> None: ...
+    def claim(self, session_id: str, message_id: str, now: datetime) -> bool: ...
+    def release(self, session_id: str, message_id: str) -> None: ...
     def put_asset(self, asset_id: str, data: bytes, content_type: str, session_id: str) -> None: ...
     def get_asset(self, asset_id: str) -> tuple[bytes, str] | None: ...
+
+
+# Claims mark a client_message_id whose turn is running, so a resend does not start a second turn.
+# They live apart from the session record: claiming one message must not make another turn's save stale.
 
 
 def _dump(record: SessionRecord) -> str:
     return record.model_dump_json()
 
 
-def _check_and_bump(record: SessionRecord, stored_version: int | None) -> None:
+def _next_version(record: SessionRecord, stored_version: int | None) -> SessionRecord:
+    """The record as it will be stored. The caller's copy changes only after the write commits,
+    so a retried or failed write still compares against the version that was loaded."""
     if (stored_version or 0) != record.storage_version:
         raise VersionConflict(record.session_id)
-    record.storage_version += 1
-    record.updated_at = utc_now()
+    return record.model_copy(update={"storage_version": record.storage_version + 1, "updated_at": utc_now()})
+
+
+def _saved(record: SessionRecord, stored: SessionRecord) -> None:
+    record.storage_version, record.updated_at = stored.storage_version, stored.updated_at
+
+
+def _claim_is_live(started_at: datetime | None, now: datetime) -> bool:
+    return started_at is not None and now - started_at < IN_FLIGHT_TIMEOUT
 
 
 class MemoryStore:
     def __init__(self):
         self._sessions: dict[str, str] = {}
+        self._claims: dict[tuple[str, str], datetime] = {}
         self._assets: dict[str, tuple[bytes, str]] = {}
         self._lock = threading.Lock()
 
@@ -127,12 +135,23 @@ class MemoryStore:
     def save(self, record):
         with self._lock:
             raw = self._sessions.get(record.session_id)
-            stored = SessionRecord.model_validate_json(raw).storage_version if raw else None
-            _check_and_bump(record, stored)
-            self._sessions[record.session_id] = _dump(record)
+            new = _next_version(record, SessionRecord.model_validate_json(raw).storage_version if raw else None)
+            self._sessions[record.session_id] = _dump(new)
+        _saved(record, new)
 
     def delete(self, session_id):
         self._sessions.pop(session_id, None)
+
+    def claim(self, session_id, message_id, now):
+        with self._lock:
+            if _claim_is_live(self._claims.get((session_id, message_id)), now):
+                return False
+            self._claims[(session_id, message_id)] = now
+            return True
+
+    def release(self, session_id, message_id):
+        with self._lock:
+            self._claims.pop((session_id, message_id), None)
 
     def put_asset(self, asset_id, data, content_type, session_id):
         self._assets[asset_id] = (data, content_type)
@@ -142,45 +161,80 @@ class MemoryStore:
 
 
 class SqliteStore:
+    """One shared connection; every use holds the lock so no statement joins another thread's transaction."""
+
     def __init__(self, path: str | Path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self._db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
         self._lock = threading.Lock()
         self._db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, version INTEGER, data TEXT)")
         self._db.execute(
+            "CREATE TABLE IF NOT EXISTS claims (session_id TEXT, message_id TEXT, started_at TEXT, "
+            "PRIMARY KEY (session_id, message_id))"
+        )
+        self._db.execute(
             "CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, session_id TEXT, content_type TEXT, data BLOB)"
         )
 
-    def load(self, session_id):
-        row = self._db.execute("SELECT data FROM sessions WHERE id = ?", (session_id,)).fetchone()
-        return SessionRecord.model_validate_json(row[0]) if row else None
-
-    def save(self, record):
+    @contextmanager
+    def _transaction(self):
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
-                row = self._db.execute("SELECT version FROM sessions WHERE id = ?", (record.session_id,)).fetchone()
-                _check_and_bump(record, row[0] if row else None)
-                self._db.execute(
-                    "INSERT OR REPLACE INTO sessions (id, version, data) VALUES (?, ?, ?)",
-                    (record.session_id, record.storage_version, _dump(record)),
-                )
+                yield
                 self._db.execute("COMMIT")
             except BaseException:
                 self._db.execute("ROLLBACK")
                 raise
 
+    def _query(self, sql, params):
+        with self._lock:
+            return self._db.execute(sql, params).fetchone()
+
+    def load(self, session_id):
+        row = self._query("SELECT data FROM sessions WHERE id = ?", (session_id,))
+        return SessionRecord.model_validate_json(row[0]) if row else None
+
+    def save(self, record):
+        with self._transaction():
+            row = self._db.execute("SELECT version FROM sessions WHERE id = ?", (record.session_id,)).fetchone()
+            new = _next_version(record, row[0] if row else None)
+            self._db.execute(
+                "INSERT OR REPLACE INTO sessions (id, version, data) VALUES (?, ?, ?)",
+                (record.session_id, new.storage_version, _dump(new)),
+            )
+        _saved(record, new)
+
     def delete(self, session_id):
-        self._db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        with self._transaction():
+            self._db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+    def claim(self, session_id, message_id, now):
+        with self._transaction():
+            row = self._db.execute(
+                "SELECT started_at FROM claims WHERE session_id = ? AND message_id = ?", (session_id, message_id)
+            ).fetchone()
+            if row and _claim_is_live(datetime.fromisoformat(row[0]), now):
+                return False
+            self._db.execute(
+                "INSERT OR REPLACE INTO claims (session_id, message_id, started_at) VALUES (?, ?, ?)",
+                (session_id, message_id, now.isoformat()),
+            )
+            return True
+
+    def release(self, session_id, message_id):
+        with self._transaction():
+            self._db.execute("DELETE FROM claims WHERE session_id = ? AND message_id = ?", (session_id, message_id))
 
     def put_asset(self, asset_id, data, content_type, session_id):
-        self._db.execute(
-            "INSERT OR REPLACE INTO assets (id, session_id, content_type, data) VALUES (?, ?, ?, ?)",
-            (asset_id, session_id, content_type, data),
-        )
+        with self._transaction():
+            self._db.execute(
+                "INSERT OR REPLACE INTO assets (id, session_id, content_type, data) VALUES (?, ?, ?, ?)",
+                (asset_id, session_id, content_type, data),
+            )
 
     def get_asset(self, asset_id):
-        row = self._db.execute("SELECT data, content_type FROM assets WHERE id = ?", (asset_id,)).fetchone()
+        row = self._query("SELECT data, content_type FROM assets WHERE id = ?", (asset_id,))
         return (bytes(row[0]), row[1]) if row else None
 
 
@@ -193,6 +247,7 @@ class FirestoreStore:
         self._firestore = firestore
         self._db = firestore.Client(database=database) if database else firestore.Client()
         self._sessions = self._db.collection(collection)
+        self._claims = self._db.collection(f"{collection}_claims")
         self._bucket = storage.Client().bucket(bucket)
 
     def load(self, session_id):
@@ -202,18 +257,38 @@ class FirestoreStore:
     def save(self, record):
         doc = self._sessions.document(record.session_id)
 
+        # Firestore reruns this function when the commit loses a race, so it must not change `record`.
         @self._firestore.transactional
         def write(transaction):
             snapshot = doc.get(transaction=transaction)
-            _check_and_bump(record, snapshot.get("version") if snapshot.exists else None)
-            transaction.set(
-                doc, {"version": record.storage_version, "data": _dump(record), "updated_at": record.updated_at}
-            )
+            new = _next_version(record, snapshot.get("version") if snapshot.exists else None)
+            transaction.set(doc, {"version": new.storage_version, "data": _dump(new), "updated_at": new.updated_at})
+            return new
 
-        write(self._db.transaction())
+        _saved(record, write(self._db.transaction()))
 
     def delete(self, session_id):
         self._sessions.document(session_id).delete()
+
+    def _claim_doc(self, session_id, message_id):
+        # Message ids come from clients; hashing keeps any '/' out of the document id.
+        return self._claims.document(hashlib.sha256(f"{session_id}\n{message_id}".encode()).hexdigest())
+
+    def claim(self, session_id, message_id, now):
+        doc = self._claim_doc(session_id, message_id)
+
+        @self._firestore.transactional
+        def take(transaction):
+            snapshot = doc.get(transaction=transaction)
+            if snapshot.exists and _claim_is_live(snapshot.get("started_at"), now):
+                return False
+            transaction.set(doc, {"session_id": session_id, "started_at": now})
+            return True
+
+        return take(self._db.transaction())
+
+    def release(self, session_id, message_id):
+        self._claim_doc(session_id, message_id).delete()
 
     def put_asset(self, asset_id, data, content_type, session_id):
         blob = self._bucket.blob(f"assets/{asset_id}")
@@ -278,11 +353,17 @@ class ToolContext:
             frame_time=frame_time,
             provenance=provenance,
         )
-        self.record.photos[asset_id] = photo
+        before = self.record.photos, self.record.adventure
+        self.record.photos = {**self.record.photos, asset_id: photo}
         _commit(self, self.record.adventure.model_copy(
             update={"photo_asset_ids": [*self.record.adventure.photo_asset_ids, asset_id]}
         ))
-        self.store.save(self.record)
+        try:
+            self.store.save(self.record)
+        except Exception:
+            # Not saved: detach it here too, so the end of the turn cannot keep a photo the tool reported as failed.
+            self.record.photos, self.record.adventure = before
+            raise
         return photo
 
 

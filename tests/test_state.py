@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -100,7 +101,7 @@ class InstanceDied(BaseException):
     """The Cloud Run instance stops mid-turn: nothing in the app gets to handle it."""
 
 
-def test_photo_from_a_turn_that_died_is_kept_and_the_message_can_run_again(monkeypatch):
+def test_photo_from_a_turn_that_died_is_kept_and_its_message_runs_again_later(monkeypatch):
     store = state.MemoryStore()
     monkeypatch.setattr(app_module, "store", store)
     capture = lambda ctx: tools.tool_ok(
@@ -120,14 +121,15 @@ def test_photo_from_a_turn_that_died_is_kept_and_the_message_can_run_again(monke
 
     # Until the claim expires the message is treated as still running; after that it runs again, once.
     assert client.post("/chat", json=body).status_code == 409
-    saved.in_flight["m-1"] -= state.IN_FLIGHT_TIMEOUT
-    store.save(saved)
+    later = state.utc_now() + state.IN_FLIGHT_TIMEOUT
+    monkeypatch.setattr(state, "utc_now", lambda: later)
     script(monkeypatch, FakeMessage(content="Got the shot.", tool_calls=None))
     assert client.post("/chat", json=body).json()["response"] == "Got the shot."
+    assert client.post("/chat", json=body).json()["response"] == "Got the shot."  # Replayed, not rerun
 
     after = store.load("died")
     assert [m["content"] for m in after.messages if m["role"] == "user"] == ["ready at the corner"]
-    assert len(after.photos) == 1 and after.in_flight == {}
+    assert len(after.photos) == 1  # The frame from the turn that died
 
 
 def test_unknown_history_and_malformed_session_ids_are_rejected(monkeypatch):
@@ -162,6 +164,85 @@ def test_concurrent_turns_cannot_overwrite_each_other(store_factory, tmp_path):
     with pytest.raises(state.VersionConflict):
         store.save(second)
     assert store.load("s").messages == [{"role": "user", "content": "first"}]
+
+
+@pytest.mark.parametrize("store_factory", [state.MemoryStore, lambda: None])
+def test_one_turn_at_a_time_can_claim_a_message(store_factory, tmp_path):
+    store = store_factory() or state.SqliteStore(tmp_path / "db.sqlite")
+    assert store.claim("s", "m-1", NOW)
+    assert not store.claim("s", "m-1", NOW + timedelta(minutes=4))
+    assert store.claim("s", "m-2", NOW)  # Other messages are independent
+    assert store.claim("s", "m-1", NOW + state.IN_FLIGHT_TIMEOUT)  # An abandoned claim can be taken over
+    store.release("s", "m-1")
+    assert store.claim("s", "m-1", NOW)
+
+
+class ContendedFirestore:
+    """Just enough of google.cloud.firestore for FirestoreStore.save. When `rival` is set, another
+    writer commits during our first attempt, so our commit is rejected and the transaction reruns."""
+
+    def __init__(self):
+        self.docs, self.rival = {}, None
+
+    def document(self, doc_id):
+        data = lambda: self.docs.get(doc_id)
+        snapshot = lambda transaction=None: SimpleNamespace(exists=data() is not None, get=lambda key: data()[key])
+        return SimpleNamespace(id=doc_id, get=snapshot)
+
+    def transactional(self, fn):
+        def run(transaction):
+            for attempt in (1, 2):
+                transaction.writes = []
+                result = fn(transaction)
+                if attempt == 1 and self.rival:
+                    self.docs.update([self.rival])  # The rival wins; our first attempt is discarded
+                    continue
+                self.docs.update((doc.id, data) for doc, data in transaction.writes)
+                return result
+        return run
+
+
+class FakeTransaction:
+    def __init__(self):
+        self.writes = []
+
+    def set(self, doc, data):
+        self.writes.append((doc, data))
+
+
+def test_firestore_save_rerun_after_a_lost_race_does_not_overwrite_the_winner():
+    fake = ContendedFirestore()
+    store = object.__new__(state.FirestoreStore)
+    store._firestore, store._sessions, store._db = fake, fake, SimpleNamespace(transaction=FakeTransaction)
+
+    store.save(SessionRecord.new("s"))
+    mine, rival = store.load("s"), store.load("s")
+    rival.messages.append({"role": "user", "content": "rival"})
+    fake.rival = ("s", {"version": 2, "data": rival.model_copy(update={"storage_version": 2}).model_dump_json()})
+    mine.messages.append({"role": "user", "content": "mine"})
+
+    with pytest.raises(state.VersionConflict):
+        store.save(mine)
+    assert store.load("s").messages == [{"role": "user", "content": "rival"}]
+    assert mine.storage_version == 1
+
+
+def test_a_photo_whose_save_failed_is_detached_and_the_turn_can_still_save(monkeypatch, tmp_path):
+    store = state.SqliteStore(tmp_path / "db.sqlite")
+    ctx = ToolContext(record=SessionRecord.new("s1"), store=store, now=lambda: NOW)
+    real_dump = state._dump
+
+    def disk_full(record):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(state, "_dump", disk_full)
+    with pytest.raises(OSError):
+        ctx.save_asset(b"x", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
+    assert ctx.record.photos == {} and ctx.record.adventure.photo_asset_ids == []
+
+    monkeypatch.setattr(state, "_dump", real_dump)
+    store.save(ctx.record)  # The failed attempt did not leave a version that makes this look stale
+    assert store.load("s1").photos == {}
 
 
 # --- State operations ---
