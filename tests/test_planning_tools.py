@@ -45,17 +45,28 @@ def activity(**changes):
             "fallback": "Reveal the answer and continue.", **changes}
 
 
+HANDLER = {"name": "Nell Harrow", "role": "handler", "contact": "radio", "introduced_in": "briefing"}
+BRIEFING = ("It is 1964, and you are the newest runner for a quiet agency on Central Park West. Nell Harrow, your "
+            "handler, radios you: a courier vanished this morning with the day's dispatches. At each stop, message her "
+            "when you arrive; she will brief you, and what you work out there points to the next lead.")
+
+
+def beat(summary, clue, uses=(), **changes):
+    return {"summary": summary, "characters": ["Nell Harrow"], "clue": clue, "uses": list(uses), **changes}
+
+
 def draft(**changes):
     return {
         "kind": "new", "start": START, "allowed_modes": ["walk"], "user_stated": ["allowed_modes"],
-        "story": {"premise": "It is 1964. A courier has vanished.", "cast": ["The Courier"], "solution": "The doorman did it."},
+        "story": {"premise": "It is 1964. A courier has vanished.", "briefing": BRIEFING, "cast": [HANDLER],
+                  "solution": "The doorman did it."},
         "stops": [
             {"place_id": "wiki:9238071", "dwell_minutes": 5, "activity": activity(),
-             "beat": {"summary": "A torn ticket stub.", "reveals": "The courier took the A train."}},
+             "beat": beat("A torn ticket stub.", "The courier took the A train.")},
             {"place_id": "wiki:5667636", "dwell_minutes": 5, "activity": activity(),
-             "beat": {"summary": "A matchbook.", "reveals": "The doorman smokes."}},
+             "beat": beat("A matchbook.", "The doorman smokes.", ["stop_1"])},
         ],
-        "chat_beats": [{"summary": "The finale.", "reveals": "The doorman did it."}],
+        "chat_beats": [beat("The finale.", None, ["stop_1", "stop_2"], reveals="The doorman did it.")],
         **changes,
     }
 
@@ -190,7 +201,7 @@ def test_a_revision_keeps_the_finished_stop_and_moves_the_dropped_stops_clue_int
     ctx = started_and_first_stop_done()
     old = state.active_plan(ctx.record)
     corner = {"place": {"name": "West 81st Street & Columbus Avenue", "lat": 40.78326, "lng": -73.97455},
-              "dwell_minutes": 3, "activity": activity(), "beat": {"summary": "A footprint.", "reveals": "Size 11."}}
+              "dwell_minutes": 3, "activity": activity(), "beat": beat("A footprint.", "Size 11 shoes.", ["stop_1"])}
     result = evaluate(ctx, {"kind": "revision", "stops": [corner], "deadline": "2026-10-01T15:30:00-04:00"}, 7)
 
     data = result["data"]
@@ -219,6 +230,7 @@ def test_after_the_user_skips_a_required_stop_a_revision_no_longer_requires_it()
     ctx = session()
     plan_draft = draft(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
     plan_draft["stops"].insert(1, corner)
+    plan_draft["chat_beats"][0]["uses"] = ["stop_1", "stop_3"]  # the corner, now stop_2, tells no part of the story
     save_adventure_plan(ctx, evaluate(ctx, plan_draft, 5, 4, 3)["data"]["draft_id"], start_now=True)
     state.resolve_checkpoint(ctx, "stop_1", "completed")
     state.resolve_checkpoint(ctx, "stop_2", "skipped", user_waived_required=True)
@@ -362,7 +374,7 @@ def test_a_nearby_landmark_cannot_stand_in_for_the_corner_the_user_required():
 
 
 def test_a_plan_leaving_much_of_the_users_time_unused_suggests_another_stop():
-    roomy = draft(deadline="2026-10-01T16:30:00-04:00", user_stated=["deadline", "allowed_modes"])
+    roomy = draft(deadline="2026-10-01T15:45:00-04:00", user_stated=["deadline", "allowed_modes"])  # 18 minutes spare
     result = evaluate(session(), roomy, 5, 9)
 
     assert result["data"]["passes"]
@@ -398,12 +410,13 @@ def test_a_departure_hours_away_is_rejected_as_a_time_zone_mix_up():
 SAN_REMO = {"place": {"name": "The San Remo", "lat": 40.7775, "lng": -73.9754}, "dwell_minutes": 5,
             "activity": {"type": "user_observation", "prompt": "Describe the twin towers from the corner.",
                          "answer_rule": "Any honest description.", "fallback": "Continue."},
-            "beat": {"summary": "A coded radio message.", "reveals": "The doorman took the C train."}}
+            "beat": beat("A coded radio message.", "The doorman took the C train.")}
 
 
 def three_stops(**changes):
     plan_draft = draft(**changes)
     plan_draft["stops"].append(SAN_REMO)
+    plan_draft["chat_beats"][0]["uses"] = ["stop_1", "stop_2", "stop_3"]
     return plan_draft
 
 
@@ -497,6 +510,7 @@ def test_a_blocked_required_stop_stays_required_until_the_user_waives_it():
               "required_by_user": True, "dwell_minutes": 2, "activity": activity(type="user_observation", hints=[])}
     plan_draft = three_stops(required_stops=[COLUMBUS_81], user_stated=["required_stops", "allowed_modes"])
     plan_draft["stops"][1] = corner
+    plan_draft["chat_beats"][0]["uses"] = ["stop_1", "stop_3"]
     ctx = session()
     save_adventure_plan(ctx, evaluate(ctx, plan_draft, 5, 4, 6)["data"]["draft_id"], start_now=True)
     state.resolve_checkpoint(ctx, "stop_1", "completed")
@@ -559,33 +573,33 @@ def verified_camera(tmp_path, monkeypatch):
     monkeypatch.delenv("SCAVAGENT_DEV_FIXTURES", raising=False)
 
 
-def camera_stop(activity_type):
-    return {"camera_checkpoint_id": "test_cam", "dwell_minutes": 3,
-            "activity": activity(type=activity_type, prompt="Stand by the pole and tell me when you are ready."),
-            "beat": {"summary": "The surveillance post.", "reveals": "Someone is watching the corner."}}
+def with_camera(activity_type, dwell_minutes=3, **changes):
+    """The standard draft with the camera as a third stop whose clue the finale uses."""
+    plan = draft(**changes)
+    plan["stops"].append({"camera_checkpoint_id": "test_cam", "dwell_minutes": dwell_minutes,
+                          "activity": activity(type=activity_type, prompt="Stand by the pole and tell me when you are ready."),
+                          "beat": beat("The surveillance post.", "The camera caught a red scarf.", ["stop_2"])})
+    plan["chat_beats"] = [beat("The finale.", None, ["stop_1", "stop_2", "stop_3"], reveals="The doorman did it.")]
+    return plan
 
 
 def test_a_stop_at_a_camera_position_must_capture(verified_camera):
-    wrong = draft()
-    wrong["stops"].insert(0, camera_stop("user_observation"))
-    refused = evaluate(session(), wrong, 1, 5, 9)
+    refused = evaluate(session(), with_camera("user_observation"), 5, 9, 1)
     assert refused["error"]["code"] == "INVALID_ARGUMENT" and "camera_capture" in refused["error"]["message"]
 
-    right = draft()
-    right["stops"].insert(0, camera_stop("camera_capture"))
-    result = evaluate(session(), right, 1, 5, 9)
+    result = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
     assert result["ok"] and result["data"]["passes"], result
-    assert [s["activity"] for s in result["data"]["plan"]["stops"]] == ["camera_capture", "chat_puzzle", "chat_puzzle"]
+    assert [s["activity"] for s in result["data"]["plan"]["stops"]] == ["chat_puzzle", "chat_puzzle", "camera_capture"]
 
 
 def test_when_time_runs_short_the_camera_stop_is_the_last_suggested_cut(verified_camera):
-    tight = draft(deadline="2026-10-01T15:30:00-04:00", user_stated=["deadline", "allowed_modes"])
-    tight["stops"].insert(0, dict(camera_stop("camera_capture"), dwell_minutes=8))
-    result = evaluate(session(), tight, 1, 20, 2)  # raw savings: camera 29, El Dorado 27, Beresford 7 minutes
+    tight = with_camera("camera_capture", dwell_minutes=8, deadline="2026-10-01T15:30:00-04:00",
+                        user_stated=["deadline", "allowed_modes"])
+    result = evaluate(session(), tight, 1, 2, 20)  # raw savings: camera 28, Beresford 27, El Dorado 8 minutes
 
     assert not result["data"]["passes"]
     cuts = result["data"]["suggestions"]
-    assert [c.split()[2] for c in cuts] == ["stop_2", "stop_3", "stop_1"]
+    assert [c.split()[2] for c in cuts] == ["stop_2", "stop_1", "stop_3"]
     assert "camera stop" in cuts[2] and "camera stop" not in cuts[0]
 
 
@@ -595,12 +609,10 @@ def test_an_image_verified_camera_can_be_planned(verified_camera):
     data["checkpoints"][0].update(verification_status="image_verified", last_field_verified_at=None,
                                   last_image_verified_at="2026-09-29T17:00:00+00:00")
     cameras.CATALOGUE_PATH.write_text(json.dumps(data))
-    plan = draft()
-    plan["stops"].insert(0, camera_stop("camera_capture"))
-    result = evaluate(session(), plan, 1, 5, 9)
+    result = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
     assert result["ok"] and result["data"]["passes"], result
 
     data["checkpoints"][0].update(verification_status="unverified")
     cameras.CATALOGUE_PATH.write_text(json.dumps(data))
-    refused = evaluate(session(), plan, 1, 5, 9)
+    refused = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
     assert "CAMERA_UNAVAILABLE" in [v["code"] for v in refused["data"]["violations"]]

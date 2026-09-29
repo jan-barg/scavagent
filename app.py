@@ -85,10 +85,16 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
             # The trace keeps the result as an object; the model receives it as JSON text.
             messages += [{"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)}]
 
+    # Out of tool rounds: ask once more with tools off, so the user still gets an answer (for example the
+    # briefing for a plan it just saved) instead of only the limit message.
+    reply = complete(messages, deadline, tool_choice="none")
+    if reply is not None and reply.content:
+        messages += [{"role": "assistant", "content": reply.content}]  # Any tool call it still made is dropped
+        return reply.content
     return "Sorry, I hit my tool-call limit before finishing."
 
 
-def complete(messages: list[dict], deadline: float):
+def complete(messages: list[dict], deadline: float, tool_choice: str | None = None):
     """One model reply, or None once the turn is out of time.
 
     A rate-limited (429) or unavailable (503) call is retried after each wait in RETRY_DELAYS that still
@@ -104,6 +110,7 @@ def complete(messages: list[dict], deadline: float):
                 messages=messages,
                 tools=TOOLS,
                 timeout=remaining,
+                **({"tool_choice": tool_choice} if tool_choice else {}),
             ).choices[0].message
         except (litellm.RateLimitError, litellm.ServiceUnavailableError):
             if not waits or waits[0] >= deadline - monotonic():

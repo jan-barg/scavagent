@@ -104,6 +104,67 @@ These are implementation acceptance targets, not currently supported adventure b
 - `tests/test_planning_tools.py`: two added tests (`test_a_draft_evaluated_before_a_restart_can_still_be_saved`, `test_a_plan_too_large_to_store_is_refused_with_a_fix`), and `test_minutes_left_mid_adventure_count_from_now` now fakes the routing call of its final "check" (it reached the live Valhalla server; the suite now passes with the network blocked).
 - Kyle's items 3 and 4 from `docs/STATUS.md` are done in Jan's files: model-call retries in `app.py`; completion in plan order and finishing only with every stop resolved in `state.py`. Destination arrival itself is still not tracked in state.
 
+## Story design v2 (branch `kyle/story-design-v2`, from `main` at `00c25f4`)
+
+Two edits to Jan's files, each in its own commit. The story work builds on the schema edit (the evaluator imports `Character`, and the prompt asks for the new fields), so reverting the schema edit means reverting that work too: every later commit on the branch except `42229e5` (`find_places`), newest first, then `94aad1f`.
+
+| File | Commit | Revert |
+|---|---|---|
+| `schemas.py` (optional story fields; approved by Jan in `docs/STORY_DESIGN.md`) | `94aad1f` | revert the story commits after it (see above), then `git revert 94aad1f` |
+| `state.py` (`state_summary` shows the cast, clues to tell in chat, and the finale) | `6fcb1c9` | `git revert 6fcb1c9` (then drop `test_the_adventure_state_shows_the_cast_and_holds_the_finale_until_the_stops_are_done` from `tests/test_story.py`) |
+
+### `schemas.py`: optional story design v2 fields
+
+Why: the agreed design (`docs/STORY_DESIGN.md`). Every new field is optional with a default, so plans stored before it keep loading (`tests/test_story.py::test_plans_stored_before_story_v2_still_load` validates the stored fixture plan and a session record holding it). New models `Character` and `ThemeLink`; new fields `Activity.solution`, `Checkpoint.theme_link`, `StoryBeat.characters`, `StoryBeat.clue`, `StoryBeat.uses`, `Story.briefing`; `Story.cast` is now `list[Character | str]`.
+
+Original lines at `00c25f4`:
+
+```python
+    fallback: str = Field(min_length=1, description="How the user continues if this cannot be done")
+
+    @model_validator(mode="after")
+    def _physical_tasks_need_evidence(self):
+```
+
+```python
+class Checkpoint(Record):
+    checkpoint_id: Id
+    place_id: Id
+    required_by_user: bool = False
+    activity: Activity
+    dwell_minutes: int = Field(ge=0)
+    story_beat_id: Id | None = None
+    camera_checkpoint_id: Id | None = None
+```
+
+```python
+class StoryBeat(Record):
+    """Invented plot. Never presented as historical fact."""
+
+    beat_id: Id
+    checkpoint_id: Id | None = None  # None: delivered in chat, not tied to a stop
+    summary: str
+    reveals: str | None = None
+
+
+class Story(Record):
+    premise: str
+    cast: list[str] = []
+    solution: str
+    beats: list[StoryBeat] = []
+```
+
+### `state.py`: `state_summary` carries the story across turns
+
+Why: the model sees only the last 40 messages (`app.CONTEXT_MESSAGES`), so by the second stop the draft it wrote (the cast's contact channels, the finale, a clue moved to chat after a skip) is gone, and `get_adventure_state` showed only the current stop's beat. Three keys were added; nothing existing changed:
+
+- `cast`: the story's cast, plain names or `Character` objects.
+- `clues_to_tell_in_chat`: unrevealed beats that are chat beats (except the finale) or belong to a stop the user skipped or could not reach.
+- `finale_if_finished`: the last chat beat, once no checkpoint is current (like `solution_if_finished`).
+
+Original: `state_summary` at `00c25f4` had none of these keys and no `finale`/`missed` locals.
+- `agent.py` (after PR #13): one sentence in "Ending": when the user says they have arrived at the destination, call `update_adventure_state reach_destination`, then `finish_adventure`; the server now refuses to finish a plan with a destination before `reach_destination`. Why: grader query 3 sometimes ended the adventure while the user was still on the way (Kyle's report).
+
 # Jan's camera session: edits to Kyle's files (September 29)
 
 Made on `claude/camera-calibration` so a field-verified camera position reaches the plan. Each is small and in its own commit; revert the commit to undo it.
@@ -113,5 +174,7 @@ Made on `claude/camera-calibration` so a field-verified camera position reaches 
 | `adventure/agent_tools.py` | `016ca8e` | `camera_lookup` reads `cameras.load_checkpoints(allow_synthetic=dev_mode())` instead of the private `cameras._checkpoints` (Kyle's request) | `git revert 016ca8e` (also removes the accessor) |
 | `scripts/acceptance_checks.py` | `977017a` | New check: when the finder returns a camera for query 2, the passing plan includes a `camera_capture` stop | `git revert 977017a` |
 | `agent.py`, `adventure/drafts.py`, `adventure/validation.py`, `tests/test_planning_tools.py` | `76c6103` | The prompt says how to add a found camera stop; a draft refuses a stop with `camera_checkpoint_id` whose activity is not `camera_capture`; the evaluator lists a camera stop last among cuts | `git revert 76c6103` |
+
+When `main` (with Kyle's story design v2 prompt) was merged into this branch, the three camera sentences were re-applied to the rewritten `agent.py` and the camera-last ordering was kept beside the new "or swap it" suggestion text, in the merge commit; revert those hunks there too.
 
 Why `76c6103`: in local live runs of query 2 with a camera position 5 m from the start, Flash-Lite dropped the camera in 5 of 5 runs and said no position fit. It either put the camera at the start with a `user_observation` activity (the plan passed but would never capture) or followed the first cut suggestion, which named the camera stop ("saves up to 16 minutes" for a stop 0.6 minutes from the start). With the three changes, 2 of 2 runs kept it.

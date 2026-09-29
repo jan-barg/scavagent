@@ -4,8 +4,9 @@
 
 BASE_URL defaults to http://127.0.0.1:8000 (start the app with `uv run app.py`). The checks use the
 live model and live data, so wording varies; they test invariants: the right tools ran, a plan
-passed the evaluator and was saved, the user's limits held, and nothing was waived for the user.
-Exit status 1 if any check fails.
+passed the evaluator and was saved, the user's limits held, nothing was waived for the user, and the
+saved story follows docs/STORY_DESIGN.md (a briefing, characters introduced before they act, every
+stop's clue used later, and theme links for a themed request). Exit status 1 if any check fails.
 """
 
 import json
@@ -41,6 +42,8 @@ def main():
     check("Q1 researched at least one place", ran_ok(first, "research_place"))
     check("Q1 plan passed evaluate_adventure_plan", passing(first) is not None)
     check("Q1 plan saved", ran_ok(first, "save_adventure_plan"))
+    if passing(first):
+        check_story("Q1", passing(first), themed=True)  # "a 1960s spy adventure" states a theme
 
     session = str(uuid.uuid4())
     asked_at = datetime.now(timezone.utc)
@@ -57,6 +60,7 @@ def main():
         finish = datetime.fromisoformat(data["finish_at"])
         check("Q2 finishes with contingency inside 45 minutes",
               finish + timedelta(minutes=data["contingency_minutes"]) <= asked_at + timedelta(minutes=46))
+        check_story("Q2", good, themed=True)
     check("Q2 looked for a camera stop", any(c["name"] == "find_camera_checkpoints" for c in second["tool_calls"]))
     no_camera = all(not c["result"]["ok"] for c in second["tool_calls"] if c["name"] == "find_camera_checkpoints")
     check("Q2 says when no camera stop fits", not no_camera or "camera" in second["response"].lower())
@@ -68,7 +72,8 @@ def main():
     # Reach the first stop and answer it, so the follow-up happens mid-adventure.
     chat(base, session, "Great, let's go.")
     chat(base, session, "I'm here now.")
-    chat(base, session, "I see tall stone buildings with carved trim around the windows and a big cornice.")
+    chat(base, session, "I see tall stone buildings with carved trim around the windows and a big cornice. I can't "
+                        "work out the puzzle, though; tell me the answer and let's keep going.")
     asked_at = datetime.now(timezone.utc)
     third = chat(base, session, QUERY_3)
     drafts = [c["args"].get("draft", c["args"]) for c in third["tool_calls"] if c["name"] == "evaluate_adventure_plan"]
@@ -78,7 +83,8 @@ def main():
     only_destination_left = any(c["name"] == "get_next_directions" and c["result"]["ok"]
                                 and c["result"]["data"].get("to_id") == "destination" for c in third["tool_calls"])
     check("Q3 timed the rest against 15 minutes", rechecked or (only_destination_left and "15" in third["response"]))
-    waived = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state" and c["args"].get("user_waived_required")]
+    waived = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state" and c["result"]["ok"]
+              and c["args"].get("user_waived_required")]  # a refused call waived nothing
     check("Q3 did not waive a required stop on the user's behalf", not waived)
     check("Q3 answered", bool(third["response"]) and "Model call failed" not in third["response"])
     finished = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state"
@@ -106,6 +112,44 @@ def chat(base, session, message):
 
 def check(name, ok):
     results.append((name, bool(ok)))
+
+
+def check_story(label, call, themed):
+    """docs/STORY_DESIGN.md, checked on the draft of the plan that passed."""
+    draft = call["args"].get("draft", call["args"])
+    story, stops = draft.get("story") or {}, draft.get("stops") or []
+    briefing = story.get("briefing") or ""
+    # The ids the draft builder gives: stops in order, beats numbered over stops with a beat, then chat beats.
+    beats, number = [], 0
+    for i, stop in enumerate(stops, 1):
+        if stop.get("beat"):
+            number += 1
+            beats.append((f"stop_{i}", f"beat_{number}", stop["beat"]))
+    for beat in draft.get("chat_beats") or []:
+        number += 1
+        beats.append(("chat", f"beat_{number}", beat))
+    order = [f"stop_{i}" for i in range(1, len(stops) + 1)]
+    cast = {c["name"].lower(): c for c in story.get("cast") or [] if isinstance(c, dict) and c.get("name")}
+
+    def introduced(name, where):
+        member = cast.get(name.lower()) or next((c for n, c in cast.items() if name.lower() in n.split()), None)
+        if member is None:
+            return False
+        at = member.get("introduced_in") or "briefing"
+        if at == "briefing":
+            return any(word.lower() in briefing.lower() for word in member["name"].split() if len(word) >= 3)
+        return at in order and (where == "chat" or order.index(at) <= order.index(where))
+
+    used = {ref for _, _, beat in beats for ref in beat.get("uses") or []}
+    check(f"{label} story opens with a briefing", len(briefing.strip()) >= 200)
+    check(f"{label} introduces every character before they act",
+          all(introduced(name, where) for where, _, beat in beats for name in beat.get("characters") or []))
+    check(f"{label} uses every stop's clue later", all(
+        beat.get("clue") and (where in used or beat_id in used) for where, beat_id, beat in beats if where != "chat"))
+    if themed:
+        check(f"{label} ties each chosen stop to the theme", all(
+            (stop.get("theme_link") or {}).get("claim_ids") for stop in stops
+            if not stop.get("required_by_user") and not stop.get("camera_checkpoint_id") and not stop.get("keep")))
 
 
 def ran_ok(reply, tool):

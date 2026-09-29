@@ -227,12 +227,20 @@ class Activity(Record):
     answer_rule: str = Field(min_length=1)
     hints: list[str] = []
     fallback: str = Field(min_length=1, description="How the user continues if this cannot be done")
+    solution: str | None = None  # chat_puzzle: the exact answer, kept from the user until they solve it
 
     @model_validator(mode="after")
     def _physical_tasks_need_evidence(self):
         if self.type == "verified_feature" and not self.evidence_ids:
             raise ValueError("a verified_feature activity must reference evidence")
         return self
+
+
+class ThemeLink(Record):
+    """How a stop ties to the user's theme, through sourced claims about that stop's place."""
+
+    claim_ids: list[Id] = []
+    why: str = Field(min_length=1, description="One sentence, in the story's voice")
 
 
 class Checkpoint(Record):
@@ -243,6 +251,7 @@ class Checkpoint(Record):
     dwell_minutes: int = Field(ge=0)
     story_beat_id: Id | None = None
     camera_checkpoint_id: Id | None = None
+    theme_link: ThemeLink | None = None
 
     @model_validator(mode="after")
     def _captures_name_a_camera(self):
@@ -278,11 +287,24 @@ class StoryBeat(Record):
     checkpoint_id: Id | None = None  # None: delivered in chat, not tied to a stop
     summary: str
     reveals: str | None = None
+    characters: list[str] = []  # Names of the cast members in this beat
+    clue: str | None = None  # What the user holds after this beat, e.g. "locker 1021"
+    uses: list[Id] = []  # Earlier beats whose clues this beat builds on
+
+
+class Character(Record):
+    """An invented character. Real people from the research or the request are history, never characters."""
+
+    name: str = Field(min_length=1)
+    role: str | None = None  # e.g. "handler", "rival", "informant"
+    contact: str | None = None  # How they reach the user: radio, phone, telegram
+    introduced_in: Id = "briefing"  # "briefing", or the checkpoint_id where they first appear
 
 
 class Story(Record):
     premise: str
-    cast: list[str] = []
+    briefing: str | None = None  # The opening scene in second person: role, handler and channel, stakes
+    cast: list[Character | str] = []  # Plain names in plans made before story design v2
     solution: str
     beats: list[StoryBeat] = []
 
@@ -366,6 +388,7 @@ class AdventureState(Record):
     user_reports: list[UserReport] = []
     latest_location: LocationContext | None = None
     photo_asset_ids: list[Id] = []
+    destination_reached_at: AwareDatetime | None = None  # When the user said they reached the plan's destination
     updated_at: AwareDatetime | None = None
 
     @model_validator(mode="after")

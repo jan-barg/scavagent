@@ -46,6 +46,12 @@ BUILDING_SEARCH_M = 80  # article coordinates can sit a little off the building 
 MAX_INTRO_CLAIMS = 4
 MAX_FOCUS_CLAIMS = 8
 REMEMBER_SECONDS = 3600  # the planner builds stops from what the tools returned this long ago or less
+MAX_QUERY_TERMS = 4  # each key term is a separate search
+MAX_DETAIL_PAGES = 50  # the most page ids one Wikipedia request takes
+# Words nearly every building article contains: searched only when the query has nothing more specific.
+GENERIC_TERMS = {"historic", "historical", "history", "landmark", "landmarks", "building", "buildings", "place",
+                 "places", "site", "sites", "famous", "old", "nyc", "new", "york", "manhattan", "city", "area",
+                 "the", "a", "an", "and", "or", "of", "in", "near", "with"}
 NAME_NOISE = {"the", "apartments", "apartment", "building", "manhattan", "new", "york", "city"}
 
 CLAIMS_NOTE = "Claims are quoted or transcribed from the cited source; they are not independently verified."
@@ -65,13 +71,20 @@ _remembered = {}  # place_id -> (expires at, {"name", "point", "address", "evide
 
 
 def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
-    """Real places near a point that could anchor an adventure stop, nearest first.
+    """Real places near a point that could anchor an adventure stop.
 
     Candidates come from Wikipedia articles with coordinates and from designated NYC landmarks.
-    `query` narrows the Wikipedia results to articles mentioning it (e.g. "architecture", "jazz").
-    Designated landmarks keep up to half the slots even when nearer, less documented places would
-    fill the list. Distances are straight-line; use get_walking_times for travel time. A candidate is
-    a lead for research_place, not evidence that it suits an activity or is open.
+    Without a query they are nearest first, and designated landmarks keep up to half the slots even
+    when nearer, less documented places would fill the list.
+
+    `query` holds key terms ("Strokes rock \"music venue\"", "jazz"). Wikipedia's search requires
+    every word of a query, so each term is searched separately (quoted phrases stay whole; words like
+    "historic" and "landmark" are dropped when something more specific is given). Each candidate
+    lists the terms its article matched, and candidates matching more terms come first. When nothing
+    nearby matches, the nearest places are returned with a warning.
+
+    Distances are straight-line; use get_walking_times for travel time. A candidate is a lead for
+    research_place, not evidence that it suits an activity or is open.
     """
     point = read_point({"lat": lat, "lng": lng if lng is not None else lon})
     try:
@@ -89,9 +102,19 @@ def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
     limit = max(1, min(limit, MAX_CANDIDATES))
     query = " ".join(str(query or "").split())[:80] or None
 
-    errors = []
+    terms = _query_terms(query) if query else []
+    errors, warnings = [], []
     try:
-        articles = _article_candidates(lat, lng, radius_m, query)
+        articles = _article_candidates(lat, lng, radius_m, terms)
+        if terms and not articles:
+            warnings.append(f"Nothing within {radius_m} m mentions {' or '.join(map(repr, terms))}; these are the "
+                            "nearest places instead. Try other key terms, a wider radius_m, or search near the "
+                            "destination.")
+            articles = _article_candidates(lat, lng, radius_m, [])
+        elif terms:
+            missing = [t for t in terms if not any(t in a["matched_terms"] for a in articles)]
+            if missing:
+                warnings.append(f"No place within {radius_m} m mentions {' or '.join(map(repr, missing))}.")
     except UpstreamError as e:
         articles = []
         errors.append(str(e))
@@ -104,24 +127,33 @@ def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
         return tool_error("UPSTREAM_UNAVAILABLE", "Place sources are unavailable: " + "; ".join(errors),
                           retryable=True, next_step="Try again shortly.")
 
-    warnings = [f"Partial results; a source failed: {e}" for e in errors]
+    warnings = [f"Partial results; a source failed: {e}" for e in errors] + warnings
     if unlocated:
         warnings.append(f"Skipped {len(unlocated)} landmark(s) recorded only at a shared tax-lot center, which "
                         f"may be far from the structure: {', '.join(sorted(unlocated)[:5])}.")
     candidates = sorted(_merge(articles, landmarks), key=lambda c: c["distance_m"])
-    # In a dense block the nearest dozen can all be congregations and schools. Designated landmarks
-    # carry an official record, so they keep up to half the slots; the rest fill by distance.
-    designated = [c for c in candidates if c["designation"]][: limit // 2]
-    kept = {id(c) for c in designated}
-    nearest = [c for c in candidates if id(c) not in kept][: limit - len(designated)]
-    candidates = sorted(designated + nearest, key=lambda c: c["distance_m"])
+    if terms:
+        # The places the terms found first, most terms first; landmarks that match nothing fill any room left.
+        for candidate in candidates:
+            candidate.setdefault("matched_terms", [])
+        matched = sorted((c for c in candidates if c["matched_terms"]), key=lambda c: (-len(c["matched_terms"]),
+                                                                                         c["distance_m"]))
+        rest = [c for c in candidates if not c["matched_terms"]]
+        candidates = (matched + [c for c in rest if c["designation"]] + [c for c in rest if not c["designation"]])[:limit]
+    else:
+        # In a dense block the nearest dozen can all be congregations and schools. Designated landmarks
+        # carry an official record, so they keep up to half the slots; the rest fill by distance.
+        designated = [c for c in candidates if c["designation"]][: limit // 2]
+        kept = {id(c) for c in designated}
+        nearest = [c for c in candidates if id(c) not in kept][: limit - len(designated)]
+        candidates = sorted(designated + nearest, key=lambda c: c["distance_m"])
     for candidate in candidates:
         _remember(candidate["place_id"], name=candidate["name"], point=candidate["point"], address=candidate["address"])
     if not candidates:
         matching = f" matching {query!r}" if query else ""
         return tool_error("NO_MATCH", f"No candidate places within {radius_m} m{matching}.", retryable=False,
                           next_step="Widen radius_m (up to 2000) or drop the query.")
-    return tool_ok({"center": {"lat": lat, "lng": lng}, "radius_m": radius_m, "query": query,
+    return tool_ok({"center": {"lat": lat, "lng": lng}, "radius_m": radius_m, "query": query, "terms": terms,
                     "candidates": candidates}, warnings=warnings, freshness=reference())
 
 
@@ -180,18 +212,36 @@ def _remember(place_id, *, name, point, address, evidence=None):
 # --- Candidates ---
 
 
-def _article_candidates(lat, lng, radius_m, query):
-    if query:
-        found = _wiki({"list": "search", "srsearch": f"nearcoord:{radius_m}m,{lat},{lng} {query}",
-                       "srlimit": 30, "srprop": ""}).get("search", [])
+def _query_terms(query):
+    """The key terms of a query, each searched on its own; a quoted phrase stays one term, in its quotes."""
+    phrases = [f'"{phrase.strip()}"' for phrase in re.findall(r'"([^"]+)"', query) if phrase.strip()]
+    words = [w.strip(".;:!?") for w in re.sub(r'"[^"]*"', " ", query).replace(",", " ").split()]
+    specific = [t for t in [*phrases, *words] if t and t.lower() not in GENERIC_TERMS]
+    if not specific:
+        return [query]  # only generic words: search them together, as typed
+    unique = {}
+    for term in specific:
+        unique.setdefault(term.lower(), term)
+    return list(unique.values())[:MAX_QUERY_TERMS]
+
+
+def _article_candidates(lat, lng, radius_m, terms):
+    """Articles within the radius; with terms, those mentioning each term, and which terms they matched."""
+    matched = defaultdict(list)  # pageid -> terms, in query order
+    if terms:
+        for term in terms:
+            for page in _wiki({"list": "search", "srsearch": f"nearcoord:{radius_m}m,{lat},{lng} {term}",
+                               "srlimit": 30 if len(terms) == 1 else 20, "srprop": ""}).get("search", []):
+                matched[page["pageid"]].append(term)
+        found = sorted(matched, key=lambda pageid: -len(matched[pageid]))[:MAX_DETAIL_PAGES]
     else:
-        found = _wiki({"list": "geosearch", "gscoord": f"{lat}|{lng}", "gsradius": radius_m,
-                       "gslimit": 50}).get("geosearch", [])
+        found = [p["pageid"] for p in _wiki({"list": "geosearch", "gscoord": f"{lat}|{lng}", "gsradius": radius_m,
+                                             "gslimit": MAX_DETAIL_PAGES}).get("geosearch", [])]
     if not found:
         return []
     # colimit defaults to 10 coordinates per request, which silently drops most of a 50-page batch.
     pages = _wiki({"prop": "description|coordinates|info", "inprop": "url", "colimit": "max",
-                   "pageids": "|".join(str(p["pageid"]) for p in found)}).get("pages", [])
+                   "pageids": "|".join(map(str, found))}).get("pages", [])
 
     candidates = []
     for page in pages:
@@ -211,6 +261,7 @@ def _article_candidates(lat, lng, radius_m, query):
             "designation": None,
             "related_ids": [],
             "sources": [{"title": f"Wikipedia: {page['title']}", "url": page.get("fullurl")}],
+            **({"matched_terms": matched[page["pageid"]]} if terms else {}),
         })
     return candidates
 
