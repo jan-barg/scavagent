@@ -163,3 +163,4 @@ Why: the model sees only the last 40 messages (`app.CONTEXT_MESSAGES`), so by th
 - `finale_if_finished`: the last chat beat, once no checkpoint is current (like `solution_if_finished`).
 
 Original: `state_summary` at `00c25f4` had none of these keys and no `finale`/`missed` locals.
+- `agent.py` (after PR #13): one sentence in "Ending": when the user says they have arrived at the destination, call `update_adventure_state reach_destination`, then `finish_adventure`; the server now refuses to finish a plan with a destination before `reach_destination`. Why: grader query 3 sometimes ended the adventure while the user was still on the way (Kyle's report).
