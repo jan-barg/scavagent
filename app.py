@@ -230,9 +230,12 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     record.messages += json.loads(json.dumps(conversation[new_from:], default=str))
     reply = ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls).model_dump(mode="json")
     stored = json.loads(json.dumps(reply))  # Trimming may shorten the stored copy; the reply sent stays whole
+    # The message id lets a reloaded page tell that its pending message was already answered.
+    message_id = {"client_message_id": request.client_message_id} if request.client_message_id else {}
     record.transcript += [
-        {"role": "user", "text": request.message, "at": now.isoformat()},
-        {"role": "assistant", "text": response, "tool_calls": stored["tool_calls"], "at": state.utc_now().isoformat()},
+        {"role": "user", "text": request.message, "at": now.isoformat(), **message_id},
+        {"role": "assistant", "text": response, "tool_calls": stored["tool_calls"], "at": state.utc_now().isoformat(),
+         **message_id},
     ]
     if request.client_message_id:
         record.remember_reply(request.client_message_id, stored)
