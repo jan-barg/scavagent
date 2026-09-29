@@ -3462,6 +3462,98 @@
       "last_image_verified_at": "2026-09-29T19:21:34Z",
       "visibility_notes": "A standing adult here appears large, about 0.2 of frame height; pedestrians walking past are the main thing that may overlap.",
       "enabled": true
+    },
+    {
+      "checkpoint_id": "img_1_ave_at_40_st_a",
+      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
+      "stand_location": {
+        "lat": 40.7474788,
+        "lng": -73.9704139
+      },
+      "address": "1st Avenue at 40th Street",
+      "landmark": "Signal pole on the east side of 1st Avenue at 40th Street",
+      "side_of_street": "northeast corner of 1st Avenue and 40th Street",
+      "positioning_instructions": "Stand on the east sidewalk of 1st Avenue just north of 40th Street, a step to the fence side of the corner traffic-signal pole (the one with a small red sign low on it). Face south toward 40th Street, where the camera is.",
+      "reference_view_notes": "Looks north up 1st Avenue, with a red bus lane on the right, a green protected bike lane on the left, a brick building with arched ground-floor openings at left, and a fenced green lot along the right sidewalk.",
+      "person_region": [
+        0.83,
+        0.68,
+        0.87,
+        0.86
+      ],
+      "verification_status": "image_verified",
+      "last_image_verified_at": "2026-09-29T19:24:09Z",
+      "visibility_notes": "A person here is about a sixth of the frame tall on an open sidewalk with nothing in front.",
+      "enabled": true
+    },
+    {
+      "checkpoint_id": "img_1_ave_at_40_st_b",
+      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
+      "stand_location": {
+        "lat": 40.7476521,
+        "lng": -73.9702885
+      },
+      "address": "1st Avenue at 40th Street",
+      "landmark": "Fence-side sidewalk on the east side of 1st Avenue north of 40th Street",
+      "side_of_street": "east side of 1st Avenue, about 30 m north of 40th Street",
+      "positioning_instructions": "On the east sidewalk of 1st Avenue north of 40th Street, walk along the tall dark fence about 30 m from the corner, past the street lamp by the fence. Stand in the middle of the sidewalk and face south toward 40th Street.",
+      "reference_view_notes": "Looks north up 1st Avenue, with the long fence and a green lot along the right sidewalk and flags on poles in the far right distance.",
+      "person_region": [
+        0.88,
+        0.65,
+        0.92,
+        0.78
+      ],
+      "verification_status": "image_verified",
+      "last_image_verified_at": "2026-09-29T19:24:09Z",
+      "visibility_notes": "A person here is about an eighth of the frame tall, like the pedestrian walking there in this still, with open sidewalk around.",
+      "enabled": true
+    },
+    {
+      "checkpoint_id": "img_broadway_at_6_ave_33_st_a",
+      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
+      "stand_location": {
+        "lat": 40.7492397,
+        "lng": -73.9883145
+      },
+      "address": "6th Avenue at 33rd Street",
+      "landmark": "Bank of America corner at 6th Avenue and West 33rd Street",
+      "side_of_street": "northwest corner of 6th Avenue and 33rd Street",
+      "positioning_instructions": "At the northwest corner of 6th Avenue and 33rd Street, stand on the 33rd Street sidewalk below the Bank of America sign, a couple of steps back from the curb where the crosswalk across 33rd Street begins. Face the intersection toward 6th Avenue and Broadway, where the camera is.",
+      "reference_view_notes": "Looks up 33rd Street past a wide crosswalk, with an AEROPOSTALE sign on the left corner and Bank of America and H&M signs on the right corner; both corners are crowded with pedestrians.",
+      "person_region": [
+        0.86,
+        0.55,
+        0.91,
+        0.71
+      ],
+      "verification_status": "image_verified",
+      "last_image_verified_at": "2026-09-29T19:22:15Z",
+      "visibility_notes": "Pedestrians stand here in the still and appear about 1/6 of the frame height; crowds waiting to cross can overlap a visitor.",
+      "enabled": true
+    },
+    {
+      "checkpoint_id": "img_broadway_at_6_ave_33_st_b",
+      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
+      "stand_location": {
+        "lat": 40.749123,
+        "lng": -73.9884376
+      },
+      "address": "6th Avenue at 33rd Street",
+      "landmark": "AEROPOSTALE corner at 6th Avenue and West 33rd Street",
+      "side_of_street": "southwest corner of 6th Avenue and 33rd Street",
+      "positioning_instructions": "At the southwest corner of 6th Avenue and 33rd Street, below the AEROPOSTALE sign, stand on the 33rd Street sidewalk a few steps from the corner, just to the 33rd Street side of the tall pole with the blue street-name signs. Face the intersection toward 6th Avenue, where the camera is.",
+      "reference_view_notes": "Looks up 33rd Street past a wide crosswalk, with an AEROPOSTALE sign on the left corner and Bank of America and H&M signs on the right corner; both corners are crowded with pedestrians.",
+      "person_region": [
+        0.26,
+        0.55,
+        0.3,
+        0.71
+      ],
+      "verification_status": "image_verified",
+      "last_image_verified_at": "2026-09-29T19:22:15Z",
+      "visibility_notes": "Pedestrians stand here in the still and appear about 1/7 of the frame height; the street-sign pole and the metal crowd barricades to its left can hide someone standing right next to them.",
+      "enabled": true
     }
   ],
   "field_log": [
@@ -7285,6 +7377,110 @@
       "drafted_by": {
         "by": "Claude, from the still and OpenStreetMap street geometry",
         "draft_id": "draft_125_1"
+      }
+    },
+    {
+      "checkpoint_id": "img_1_ave_at_40_st_a",
+      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
+      "from_candidate": null,
+      "method": "image",
+      "verified_at": "2026-09-29T19:24:09+00:00",
+      "verified_by": "JB (approved in chat without viewing the re-drafted pin; recorded by Claude) (camera workbench, 2026-09-29)",
+      "stand_location_source": "Claude: pin recomputed from the approved instructions with OpenStreetMap street geometry",
+      "evidence_stills": [
+        {
+          "file": "20260929T192409Z.jpg",
+          "sha256": "323a6f97256260f6494b45f062cd630e9894da0b40801038354096da0b04224d",
+          "bytes": 25339
+        }
+      ],
+      "note": "Evidence stills are kept outside Git; the hashes identify them.",
+      "workbench_spot_id": "chat_draft_104_1r",
+      "camera_mount": {
+        "lat": 40.74759,
+        "lng": -73.9708
+      },
+      "drafted_by": {
+        "by": "Claude, from the still and OpenStreetMap street geometry",
+        "draft_id": "draft_104_1r"
+      }
+    },
+    {
+      "checkpoint_id": "img_1_ave_at_40_st_b",
+      "camera_id": "af2b479e-ec78-46b0-be35-6bbbd1691460",
+      "from_candidate": null,
+      "method": "image",
+      "verified_at": "2026-09-29T19:24:09+00:00",
+      "verified_by": "JB (approved in chat without viewing the re-drafted pin; recorded by Claude) (camera workbench, 2026-09-29)",
+      "stand_location_source": "Claude: pin recomputed from the approved instructions with OpenStreetMap street geometry",
+      "evidence_stills": [
+        {
+          "file": "20260929T192409Z.jpg",
+          "sha256": "323a6f97256260f6494b45f062cd630e9894da0b40801038354096da0b04224d",
+          "bytes": 25339
+        }
+      ],
+      "note": "Evidence stills are kept outside Git; the hashes identify them.",
+      "workbench_spot_id": "chat_draft_104_2r",
+      "camera_mount": {
+        "lat": 40.74759,
+        "lng": -73.9708
+      },
+      "drafted_by": {
+        "by": "Claude, from the still and OpenStreetMap street geometry",
+        "draft_id": "draft_104_2r"
+      }
+    },
+    {
+      "checkpoint_id": "img_broadway_at_6_ave_33_st_a",
+      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
+      "from_candidate": null,
+      "method": "image",
+      "verified_at": "2026-09-29T19:22:15+00:00",
+      "verified_by": "JB (approved in chat without viewing the re-drafted pin; recorded by Claude) (camera workbench, 2026-09-29)",
+      "stand_location_source": "Claude: pin recomputed from the approved instructions with OpenStreetMap street geometry",
+      "evidence_stills": [
+        {
+          "file": "20260929T192215Z.jpg",
+          "sha256": "082872d976ac77df99e1794e05acd5777ba9707bed638c3ce5824e6442b72350",
+          "bytes": 26432
+        }
+      ],
+      "note": "Evidence stills are kept outside Git; the hashes identify them.",
+      "workbench_spot_id": "chat_draft_112_1r",
+      "camera_mount": {
+        "lat": 40.749412,
+        "lng": -73.98806
+      },
+      "drafted_by": {
+        "by": "Claude, from the still and OpenStreetMap street geometry",
+        "draft_id": "draft_112_1r"
+      }
+    },
+    {
+      "checkpoint_id": "img_broadway_at_6_ave_33_st_b",
+      "camera_id": "8ee72946-49e0-4f49-991d-4f52b1206ed7",
+      "from_candidate": null,
+      "method": "image",
+      "verified_at": "2026-09-29T19:22:15+00:00",
+      "verified_by": "JB (approved in chat without viewing the re-drafted pin; recorded by Claude) (camera workbench, 2026-09-29)",
+      "stand_location_source": "Claude: pin recomputed from the approved instructions with OpenStreetMap street geometry",
+      "evidence_stills": [
+        {
+          "file": "20260929T192215Z.jpg",
+          "sha256": "082872d976ac77df99e1794e05acd5777ba9707bed638c3ce5824e6442b72350",
+          "bytes": 26432
+        }
+      ],
+      "note": "Evidence stills are kept outside Git; the hashes identify them.",
+      "workbench_spot_id": "chat_draft_112_2r",
+      "camera_mount": {
+        "lat": 40.749412,
+        "lng": -73.98806
+      },
+      "drafted_by": {
+        "by": "Claude, from the still and OpenStreetMap street geometry",
+        "draft_id": "draft_112_2r"
       }
     }
   ],
