@@ -40,6 +40,14 @@ def test_a_configured_effort_applies_to_any_model(monkeypatch):
     assert app_module.model_options("vertex_ai/gemini-3.5-flash") == {"reasoning_effort": "low"}
 
 
+def test_other_models_get_one_plain_system_message(client, monkeypatch):
+    monkeypatch.setattr(app_module, "MODEL", "vertex_ai/gemini-3.5-flash-lite")
+    seen = script(monkeypatch, FakeMessage(content="Hi.", tool_calls=None))
+    client.post("/chat", json={"message": "hi"})
+    system = seen[0][0]
+    assert system["role"] == "system" and system["content"].startswith(app_module.SYSTEM_PROMPT + "\n\nApp context")
+
+
 def test_every_model_call_carries_the_model_options(client, monkeypatch):
     monkeypatch.setattr(app_module, "MODEL_OPTIONS", {"reasoning_effort": "medium", "max_tokens": 32_000})
     calls = []
@@ -186,6 +194,11 @@ def test_claude_requests_adaptive_thinking_and_replays_it_only_within_the_turn(c
     assert first["thinking"]["type"] == "adaptive" and first["output_config"] == {"effort": "medium"}
     assert first["max_tokens"] == 32_000 and first["cache_control"] == {"type": "ephemeral"}
     assert "tool_choice" not in first
+    # The instructions are cached for an hour apart from the per-turn server context, which follows them.
+    instructions, context = first["system"]
+    assert instructions["text"] == app_module.SYSTEM_PROMPT
+    assert instructions["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+    assert context["text"].startswith("App context (from the server") and "cache_control" not in context
     # The tool round goes back with its thinking block ahead of the tool call, as Claude requires.
     assert [b["type"] for b in sent[1]["messages"][1]["content"]] == ["thinking", "tool_use"]
     assert sent[1]["messages"][1]["content"][0]["signature"] == "SIG-TURN-1"

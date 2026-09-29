@@ -41,10 +41,15 @@ CLAUDE_MAX_TOKENS = 32_000
 REASONING_FIELDS = ("thinking_blocks", "reasoning_content")
 
 
+def is_claude(model: str) -> bool:
+    """Claude on Vertex (vertex_ai/claude-...) or Anthropic's API (anthropic/claude-...)."""
+    return model.split("/")[-1].startswith("claude")
+
+
 def model_options(model: str) -> dict:
     """Extra litellm.completion arguments for the configured model."""
     options = {"reasoning_effort": REASONING_EFFORT} if REASONING_EFFORT else {}
-    if model.split("/")[-1].startswith("claude"):
+    if is_claude(model):
         # Thinking is always on for Claude 5.5 models; effort is the control. Automatic prompt caching: every
         # tool round re-sends the turn so far, and the cached part costs a tenth.
         options = {"reasoning_effort": "medium", **options, "max_tokens": CLAUDE_MAX_TOKENS,
@@ -178,6 +183,20 @@ def app_context(record: SessionRecord, now: datetime) -> str:
     return "App context (from the server, not the user):\n" + "\n".join(f"- {line}" for line in lines)
 
 
+def system_message(context: str) -> dict:
+    """The agent's instructions, then this turn's server context.
+
+    For Claude the instructions are their own block, cached for an hour. They and the tools before them (about
+    10K tokens) are the same for every session and turn, so later turns read them at a twentieth of the price
+    instead of writing them again; the context after them changes every turn.
+    """
+    if not is_claude(MODEL):
+        return {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + context}
+    return {"role": "system", "content": [
+        {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+        {"type": "text", "text": context}]}
+
+
 def recent(messages: list[dict]) -> list[dict]:
     """The last CONTEXT_MESSAGES messages, starting at a user message so tool results keep their calls."""
     start = max(0, len(messages) - CONTEXT_MESSAGES)
@@ -276,7 +295,7 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
 
     # The user's message joins the stored conversation only when the turn ends, so a save
     # during the turn (a captured photo) never stores half a turn.
-    context = [{"role": "system", "content": SYSTEM_PROMPT + "\n\n" + app_context(record, now)}]
+    context = [system_message(app_context(record, now))]
     conversation = context + recent(without_reasoning(record.messages) + [{"role": "user", "content": request.message}])
     new_from = len(conversation) - 1
 
