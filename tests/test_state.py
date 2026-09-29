@@ -489,6 +489,20 @@ def test_new_adventure_after_finishing_keeps_photos_but_resets_progress(active):
     assert after.photo_asset_ids == [photo.asset_id]
 
 
+def test_a_capture_is_remembered_for_its_message_until_that_message_has_a_reply(active):
+    active.message_id = "m-1"
+    photo = active.save_asset(b"x", "image/jpeg", "cam-1", "fixture_cam_cp_1", None, NOW)
+
+    assert active.saved_capture("fixture_cam_cp_1") == photo
+    stored = active.store.load("s1")  # Already durable, so a rerun after the turn dies still finds it
+    assert ToolContext(record=stored, store=active.store, message_id="m-1").saved_capture("fixture_cam_cp_1") == photo
+    assert ToolContext(record=stored, store=active.store, message_id="m-2").saved_capture("fixture_cam_cp_1") is None
+    assert active.saved_capture("another_camera_checkpoint") is None
+
+    active.record.remember_reply("m-1", {"response": "Got you.", "session_id": "s1", "tool_calls": []})
+    assert active.saved_capture("fixture_cam_cp_1") is None  # A resend now replays the reply instead
+
+
 def test_the_model_can_match_a_photo_to_its_stop(active):
     # PhotoAsset.checkpoint_id is the camera checkpoint; the plan's stop points at it.
     active.save_asset(b"x", "image/jpeg", "fixture-camera-not-dot", "fixture_cam_cp_1", None, NOW)

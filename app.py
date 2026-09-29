@@ -204,7 +204,8 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
 
     tool_calls = []
     try:
-        response = run_agent(conversation, tool_calls, ToolContext(record=record, store=store))
+        ctx = ToolContext(record=record, store=store, message_id=request.client_message_id)
+        response = run_agent(conversation, tool_calls, ctx)
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         # Provider errors can quote request details, so those go only to the server log.
