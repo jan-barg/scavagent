@@ -62,22 +62,36 @@ def model_options(model: str) -> dict:
 
 
 MODEL_OPTIONS = model_options(MODEL)
+# Optional split: this model plans adventures (and replans them), and SCAVAGENT_MODEL guides the walk once one is
+# proposed or active. Unset, SCAVAGENT_MODEL does everything.
+PLANNER_MODEL = os.environ.get("SCAVAGENT_PLANNER_MODEL") or None
+PLANNING_TOOLS = {"evaluate_adventure_plan", "save_adventure_plan"}  # A guide that calls these hands the turn over
 
 # --- The Harness ---
 
 
-def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | None = None) -> str:
+def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | None = None,
+              model: str | None = None, planner: str | None = None) -> str:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text. Every tool call is appended to `tool_calls` as it runs,
     so the caller keeps the trace even if a later model call raises. Session tools
-    receive `ctx`, which the server binds to the current session.
+    receive `ctx`, which the server binds to the current session. With a `planner`, a reply from
+    `model` that asks to evaluate or save a plan is dropped unrun, and the planner redoes the turn
+    from the user's message (tools that already ran stay in the trace and in the session's state).
     """
+    model = model or MODEL
+    turn_start = len(messages)
     deadline = monotonic() + TURN_SECONDS
     for _ in range(MAX_TOOL_ROUNDS):
-        reply = complete(messages, deadline)
+        reply = complete(messages, deadline, model=model)
         if reply is None:
             return "That took me too long, so I stopped. Please send your message again."
+        if planner and any(call.function.name in PLANNING_TOOLS for call in reply.tool_calls or []):
+            del messages[turn_start:]
+            messages[0] = system_message(planner)
+            model, planner = planner, None
+            continue
 
         # Append assistant's reply (text, tool calls, or both) to the context.
         # model_dump() keeps it a plain dict: the raw object carries provider-specific
@@ -122,30 +136,32 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
 
     # Out of tool rounds: ask once more with tools off, so the user still gets an answer (for example the
     # briefing for a plan it just saved) instead of only the limit message.
-    reply = complete(messages, deadline, tool_choice="none")
+    reply = complete(messages, deadline, tool_choice="none", model=model)
     if reply is not None and reply.content:
         messages += [{"role": "assistant", "content": reply.content}]  # Any tool call it still made is dropped
         return reply.content
     return "Sorry, I hit my tool-call limit before finishing."
 
 
-def complete(messages: list[dict], deadline: float, tool_choice: str | None = None):
+def complete(messages: list[dict], deadline: float, tool_choice: str | None = None, model: str | None = None):
     """One model reply, or None once the turn is out of time.
 
     A rate-limited (429), overloaded or failed (500/529), or unavailable (503) call is retried after each wait
     in RETRY_DELAYS that still fits before the deadline; after that the error propagates. A reply with neither
     text nor a tool call is asked for once more.
     """
+    model = model or MODEL
+    options = MODEL_OPTIONS if model == MODEL else model_options(model)
     waits, asked_again = list(RETRY_DELAYS), False
     while (remaining := deadline - monotonic()) > 0:
         try:
             reply = litellm.completion(
-                model=MODEL,
+                model=model,
                 vertex_location=VERTEX_LOCATION,
-                messages=with_cache_points(messages) if is_claude(MODEL) else messages,
+                messages=with_cache_points(messages) if is_claude(model) else messages,
                 tools=TOOLS,
                 timeout=remaining,
-                **MODEL_OPTIONS,
+                **options,
                 **({"tool_choice": tool_choice} if tool_choice else {}),
             ).choices[0].message
         except Exception as error:
@@ -194,13 +210,13 @@ def app_context(record: SessionRecord, now: datetime) -> str:
     return "App context (from the server, not the user):\n" + "\n".join(f"- {line}" for line in lines)
 
 
-def system_message() -> dict:
+def system_message(model: str | None = None) -> dict:
     """The agent's instructions: the same for every session and turn.
 
     For Claude they are cached for an hour, so with the tools before them (about 10K tokens) they are read at a
     twentieth of the price instead of written again.
     """
-    if not is_claude(MODEL):
+    if not is_claude(model or MODEL):
         return {"role": "system", "content": SYSTEM_PROMPT}
     return {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": HOUR_CACHE}]}
 
@@ -335,13 +351,16 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     # The user's message joins the stored conversation only when the turn ends, so a save
     # during the turn (a captured photo) never stores half a turn.
     newest = user_message(request.message, app_context(record, now))
-    conversation = [system_message()] + recent(without_reasoning(record.messages) + [newest])
+    # With a planner configured, it takes any turn with no adventure under way; the guide takes the rest.
+    model = PLANNER_MODEL if PLANNER_MODEL and record.adventure.status not in ("proposed", "active") else MODEL
+    conversation = [system_message(model)] + recent(without_reasoning(record.messages) + [newest])
     new_from = len(conversation)  # The model's messages for this turn start after the newest message
 
     tool_calls = []
     try:
         ctx = ToolContext(record=record, store=store, message_id=request.client_message_id)
-        response = run_agent(conversation, tool_calls, ctx)
+        response = run_agent(conversation, tool_calls, ctx, model=model,
+                             planner=PLANNER_MODEL if model != PLANNER_MODEL else None)
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         # Provider errors can quote request details, so those go only to the server log.

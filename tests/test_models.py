@@ -302,3 +302,77 @@ def test_claude_caches_the_history_before_each_of_the_last_two_user_messages(cli
     assert marked == [("assistant", "Reply 0."), ("assistant", "Reply 1.")]
     assert sent[2]["cache_control"] == {"type": "ephemeral"}  # Plus the automatic one for this turn's tool rounds
     assert "cache_control" not in json.dumps(app_module.store.load(session).messages)
+
+
+# --- Planner and guide ---
+
+PLANNER, GUIDE = "anthropic/claude-sonnet-5-5", "vertex_ai/gemini-3.5-flash-lite"
+
+
+def running_session(session_id, status="active"):
+    """A stored session with an adventure under way (the dev fixture), active or proposed and awaiting "ready"."""
+    ctx = state.ToolContext(record=state.SessionRecord.new(session_id), store=app_module.store)
+    tools.load_dev_adventure(ctx, "constrained_route")
+    ctx.record.adventure = ctx.record.adventure.model_copy(update={"status": status})
+    app_module.store.save(ctx.record)
+
+
+@pytest.fixture
+def split(client, monkeypatch):
+    monkeypatch.setattr(app_module, "MODEL", GUIDE)
+    monkeypatch.setattr(app_module, "MODEL_OPTIONS", {})
+    monkeypatch.setattr(app_module, "PLANNER_MODEL", PLANNER)
+    calls = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return reply(steps.pop(0))
+
+    steps = []
+    monkeypatch.setattr(app_module.litellm, "completion", completion)
+    return steps, calls
+
+
+@pytest.mark.parametrize("status", ["proposed", "active"])
+def test_the_planner_plans_and_the_guide_runs_the_adventure(client, split, status):
+    steps, calls = split
+    running_session("walk", status)
+    steps += [FakeMessage(content="Here's your mission.", tool_calls=None), FakeMessage(content="Head north.", tool_calls=None)]
+    client.post("/chat", json={"message": "plan me something"})
+    client.post("/chat", json={"message": "I'm ready", "session_id": "walk"})
+
+    assert [c["model"] for c in calls] == [PLANNER, GUIDE]
+    assert calls[0]["reasoning_effort"] == "medium" and "reasoning_effort" not in calls[1]  # Each model's own options
+    assert isinstance(calls[0]["messages"][0]["content"], list)  # Claude's cached instructions block
+    assert calls[1]["messages"][0]["content"] == app_module.SYSTEM_PROMPT
+
+
+def test_a_guide_that_starts_replanning_hands_the_turn_to_the_planner(client, split):
+    steps, calls = split
+    running_session("walk")
+    steps += [
+        FakeMessage(content=None, tool_calls=[tool_call("g1", "get_weather", '{"location": "NYC"}')]),
+        FakeMessage(content=None, tool_calls=[tool_call("g2", "evaluate_adventure_plan", '{"draft": {}}')]),
+        FakeMessage(content="New plan: two stops, 15 minutes.", tool_calls=None),
+    ]
+    body = client.post("/chat", json={"message": "skip a stop, I only have 15 minutes", "session_id": "walk"}).json()
+
+    assert [c["model"] for c in calls] == [GUIDE, GUIDE, PLANNER]
+    assert body["response"] == "New plan: two stops, 15 minutes."
+    assert [c["name"] for c in body["tool_calls"]] == ["get_weather"]  # The guide's evaluate call never ran
+    # The planner redoes the turn from the user's message, with its own instructions block.
+    planner_view = calls[2]["messages"]
+    assert isinstance(planner_view[0]["content"], list) and planner_view[-1]["role"] == "user"
+    stored = app_module.store.load("walk").messages
+    assert [m["role"] for m in stored] == ["user", "assistant"] and stored[-1]["content"] == body["response"]
+
+
+def test_without_a_planner_one_model_does_everything(client, monkeypatch):
+    monkeypatch.setattr(app_module, "PLANNER_MODEL", None)
+    calls = []
+    monkeypatch.setattr(app_module.litellm, "completion", lambda **kw: calls.append(kw) or reply(
+        FakeMessage(content=None, tool_calls=[tool_call("e1", "evaluate_adventure_plan", '{"draft": {}}')]) if len(calls) == 1
+        else FakeMessage(content="Done.", tool_calls=None)))
+    body = client.post("/chat", json={"message": "plan"}).json()
+    assert {c["model"] for c in calls} == {app_module.MODEL}
+    assert [c["name"] for c in body["tool_calls"]] == ["evaluate_adventure_plan"]  # Runs normally
