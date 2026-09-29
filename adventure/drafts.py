@@ -126,7 +126,9 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
     waived = [str(w) for w in draft.get("waived_required_ids") or []]
     for checkpoint_id in waived:
         if checkpoint_id not in required_ids:
-            raise DraftError(f"{checkpoint_id} is not a stop the user required, so there is nothing to waive.")
+            raise DraftError(f"{checkpoint_id} is not a stop the user required, so there is nothing to waive. To skip it, "
+                             "record the skip (update_adventure_state skip_checkpoint, no waiver), then evaluate kind "
+                             "\"check\" with the new time limit, or a revision that leaves it out.")
     # Skipping a required stop took the user's explicit waiver (state.resolve_checkpoint enforces it).
     # A blocked one stays required until the user waives it or picks a substitute (PLAN.md section 7).
     given_up = set(waived) | (required_ids & set(state.skipped_ids))

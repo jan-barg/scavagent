@@ -80,7 +80,8 @@ def main():
     only_destination_left = any(c["name"] == "get_next_directions" and c["result"]["ok"]
                                 and c["result"]["data"].get("to_id") == "destination" for c in third["tool_calls"])
     check("Q3 timed the rest against 15 minutes", rechecked or (only_destination_left and "15" in third["response"]))
-    waived = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state" and c["args"].get("user_waived_required")]
+    waived = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state" and c["result"]["ok"]
+              and c["args"].get("user_waived_required")]  # a refused call waived nothing
     check("Q3 did not waive a required stop on the user's behalf", not waived)
     check("Q3 answered", bool(third["response"]) and "Model call failed" not in third["response"])
     finished = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state"
