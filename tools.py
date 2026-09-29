@@ -157,9 +157,13 @@ def capture_camera_checkpoint(ctx: ToolContext, checkpoint_id: str) -> dict:
     """Save a checkpoint's DOT still to this session, at most once per user message."""
     photo = ctx.saved_capture(checkpoint_id)
     if photo is not None:  # This message's earlier turn died after taking the photo
+        status = cameras.verification_status(checkpoint_id)
+        warnings = ["This message already saved this photo before its turn was interrupted; it was reused, not retaken."]
+        if status == "image_verified":  # the replay must disclose what the first capture did
+            warnings.append(cameras.IMAGE_VERIFIED_CAPTURE_WARNING)
         return tool_ok(
-            {"photo": photo.model_dump(mode="json"), "already_captured": True},
-            warnings=["This message already saved this photo before its turn was interrupted; it was reused, not retaken."],
+            {"photo": photo.model_dump(mode="json"), "already_captured": True, "verification_status": status},
+            warnings=warnings,
         )
     return cameras.capture_camera_checkpoint(checkpoint_id, save_asset=ctx.save_asset)
 

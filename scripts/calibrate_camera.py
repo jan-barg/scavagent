@@ -205,6 +205,19 @@ def fill_from_pin(spot, locate=None):
     return {**spot, **{k: derived[k] for k in blank}, "derived_fields": blank}
 
 
+def review_problem(spot):
+    """Why a workbench row may not become a usable checkpoint, or None. Only a human-saved spot qualifies."""
+    if "draft_status" in spot:
+        return "it is a Claude draft, not a spot a person saved or approved"
+    if not (spot.get("marked_by") or spot.get("marked_by_id")):
+        return "it names no reviewer"
+    try:
+        datetime.fromisoformat(str(spot.get("marked_at")).replace("Z", "+00:00"))
+    except ValueError:
+        return "it has no review time"
+    return None
+
+
 def spot_notes(spot, evidence_dir, taken):
     """A workbench spot (image method) as notes for build_entry; `taken` holds checkpoint ids already used."""
     words = re.sub(r"[^a-z0-9]+", "_", spot["camera_name"].lower().replace("@", " at ")).strip("_")
@@ -217,7 +230,7 @@ def spot_notes(spot, evidence_dir, taken):
         **{k: spot.get(k) or "" for k in TEXT_FIELDS}, "visibility_notes": spot.get("visibility_notes") or "",
         "person_region": spot.get("box"), "spot_in_view": spot.get("spot_in_view") is True,
         "verified_at": spot.get("still_retrieved_at") or "",
-        "verified_by": f"{spot.get('marked_by') or 'teammate'} (camera workbench, {spot.get('marked_at', '')[:10]})",
+        "verified_by": f"{spot.get('marked_by') or 'workbench user ' + str(spot.get('marked_by_id'))} (camera workbench, {str(spot.get('marked_at'))[:10]})",
         "evidence_stills": [str(Path(evidence_dir) / spot["still_file"])] if spot.get("still_file") else [],
         "derived_fields": spot.get("derived_fields", []),
         "from_draft": spot.get("from_draft"),
@@ -239,9 +252,9 @@ def add_to_catalogue(catalogue, checkpoint, log):
     return updated
 
 
-def write_catalogue(updated, path=None):
-    """Write the catalogue, then load it the way the app does; restore the old file if that fails."""
-    path = Path(path or cameras.CATALOGUE_PATH)
+def write_catalogue(updated):
+    """Write the app's catalogue, then load it the way the app does; restore the old file if that fails."""
+    path = Path(cameras.CATALOGUE_PATH)
     previous = path.read_text()
     path.write_text(json.dumps(updated, indent=2, ensure_ascii=False) + "\n")
     try:
@@ -306,6 +319,10 @@ def main(argv=None):
                 continue  # already in the catalogue; re-importing must not duplicate it
             spot = json.loads(path.read_text())
             spot = spot.get("data", spot)  # an exported document may wrap its fields
+            if problem := review_problem(spot):
+                failed += 1
+                print(f"Skipped {path.name} ({spot.get('camera_name')}): {problem}", file=sys.stderr)
+                continue
             try:
                 spot = fill_from_pin(spot)
             except (ValueError, KeyError) as error:

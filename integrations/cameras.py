@@ -178,6 +178,17 @@ def load_checkpoints(allow_synthetic=False):
     return _checkpoints(None, allow_synthetic is True)
 
 
+IMAGE_VERIFIED_CAPTURE_WARNING = "This position was matched on the camera image, not tested in person. If they cannot find themselves, suggest a step toward the curb and offer a retake."
+
+
+def verification_status(checkpoint_id):
+    """The catalogue's verification status for a checkpoint, or None if it is unknown or the catalogue is invalid."""
+    try:
+        return next((c.verification_status for c in load_checkpoints() if c.checkpoint_id == checkpoint_id), None)
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
 def _eligible(checkpoint, allow_synthetic):
     return checkpoint.enabled and (
         checkpoint.verification_status in VERIFIED_CAMERA_STATUSES
@@ -356,7 +367,7 @@ def capture_camera_checkpoint(checkpoint_id, save_asset: SaveAsset | None = None
         return _failure("INTERNAL_ERROR", "Photo storage did not return a valid saved-asset record.", "Keep existing photos; check session storage before retrying this capture.")
     warnings = ["Frame time is unknown; retrieval time is not exposure time. Ask the user whether they are visible. Reuse this saved media URL in the finale."]
     if checkpoint.verification_status == "image_verified":
-        warnings.append("This position was matched on the camera image, not tested in person. If they cannot find themselves, suggest a step toward the curb and offer a retake.")
+        warnings.append(IMAGE_VERIFIED_CAPTURE_WARNING)
     return tool_ok(
         {"photo": asset.model_dump(mode="json"), "positioning_instructions": checkpoint.positioning_instructions,
          "verification_status": checkpoint.verification_status},

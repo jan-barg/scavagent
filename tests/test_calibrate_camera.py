@@ -211,6 +211,9 @@ def test_workbench_spots_import_once_as_image_verified_entries(catalogue, tmp_pa
             "visibility_notes": "", "spot_in_view": True, "marked_by": "TB", "marked_at": "2026-09-29T20:00:00Z"}
     (spots / "doc1.json").write_text(json.dumps(spot))
     (spots / "doc2.json").write_text(json.dumps(dict(spot, positioning_instructions="")))  # incomplete: skipped, not guessed
+    (spots / "draft1.json").write_text(json.dumps(dict(spot, draft_status="pending")))  # an unreviewed Claude draft
+    unreviewed = {k: v for k, v in spot.items() if k not in ("marked_by", "marked_at")}
+    (spots / "doc3.json").write_text(json.dumps(dict(unreviewed, from_draft="draft1")))  # no reviewer, no review time
 
     cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
     cal.main(["import-spots", str(spots), "--evidence", str(evidence), "--write"])
@@ -222,7 +225,9 @@ def test_workbench_spots_import_once_as_image_verified_entries(catalogue, tmp_pa
     assert entry["person_region"] == [0.02, 0.4, 0.08, 0.62]
     [log] = saved["field_log"]
     assert log["workbench_spot_id"] == "doc1" and log["method"] == "image" and log["evidence_stills"][0]["sha256"]
-    assert "positioning_instructions" in capsys.readouterr().err
+    assert log["verified_by"] == "TB (camera workbench, 2026-09-29)"
+    err = capsys.readouterr().err
+    assert "positioning_instructions" in err and "not a spot a person saved" in err and "names no reviewer" in err
 
 
 def test_blank_address_fields_are_filled_from_the_pin_and_logged():
@@ -237,3 +242,14 @@ def test_blank_address_fields_are_filled_from_the_pin_and_logged():
     assert filled["derived_fields"] == ["address", "landmark"]
     complete = dict(spot, address="a", landmark="b")
     assert cal.fill_from_pin(complete, locate=lambda *a: pytest.fail("no lookup needed")) is complete
+
+
+@pytest.mark.parametrize("spot, problem", [
+    ({"draft_status": "approved", "marked_by": "JB", "marked_at": "2026-09-29T20:00:00Z"}, "Claude draft"),
+    ({"marked_at": "2026-09-29T20:00:00Z"}, "no reviewer"),
+    ({"marked_by": "JB"}, "no review time"),
+    ({"marked_by": "JB", "marked_at": "yesterday"}, "no review time"),
+])
+def test_only_rows_a_person_saved_can_be_imported(spot, problem):
+    assert problem in cal.review_problem(spot)
+    assert cal.review_problem({"marked_by_id": "u_1", "marked_at": "2026-09-29T20:00:00Z"}) is None

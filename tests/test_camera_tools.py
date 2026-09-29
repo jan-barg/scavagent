@@ -84,12 +84,37 @@ def test_a_capture_is_saved_to_the_session_and_not_retaken_when_its_message_runs
     script(monkeypatch, capture("c2"), FakeMessage(content="Got you.", tool_calls=None))
     [call] = client.post("/chat", json=ready).json()["tool_calls"]
     assert call["result"]["data"]["already_captured"] is True and call["result"]["data"]["photo"]["asset_id"] == photo_id
+    assert call["result"]["data"]["verification_status"] == "field_verified"
+    assert not any("not tested in person" in w for w in call["result"]["warnings"])
     assert dot.count(STILL_URL) == 1 and len(store.load("cam").photos) == 1
 
     # A new message asking again is a real retake.
     script(monkeypatch, capture("c3"), FakeMessage(content="Retook it.", tool_calls=None))
     client.post("/chat", json={**ready, "message": "try again", "client_message_id": "m-2"})
     assert dot.count(STILL_URL) == 2 and len(store.load("cam").photos) == 2
+
+
+def test_a_replayed_capture_still_says_the_position_was_only_checked_on_the_image(dot, monkeypatch):
+    data = json.loads(cameras.CATALOGUE_PATH.read_text())
+    data["checkpoints"][0].update(verification_status="image_verified", last_field_verified_at=None,
+                                  last_image_verified_at="2026-09-29T19:00:00+00:00")
+    cameras.CATALOGUE_PATH.write_text(json.dumps(data))
+    store = state.MemoryStore()
+    monkeypatch.setattr(app_module, "store", store)
+    client = TestClient(app_module.app)
+    ready = {"message": "ready", "session_id": "img", "client_message_id": "m-1"}
+
+    script(monkeypatch, capture("c1"), InstanceDied())
+    with pytest.raises(InstanceDied):
+        client.post("/chat", json=ready)
+    later = state.utc_now() + state.IN_FLIGHT_TIMEOUT
+    monkeypatch.setattr(state, "utc_now", lambda: later)
+    script(monkeypatch, capture("c2"), FakeMessage(content="Here it is.", tool_calls=None))
+    [call] = client.post("/chat", json=ready).json()["tool_calls"]
+
+    assert call["result"]["data"]["already_captured"] is True
+    assert call["result"]["data"]["verification_status"] == "image_verified"
+    assert any("not tested in person" in w for w in call["result"]["warnings"])
 
 
 def test_the_model_cannot_reach_server_only_camera_arguments(dot):
