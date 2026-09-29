@@ -40,12 +40,34 @@ def test_a_configured_effort_applies_to_any_model(monkeypatch):
     assert app_module.model_options("vertex_ai/gemini-3.5-flash") == {"reasoning_effort": "low"}
 
 
-def test_other_models_get_one_plain_system_message(client, monkeypatch):
+def test_the_server_context_rides_with_the_newest_message_and_is_never_stored(client, monkeypatch):
     monkeypatch.setattr(app_module, "MODEL", "vertex_ai/gemini-3.5-flash-lite")
-    seen = script(monkeypatch, FakeMessage(content="Hi.", tool_calls=None))
-    client.post("/chat", json={"message": "hi"})
-    system = seen[0][0]
-    assert system["role"] == "system" and system["content"].startswith(app_module.SYSTEM_PROMPT + "\n\nApp context")
+    seen = script(monkeypatch, FakeMessage(content="Hi.", tool_calls=None), FakeMessage(content="Again.", tool_calls=None))
+    session = client.post("/chat", json={"message": "hi"}).json()["session_id"]
+    client.post("/chat", json={"message": "and now?", "session_id": session})
+
+    assert seen[0][0] == {"role": "system", "content": app_module.SYSTEM_PROMPT}  # The same every turn
+    context, text = seen[1][-1]["content"]
+    assert context["text"].startswith("App context (from the server, not the user)") and text["text"] == "and now?"
+    assert seen[1][1] == {"role": "user", "content": "hi"}  # Earlier messages go back without their context
+    assert "App context" not in json.dumps(app_module.store.load(session).messages)
+
+
+def test_everything_before_the_newest_message_is_unchanged_since_the_last_turn(client, monkeypatch):
+    # What lets the provider serve the conversation so far from its cache.
+    seen = script(
+        monkeypatch,
+        FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+        FakeMessage(content="Sunny.", tool_calls=None),
+        FakeMessage(content="Still sunny.", tool_calls=None),
+        FakeMessage(content="Yes.", tool_calls=None),
+    )
+    session = client.post("/chat", json={"message": "weather?"}).json()["session_id"]
+    client.post("/chat", json={"message": "now?", "session_id": session})
+    client.post("/chat", json={"message": "sure?", "session_id": session})
+
+    second, third = seen[2], seen[3]
+    assert third[:len(second) - 1] == second[:-1]
 
 
 def test_every_model_call_carries_the_model_options(client, monkeypatch):
@@ -195,11 +217,11 @@ def test_claude_requests_adaptive_thinking_and_replays_it_only_within_the_turn(c
     assert first["thinking"]["type"] == "adaptive" and first["output_config"] == {"effort": "medium"}
     assert first["max_tokens"] == 32_000 and first["cache_control"] == {"type": "ephemeral"}
     assert "tool_choice" not in first
-    # The instructions are cached for an hour apart from the per-turn server context, which follows them.
-    instructions, context = first["system"]
+    # The instructions are cached for an hour; this turn's server context comes with the user's message.
+    [instructions] = first["system"]
     assert instructions["text"] == app_module.SYSTEM_PROMPT
     assert instructions["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
-    assert context["text"].startswith("App context (from the server") and "cache_control" not in context
+    assert [b["text"][:11] for b in first["messages"][0]["content"]] == ["App context", "weather?"]
     # The tool round goes back with its thinking block ahead of the tool call, as Claude requires.
     assert [b["type"] for b in sent[1]["messages"][1]["content"]] == ["thinking", "tool_use"]
     assert sent[1]["messages"][1]["content"][0]["signature"] == "SIG-TURN-1"
@@ -264,3 +286,19 @@ def test_claude_answers_after_the_last_tool_round_with_tools_off(client, vertex_
     ]
     assert client.post("/chat", json={"message": "plan"}).json()["response"] == "Your briefing."
     assert "tool_choice" not in sent[0] and sent[1]["tool_choice"] == {"type": "none"}  # Claude 5.5 accepts none
+
+
+def test_claude_caches_the_history_before_each_of_the_last_two_user_messages(client, vertex_claude):
+    replies, sent = vertex_claude
+    replies += [(200, anthropic_reply({"type": "text", "text": f"Reply {n}."})) for n in range(3)]
+    session = client.post("/chat", json={"message": "one"}).json()["session_id"]
+    for text in ("two", "three"):
+        client.post("/chat", json={"message": text, "session_id": session})
+
+    hour = {"type": "ephemeral", "ttl": "1h"}
+    marked = [(m["role"], b.get("text")) for m in sent[2]["messages"] if isinstance(m["content"], list)
+              for b in m["content"] if b.get("cache_control") == hour]
+    # Reply 0 closed the history the previous turn cached; Reply 1 closes what this turn adds for the next one.
+    assert marked == [("assistant", "Reply 0."), ("assistant", "Reply 1.")]
+    assert sent[2]["cache_control"] == {"type": "ephemeral"}  # Plus the automatic one for this turn's tool rounds
+    assert "cache_control" not in json.dumps(app_module.store.load(session).messages)

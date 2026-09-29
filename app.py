@@ -29,7 +29,11 @@ MAX_TOOL_ROUNDS = 16
 TURN_SECONDS = 240
 # Waits before retrying a model call that Vertex rate-limited (429) or found unavailable (503), while the turn has time.
 RETRY_DELAYS = (2, 4, 8, 16)
-CONTEXT_MESSAGES = 40  # Recent conversation sent to the model; the full plan stays in storage
+CONTEXT_MESSAGES = 40  # Recent conversation sent to the model (at least this much); the full plan stays in storage
+# The window's start moves in steps of this many messages, not every turn, so the beginning of the conversation
+# stays the same for several turns and the model provider can serve it from its cache.
+CONTEXT_STEP = 20
+HOUR_CACHE = {"type": "ephemeral", "ttl": "1h"}
 # Model choice is deferred; keep it configurable. Defaults to the starter's model.
 MODEL = os.environ.get("SCAVAGENT_MODEL", "vertex_ai/gemini-3.5-flash-lite")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
@@ -138,7 +142,7 @@ def complete(messages: list[dict], deadline: float, tool_choice: str | None = No
             reply = litellm.completion(
                 model=MODEL,
                 vertex_location=VERTEX_LOCATION,
-                messages=messages,
+                messages=with_cache_points(messages) if is_claude(MODEL) else messages,
                 tools=TOOLS,
                 timeout=remaining,
                 **MODEL_OPTIONS,
@@ -190,26 +194,53 @@ def app_context(record: SessionRecord, now: datetime) -> str:
     return "App context (from the server, not the user):\n" + "\n".join(f"- {line}" for line in lines)
 
 
-def system_message(context: str) -> dict:
-    """The agent's instructions, then this turn's server context.
+def system_message() -> dict:
+    """The agent's instructions: the same for every session and turn.
 
-    For Claude the instructions are their own block, cached for an hour. They and the tools before them (about
-    10K tokens) are the same for every session and turn, so later turns read them at a twentieth of the price
-    instead of writing them again; the context after them changes every turn.
+    For Claude they are cached for an hour, so with the tools before them (about 10K tokens) they are read at a
+    twentieth of the price instead of written again.
     """
     if not is_claude(MODEL):
-        return {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + context}
-    return {"role": "system", "content": [
-        {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral", "ttl": "1h"}},
-        {"type": "text", "text": context}]}
+        return {"role": "system", "content": SYSTEM_PROMPT}
+    return {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": HOUR_CACHE}]}
+
+
+def user_message(text: str, context: str) -> dict:
+    """The newest message as the model receives it: this turn's server context, then what the user wrote.
+
+    The context rides with the newest message, not in the system message, so everything before it is unchanged
+    since the last turn and can come from the provider's cache. It is not stored: the next turn has its own.
+    """
+    return {"role": "user", "content": [{"type": "text", "text": context}, {"type": "text", "text": text}]}
 
 
 def recent(messages: list[dict]) -> list[dict]:
-    """The last CONTEXT_MESSAGES messages, starting at a user message so tool results keep their calls."""
-    start = max(0, len(messages) - CONTEXT_MESSAGES)
+    """At least the last CONTEXT_MESSAGES messages, starting at a user message so tool results keep their calls.
+
+    The start moves in steps of CONTEXT_STEP messages, so it stays put for several turns (see CONTEXT_STEP).
+    """
+    start = max(0, (len(messages) - CONTEXT_MESSAGES) // CONTEXT_STEP * CONTEXT_STEP)
     while start > 0 and messages[start].get("role") != "user":
         start -= 1
     return messages[start:]
+
+
+def with_cache_points(messages: list[dict]) -> list[dict]:
+    """Claude's request copy, with one-hour cache breakpoints where the history ended before the last two user messages.
+
+    The previous turn cached the history up to its user message, so this turn reads it; the breakpoint before the
+    newest message caches what the previous turn added, for the next turn. An hour covers the walk between stops.
+    With the instructions' breakpoint and the automatic one for this turn's tool rounds, that is four, the most a
+    request may have. A turn stored before every turn ended on an assistant reply may not get one; it then only
+    misses the cache.
+    """
+    marked = list(messages)
+    for i in [i for i, m in enumerate(messages) if m.get("role") == "user"][-2:]:
+        before = messages[i - 1] if i > 0 else {}
+        if before.get("role") == "assistant" and not before.get("tool_calls") and isinstance(before.get("content"), str) \
+                and before["content"]:
+            marked[i - 1] = {**before, "content": [{"type": "text", "text": before["content"], "cache_control": HOUR_CACHE}]}
+    return marked
 
 
 def without_reasoning(messages: list[dict]) -> list[dict]:
@@ -228,17 +259,18 @@ def without_reasoning(messages: list[dict]) -> list[dict]:
     return plain
 
 
-def turn_messages(messages: list[dict], response: str) -> list[dict]:
-    """This turn's messages as stored: no reasoning, no empty replies, and ending with the reply the user saw.
+def turn_messages(text: str, replies: list[dict], response: str) -> list[dict]:
+    """This turn as stored: the user's message without the server context, then the model's messages without
+    reasoning or empty replies, ending with the reply the user saw.
 
     A turn cut short (out of time or tool rounds, or a failed model call) otherwise ends on a tool result or
     the user's message, and the model would not know what the user was told.
     """
-    kept = [m for m in without_reasoning(messages) if m.get("role") != "assistant" or m.get("content") or m.get("tool_calls")]
+    kept = [m for m in without_reasoning(replies) if m.get("role") != "assistant" or m.get("content") or m.get("tool_calls")]
     last = kept[-1] if kept else {}
     if last.get("role") != "assistant" or last.get("tool_calls") or not last.get("content"):
         kept.append({"role": "assistant", "content": response})
-    return kept
+    return [{"role": "user", "content": text}, *kept]
 
 
 # --- FastAPI App ---
@@ -302,9 +334,9 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
 
     # The user's message joins the stored conversation only when the turn ends, so a save
     # during the turn (a captured photo) never stores half a turn.
-    context = [system_message(app_context(record, now))]
-    conversation = context + recent(without_reasoning(record.messages) + [{"role": "user", "content": request.message}])
-    new_from = len(conversation) - 1
+    newest = user_message(request.message, app_context(record, now))
+    conversation = [system_message()] + recent(without_reasoning(record.messages) + [newest])
+    new_from = len(conversation)  # The model's messages for this turn start after the newest message
 
     tool_calls = []
     try:
@@ -318,7 +350,7 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
         response = f"Model call failed ({type(e).__name__}). Please try again in a moment."
 
     # Keep this turn's messages, made plain JSON so any store can hold them.
-    record.messages += json.loads(json.dumps(turn_messages(conversation[new_from:], response), default=str))
+    record.messages += json.loads(json.dumps(turn_messages(request.message, conversation[new_from:], response), default=str))
     reply = ChatResponse(response=response, session_id=session_id, tool_calls=tool_calls).model_dump(mode="json")
     stored = json.loads(json.dumps(reply))  # Trimming may shorten the stored copy; the reply sent stays whole
     # The message id lets a reloaded page tell that its pending message was already answered.
