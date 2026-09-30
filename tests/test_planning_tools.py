@@ -700,11 +700,24 @@ def test_a_camera_asked_for_in_an_earlier_adventure_does_not_carry_over(camera_f
     assert result["data"]["passes"] and camera_finder["routes"] == []
 
 
-def test_asking_for_a_camera_is_told_from_turning_one_down():
-    assert agent_tools.asks_for_camera("Walking only, architecture theme, and include a camera stop if one fits.")
-    assert agent_tools.asks_for_camera("No, include a camera stop after all.")
-    assert not agent_tools.asks_for_camera("Not interested in a camera stop.")
-    assert not agent_tools.asks_for_camera("")
+@pytest.mark.parametrize("words", [
+    "Walking only, architecture theme, and include a camera stop if one fits.",  # grader query 2
+    "No, include a camera stop after all.",
+    # Double negatives, from Jan's Claude's review of #26: each once read as a refusal.
+    "Don't forget the camera stop!",
+    "Make sure not to miss the camera stop.",
+    "Never skip the camera.",
+])
+def test_these_ask_for_a_camera(words):
+    assert agent_tools.asks_for_camera(words)
+
+
+@pytest.mark.parametrize("words", [
+    "No camera stop please.", "Skip the camera this time.", "A walk without photos of me, please.",
+    "I don't want a camera stop.", "Not interested in a camera stop.", "",
+])
+def test_these_turn_a_camera_down(words):
+    assert not agent_tools.asks_for_camera(words)
 
 
 def test_the_search_runs_only_for_a_camera_request_and_a_plan_without_one(camera_finder, verified_camera):

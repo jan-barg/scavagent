@@ -30,6 +30,8 @@ CAMERA_WORDS = re.compile(r"\b(?:cameras?|webcams?|selfies?|photos? of (?:me|us|
 # camera". The reach ends at punctuation, so "No, include a camera stop" still asks for one.
 CAMERA_REFUSAL = re.compile(r"(?:\b(?:no|not|without|skip|skipping|avoid|avoiding|never|drop|forget)\b|n't)"
                             r"(?:[^\S\n]+[\w']+){0,3}[^\S\n]*$", re.I)
+# A refusal that is itself turned down asks: "don't forget the camera", "not to miss it", "never skip it".
+CAMERA_DOUBLE_NEGATIVE = re.compile(r"(?:\b(?:not|never)\b|n't)[^\S\n]+(?:to[^\S\n]+)?(?:forget|skip|miss|drop)\b", re.I)
 TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
 LOCATION_FRESH = timedelta(minutes=10)
 OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from where they are
@@ -239,9 +241,14 @@ def _evaluated(plan, now, lookup, dev, context):
 
 
 def asks_for_camera(text):
-    """Whether the text asks for a camera stop: a camera mention that no "no", "skip", or "without" turns down."""
-    return any(not CAMERA_REFUSAL.search(text[max(0, match.start() - 60):match.start()])
-               for match in CAMERA_WORDS.finditer(text or ""))
+    """Whether the text asks for a camera stop: a camera mention that no "no", "skip", or "without" turns down,
+    unless that refusal is itself turned down ("don't forget the camera stop")."""
+    for match in CAMERA_WORDS.finditer(text or ""):
+        before = text[max(0, match.start() - 60):match.start()]
+        refusal = CAMERA_REFUSAL.search(before)
+        if refusal is None or CAMERA_DOUBLE_NEGATIVE.search(before[refusal.start():]):
+            return True
+    return False
 
 
 def _camera_finder(draft, dev):
