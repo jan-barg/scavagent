@@ -132,7 +132,9 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
                 # Vertex's OpenAI-compatible endpoint rejects every later request of a conversation that holds
                 # malformed arguments, so the model's copy gets {} next to the error; the trace keeps what it sent.
                 assistant["tool_calls"][i]["function"]["arguments"] = "{}"
-            if monotonic() >= deadline:
+            if i in early:
+                result = early[i]  # Started with its round, before the deadline
+            elif monotonic() >= deadline:
                 result = tool_error(
                     "INTERNAL_ERROR",
                     "This turn ran out of time, so the tool was not run.",
@@ -140,7 +142,7 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
                     next_step="Tell the user it took too long and to send the message again.",
                 )
             elif isinstance(args, dict):
-                result = early[i] if i in early else run_tool(call.function.name, args, ctx)
+                result = run_tool(call.function.name, args, ctx)
             else:
                 result = tool_error(
                     "INVALID_ARGUMENT",
