@@ -81,7 +81,7 @@ Stories: all three models now write briefings, casts with a handler and a channe
 
 ## Split: Sonnet 5.5 plans, Flash-Lite guides (September 29, night)
 
-`SCAVAGENT_PLANNER_MODEL=anthropic/claude-sonnet-5-5` with `SCAVAGENT_MODEL=vertex_ai/gemini-3.5-flash-lite` (commit `e5e7024`). Sonnet takes turns with no adventure under way; Flash-Lite takes the rest; a Flash-Lite reply that tries to evaluate or save a plan is dropped and Sonnet redoes the turn.
+`SCAVAGENT_PLANNER_MODEL=anthropic/claude-sonnet-5-5` with `SCAVAGENT_MODEL=vertex_ai/gemini-3.5-flash-lite` (commit `e5e7024`; the setting was removed in #29 after the decision). Sonnet takes turns with no adventure under way; Flash-Lite takes the rest; a Flash-Lite reply that tries to evaluate or save a plan is dropped and Sonnet redoes the turn.
 
 | Run | Sonnet alone | Split |
 |---|---|---|
@@ -101,7 +101,7 @@ Stories: all three models now write briefings, casts with a handler and a channe
 
 ## Decision
 
-Claude Sonnet 5.5 alone (Jan, September 29). Opus 5.5 is too expensive, and the Sonnet-plans/Flash-Lite-guides split saved $0.10–0.15 per adventure but delivered each stop noticeably worse (it gave away answers, jumped ahead, invented links). Live on Cloud Run since revision `scavagent-00016-z6s` (`SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5`, key from Secret Manager); acceptance checks against the deployed URL: 26/26. The code default is still Gemini 3.5 Flash-Lite, so local runs work without an Anthropic key.
+Claude Sonnet 5.5 alone (Jan, September 29). Opus 5.5 is too expensive, and the Sonnet-plans/Flash-Lite-guides split saved $0.10–0.15 per adventure but delivered each stop noticeably worse (it gave away answers, jumped ahead, invented links). Live on Cloud Run since revision `scavagent-00016-z6s` (`SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5`, key from Secret Manager); acceptance checks against the deployed URL: 26/26. The code default is still Gemini 3.5 Flash-Lite, so local runs work without an Anthropic key. After this decision, the split's code (`SCAVAGENT_PLANNER_MODEL`) was removed in #29. The sections above record what was measured.
 
 ## Recommendation (before the decision)
 
@@ -111,4 +111,4 @@ Claude, Sonnet 5.5 or Opus 5.5; Jan to choose from the story samples.
 - Under story design v2 both fit the 240-second turn limit (longest planning turns: Opus 144 s, Sonnet 64 s).
 - Opus writes the richer stories for about twice the cost: per planning turn about $0.24 against $0.10, per follow-up about $0.15 against $0.07 (list prices, after the caching change). A full adventure (one plan, about eight follow-ups) comes to roughly $0.80–1.40 on Opus and $0.40–0.65 on Sonnet: the low end with minutes between turns (the walkthrough above), the high end with replanning and turns in quick succession.
 - Flash-Lite stays about ten times cheaper, and its stories are thinner.
-- Next: the planner/guide split (a Claude model plans and replans, a cheaper model guides the walk), once Jan has picked the combinations to try. It needs a full walkthrough per combination (arrival, answers at each stop, the finale, a replan), because the guide delivers the story.
+- Next (since done and rejected; see "Split" and "Decision" above): the planner/guide split (a Claude model plans and replans, a cheaper model guides the walk), once Jan has picked the combinations to try. It needs a full walkthrough per combination (arrival, answers at each stop, the finale, a replan), because the guide delivers the story.

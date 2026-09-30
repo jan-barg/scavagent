@@ -226,3 +226,10 @@ Jan asked for code that nothing uses to be removed, and Codex reviewed each chan
 - `fixtures/integrations/*.json` (4 files) and `scripts/capture_integration_fixtures.py` were deleted. Nothing loaded the captures, and their `find_places` results predate `matched_terms`. The same-named `fixtures/*.json` are separate files and stay.
 
 To restore any of them: `git checkout 3ca0f5c -- adventure/validation.py adventure/drafts.py fixtures/integrations scripts/capture_integration_fixtures.py`.
+
+## Stale lines after #28 and #29 (branch `claude/stale-docs`, from `main` at `922321f`)
+
+- `docs/STATUS.md`, Kyle's section, three factual updates only:
+  - "The one change still in review is the double-negative fix" was dropped, and #28 was added to the merged list;
+  - "**In review (`kyle/status-and-double-negatives`):**" became "**#28:**";
+  - "Cleanup ... waits for the read-only session's list" became "Cleanup: done in #29".
