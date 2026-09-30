@@ -11,25 +11,19 @@ visible" answer recorded with a retake offered, and the photo in the finale. Exi
 check fails.
 """
 
-import json
 import re
 import sys
 import uuid
 
-from acceptance_checks import QUERY_2, chat, check, passing, ran_ok, results, transcript  # scripts/ is on sys.path
+from acceptance_checks import (  # scripts/ is on sys.path
+    QUERY_2, arguments, chat, check, passing, ran_ok, report, state)
 
 MAX_STOPS_BEFORE_CAMERA = 4
 VERIFICATION_WORDS = re.compile(r"camera image|matched|not (?:been )?tested in person|not (?:yet )?(?:been )?field|in person", re.I)
 
 
 def main():
-    args = sys.argv[1:]
-    out = None
-    if "--out" in args:
-        i = args.index("--out")
-        out = args[i + 1]
-        del args[i:i + 2]
-    base = (args[0] if args else "http://127.0.0.1:8000").rstrip("/")
+    base, out = arguments(sys.argv[1:])
     session = str(uuid.uuid4())
 
     plan = chat(base, session, QUERY_2)
@@ -41,7 +35,7 @@ def main():
     if camera is None:
         notes = good["result"]["data"].get("notes", []) if good else []
         print("No camera stop; evaluator notes:", [n for n in notes if "camera" in n])
-        return finish(out)
+        return report(out)
 
     chat(base, session, "Great, let's go.")
     arrival = None
@@ -54,7 +48,7 @@ def main():
     at_camera = ((state(arrival) or {}).get("current_checkpoint") or {}).get("checkpoint_id") == camera["checkpoint_id"]
     check("Reached the camera stop", at_camera)
     if not at_camera:
-        return finish(out)
+        return report(out)
     shot = chat(base, session, "I'm in position.")
     captures = [c for c in shot["tool_calls"] if c["name"] == "capture_camera_checkpoint"]
     captured = [c for c in captures if c["result"]["ok"]]
@@ -81,24 +75,7 @@ def main():
                   and c["result"]["ok"]]
     check("Destination: arrival recorded, then finished", "reach_destination" in operations and "finish_adventure" in operations)
     check("Finale: the saved photo is shown again", any(m and m in done["response"] for m in media))
-    return finish(out)
-
-
-def state(reply):
-    """The last get_adventure_state result in the reply, if the model called it."""
-    found = [c["result"]["data"] for c in reply["tool_calls"] if c["name"] == "get_adventure_state" and c["result"]["ok"]]
-    return found[-1] if found else None
-
-
-def finish(out):
-    width = max(len(name) for name, _ in results)
-    for name, ok in results:
-        print(f"{'PASS' if ok else 'FAIL'}  {name.ljust(width)}")
-    if out:
-        with open(out, "w") as f:
-            json.dump(transcript, f, indent=2)
-        print(f"transcript: {out}")
-    sys.exit(0 if all(ok for _, ok in results) else 1)
+    return report(out)
 
 
 if __name__ == "__main__":
