@@ -48,6 +48,7 @@ Latest changes/checks (September 30):
 - Reviewed and merged Kyle's #24 (cameras, depth, guiding, speed) and #26 (review fixes), and Codex's #23 (frontend).
 - #25 (Claude): `app.py` now keeps the results of a lookup round that finishes past the 240 s turn deadline; before, they were reported as "not run". Tests failed on the old code for each fix, and planted bugs in #24 and #26 were caught (11 of 12 in #24; the survivor was covered by #26).
 - Deployed: revision `scavagent-00024-ks8` from `f19af1f`. No model calls were made against the deployed agent.
+- Cleanup (`claude/redundancy-cleanup`): removed code, schema fields, and fixtures that nothing used; the optional planner/guide split (`SCAVAGENT_PLANNER_MODEL` is no longer read); the unused grid fallback in `scripts/camera_geometry.py`; and the pre-#3 pending-message migration in `index.html`. Codex reviewed each change as safe. With the network blocked, `uv run --frozen pytest -q` passed 419 and `node --test tests/frontend.test.cjs` passed 36. Kyle's files that changed are listed in [SHARED_FILE_EDITS.md](SHARED_FILE_EDITS.md).
 - Jan's decision (September 30): no AI-disclosure line on the page. This is an internal class project, and the course staff know it is an AI.
 
 ## Kyle workstream
