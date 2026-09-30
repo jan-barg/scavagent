@@ -19,7 +19,8 @@ from datetime import datetime, timedelta, timezone
 
 from acceptance_checks import chat, check, passing, ran_ok, results, transcript  # scripts/ is on sys.path
 
-PLAN = "I'm at West End Avenue and West 72nd Street. I have 45 minutes for a music history mystery."
+# An hour needs at least three stops, so something is still ahead when the user says 15 minutes are left.
+PLAN = "I'm at West End Avenue and West 72nd Street. I have an hour for a music history mystery."
 RESOLVING = ("complete_checkpoint", "skip_checkpoint", "block_checkpoint")
 
 
