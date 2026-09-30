@@ -191,7 +191,6 @@ class CameraCheckpoint(Record):
     landmark: str
     side_of_street: str
     positioning_instructions: str
-    reference_image_asset_id: Id | None = None
     reference_view_notes: str | None = None
     person_region: tuple[float, float, float, float] | None = Field(
         default=None, description="Normalized x0, y0, x1, y1 where a participant appears"
@@ -201,7 +200,6 @@ class CameraCheckpoint(Record):
     last_image_verified_at: AwareDatetime | None = None
     visibility_notes: str | None = None
     enabled: bool = False
-    fallback_checkpoint_id: Id | None = None
 
     @model_validator(mode="after")
     def _verification_is_dated(self):

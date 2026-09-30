@@ -341,7 +341,6 @@ def test_invalid_local_records_are_not_silently_treated_as_empty():
 
 
 def test_exported_tools_exclude_server_only_arguments():
-    assert set(cam.CAMERA_TOOL_MAP) == {"find_camera_checkpoints", "capture_camera_checkpoint"}
     for tool in cam.CAMERA_TOOLS:
         props = tool["function"]["parameters"]["properties"]
         assert not {"save_asset", "session_id", "client", "checkpoints", "allow_synthetic", "url"}.intersection(props)

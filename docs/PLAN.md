@@ -104,10 +104,10 @@ Each catalogue entry should contain:
 | `stand_location` | Latitude/longitude of a verified public pedestrian position |
 | `address`, `landmark`, `side_of_street` | Instructions that are usable despite GPS error |
 | `positioning_instructions` | Where to stand and which direction to face |
-| `reference_image`, `reference_view_notes` | Expected framing and recognizable landmarks |
+| `reference_view_notes` | Expected framing and recognizable landmarks |
 | `person_region` | Approximate area in the reference image where the participant appears; optional aid, not face identification |
 | `last_field_verified_at`, `visibility_notes` | Evidence of usability, lighting limitations, expected person size, occlusion risks |
-| `enabled`, `fallback_checkpoint_id` | Whether it can currently be offered, and an alternative |
+| `enabled` | Whether it can currently be offered |
 
 Calibration is a small fieldwork exercise: one teammate stands at a proposed location while the other checks the camera image; record an exact pedestrian landmark, example frame, and instructions. Camera catalogue coordinates alone are not enough. The previously checked Central Park West/86th Street feed establishes a potentially useful sidewalk view, but we have not yet calibrated a participant standing position there.
 

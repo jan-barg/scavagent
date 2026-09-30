@@ -120,7 +120,6 @@ def template(camera_id, candidate, method="field"):
         "verified_at": "",
         "verified_by": "",
         "evidence_stills": [],
-        "fallback_checkpoint_id": None,
     }
 
 
@@ -170,7 +169,6 @@ def build_entry(notes, mount=None, now=None, base_dir=ROOT):
             checkpoint_id=checkpoint_id, camera_id=notes["camera_id"], stand_location=stand, **fields,
             person_region=notes.get("person_region"), visibility_notes=(notes.get("visibility_notes") or "").strip() or None,
             verification_status=status, **{date_field: verified_at}, enabled=True,
-            fallback_checkpoint_id=notes.get("fallback_checkpoint_id"),
         )
     except ValueError as error:
         raise NotesError(f"Not a valid CameraCheckpoint: {error}") from None

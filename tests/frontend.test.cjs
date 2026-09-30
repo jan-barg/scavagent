@@ -15,7 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 class Element extends EventTarget {
   constructor(tag = "div") {
     super();
-    this.tagName = tag; this.children = []; this.value = ""; this.style = {};
+    this.tagName = tag; this.children = []; this.value = ""; this.readOnly = false; this.style = {};
     this.className = ""; this.scrollHeight = 44; this.listeners = {}; this._text = ""; this.textChanges = [];
     this.classList = {
       add: name => { this.className += " " + name; },
