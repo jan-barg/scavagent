@@ -26,6 +26,10 @@ DRAFT_FRESH = timedelta(minutes=10)  # an older draft's legs and times no longer
 UNUSED_MINUTES = 12  # a passing plan leaving this much of the user's time unused could add a stop
 # The user asked for a camera stop (grader query 2: "include a camera stop if one fits").
 CAMERA_WORDS = re.compile(r"\b(?:cameras?|webcams?|selfies?|photos? of (?:me|us|myself|ourselves))\b", re.I)
+# A mention these words turn down: "no camera stop", "skip the camera", "without photos of me", "I don't want a
+# camera". The reach ends at punctuation, so "No, include a camera stop" still asks for one.
+CAMERA_REFUSAL = re.compile(r"(?:\b(?:no|not|without|skip|skipping|avoid|avoiding|never|drop|forget)\b|n't)"
+                            r"(?:[^\S\n]+[\w']+){0,3}[^\S\n]*$", re.I)
 TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
 LOCATION_FRESH = timedelta(minutes=10)
 OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from where they are
@@ -60,7 +64,7 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
             plan, warnings = build_new_plan(draft, now, lookup)
             waived, words = [], _user_words(ctx, draft)
             context = {"stop_count_stated": "stop_count" in (draft.get("user_stated") or []),
-                       "user_text": words, "rejected_links": rejected, "camera_finder": _camera_finder(draft, words, dev)}
+                       "user_text": words, "rejected_links": rejected, "camera_finder": _camera_finder(draft, dev)}
         else:
             return tool_error("INVALID_ARGUMENT", f"Unknown kind {kind!r}.", retryable=False,
                               next_step="Use kind 'new', 'revision', or 'check'.")
@@ -234,12 +238,20 @@ def _evaluated(plan, now, lookup, dev, context):
     return plan.model_copy(update={"validation": evaluation.report}), evaluation
 
 
-def _camera_finder(draft, words, dev):
+def asks_for_camera(text):
+    """Whether the text asks for a camera stop: a camera mention that no "no", "skip", or "without" turns down."""
+    return any(not CAMERA_REFUSAL.search(text[max(0, match.start() - 60):match.start()])
+               for match in CAMERA_WORDS.finditer(text or ""))
+
+
+def _camera_finder(draft, dev):
     """When the user asked for a camera stop, a route search the evaluator runs itself if the plan has none.
 
     The model may skip find_camera_checkpoints and say no camera fits; this makes that claim checked.
-    Each route is searched once per evaluation (the plan is evaluated twice)."""
-    if "camera_stop" not in (draft.get("user_stated") or []) and not CAMERA_WORDS.search(words):
+    A request is "camera_stop" in user_stated, or the current request (user_request) asking for one.
+    Earlier messages don't count: a camera asked for in an earlier adventure is not a request for
+    this one. Each route is searched once per evaluation (the plan is evaluated twice)."""
+    if "camera_stop" not in (draft.get("user_stated") or []) and not asks_for_camera(str(draft.get("user_request") or "")):
         return None
     searched = {}
 

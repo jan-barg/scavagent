@@ -103,7 +103,7 @@ Latest changes/checks (September 29, night: cameras, story depth, guiding, speed
 
 - **Camera stops in planning (1):**
   - The camera session's edits to Kyle's files in #17 are sound.
-  - A requested camera stop is now enforced. When the user's words ask for a camera (or `"camera_stop"` is in `user_stated`) and the plan has none, `evaluate_adventure_plan` runs `find_camera_checkpoints` along the route itself. A verified position whose detour and photo fit the free time becomes `CAMERA_STOP_MISSING`, naming the id to add; anything else becomes a note for the reply.
+  - A requested camera stop is now enforced. When the current request asks for a camera (a mention that "no", "skip", or "without" doesn't turn down; earlier adventures don't count), or `"camera_stop"` is in `user_stated`, and the plan has none, `evaluate_adventure_plan` runs `find_camera_checkpoints` along the route itself. A verified position whose detour and photo fit the free time becomes `CAMERA_STOP_MISSING`, naming the id to add; anything else becomes a note for the reply.
   - `get_next_directions` to a camera stop carries the spot's instructions and verification status. The planning turn has scrolled away by then, and `get_adventure_state` shows only the id.
   - Grader query 2 with a real camera: see `scripts/camera_checks.py` below.
 - **Deeper stories (2):**

@@ -21,7 +21,7 @@ Scavagent was built by Jan (`jgb2170`) and Kyle (`kc3936`). Each directed coding
 
 - **Original tool: `find_camera_checkpoints` and `capture_camera_checkpoint`** (`integrations/cameras.py`).
   - These find NYC DOT traffic-camera views at pedestrian standing positions, never the camera's mounting point.
-  - The positions come from a calibration workbench, where Jan approved 147 image-verified spots.
+  - The positions come from a calibration workbench, where Jan approved 151 image-verified spots on 102 cameras.
   - The capture tool saves the live still as a souvenir, at most once per message, and shows it again in the finale.
 - **App and harness** (`app.py`): the `/chat` loop and trace, retries, the final answer after the last tool round, and model selection (Claude Sonnet 5.5 through Anthropic, with a Gemini fallback and prompt caching). Also the model comparison ([MODEL_COMPARISON.md](MODEL_COMPARISON.md)).
 - **Progress and storage** (`state.py`, `tools.py`): durable sessions (SQLite locally, Firestore and Cloud Storage deployed), the progress operations and their guards (plan order, arrival at the destination), photos, and history.

@@ -675,6 +675,38 @@ def test_a_camera_too_far_for_the_free_time_is_a_note_not_a_violation(camera_fin
     assert any("does not fit the time" in note for note in result["data"]["notes"])
 
 
+@pytest.mark.parametrize("words", [
+    "I'm at Central Park West and West 86th. No camera stop please.",
+    "Skip the camera this time.",
+    "A walk without photos of me, please.",
+    "I don't want a camera stop.",
+])
+def test_a_camera_the_user_turns_down_is_not_searched_for(camera_finder, words):
+    # Jan's review: each of these matched the camera words and would have demanded a camera.
+    camera_finder["answer"] = camera_search(("test_cam", 120))
+    result = evaluate(session(), draft(user_request=words), 5, 9)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    assert camera_finder["routes"] == []
+
+
+def test_a_camera_asked_for_in_an_earlier_adventure_does_not_carry_over(camera_finder):
+    camera_finder["answer"] = camera_search(("test_cam", 120))
+    ctx = session()
+    ctx.record.messages = [{"role": "user", "content": ASKED_FOR_A_CAMERA}, {"role": "assistant", "content": "Done."}]
+
+    result = evaluate(ctx, draft(user_request="New adventure from here, please. A spy theme."), 5, 9)
+
+    assert result["data"]["passes"] and camera_finder["routes"] == []
+
+
+def test_asking_for_a_camera_is_told_from_turning_one_down():
+    assert agent_tools.asks_for_camera("Walking only, architecture theme, and include a camera stop if one fits.")
+    assert agent_tools.asks_for_camera("No, include a camera stop after all.")
+    assert not agent_tools.asks_for_camera("Not interested in a camera stop.")
+    assert not agent_tools.asks_for_camera("")
+
+
 def test_the_search_runs_only_for_a_camera_request_and_a_plan_without_one(camera_finder, verified_camera):
     camera_finder["answer"] = camera_search(("test_cam", 120))
     unasked = evaluate(session(), draft(), 5, 9)

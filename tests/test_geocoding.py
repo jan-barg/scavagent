@@ -1,4 +1,5 @@
 import re
+import threading
 import time
 
 import pytest
@@ -106,6 +107,35 @@ def test_a_slow_overpass_server_is_raced_by_the_mirror(monkeypatch):
 
     assert result["ok"] and result["data"]["provider_ref"] == "osm:node/7"
     assert time.monotonic() - started < 0.5  # the mirror's answer, not the slow server's
+
+
+def test_concurrent_nominatim_lookups_stay_a_second_apart(monkeypatch):
+    # Geocodes asked for in one round run at once (app.lookups_at_once), and Nominatim blocks clients
+    # that send more than one request per second: the lock is what keeps them apart.
+    starts = []
+
+    def fake_fetch(provider, method, url, **kwargs):
+        starts.append(time.monotonic())
+        return []
+
+    monkeypatch.setattr(geocoding, "fetch_json", fake_fetch)
+    # A slow clock widens the race: without the lock both threads read the same last-call time and go together.
+    clock = time.monotonic
+    monkeypatch.setattr(geocoding.time, "monotonic", lambda: (time.sleep(0.05), clock())[1])
+    together = threading.Barrier(2)
+
+    def look_up(name):
+        together.wait()
+        geocoding._named_place(name)
+
+    threads = [threading.Thread(target=look_up, args=(name,)) for name in ("The Apthorp", "The Ansonia")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(starts) == 2
+    assert abs(starts[1] - starts[0]) >= 0.99
 
 
 def test_every_provider_down_is_a_retryable_upstream_error():
