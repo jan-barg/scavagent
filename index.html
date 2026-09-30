@@ -107,7 +107,7 @@ function readPending() {
     const value = JSON.parse(readStored(PENDING_KEY));
     if (value && typeof value.message === "string" && value.message.length <= 8000 &&
         typeof value.client_message_id === "string" && /^[0-9a-f-]{36}$/i.test(value.client_message_id) &&
-        (value.session_id === null || value.session_id === sessionId)) return value;
+        typeof value.session_id === "string" && value.session_id === sessionId) return value;
   } catch { /* Ignore corrupt or unavailable browser storage. */ }
   return null;
 }
@@ -300,9 +300,8 @@ async function send(event) {
     sessionId = uuid();
     store(SESSION_KEY, sessionId);
   }
-  if (!pending || pending.session_id === null) {
-    // Upgrade older pending messages without changing their text or request ID.
-    pending = pending ? { ...pending, session_id:sessionId } : { message:text, session_id:sessionId, client_message_id:uuid() };
+  if (!pending) {
+    pending = { message:text, session_id:sessionId, client_message_id:uuid() };
     store(PENDING_KEY, JSON.stringify(pending));
   }
   busy = true; input.value = ""; refreshControls();

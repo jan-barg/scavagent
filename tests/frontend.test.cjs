@@ -200,26 +200,6 @@ test("409 keeps the pending turn for an automatic retry with a refreshed locatio
   assert(!h.storage.has(PENDING));
 });
 
-for (const existingSession of [null, "existing-session"]) {
-  test("legacy null-session pending message migrates with " + (existingSession ? "an existing session" : "a new session"), async () => {
-    const initial = { [PENDING]: JSON.stringify({ message: "ready", session_id: null, client_message_id: MESSAGE_ID }) };
-    if (existingSession) initial[SESSION] = existingSession;
-    const h = harness(initial, [...(existingSession ? [restored(existingSession)] : []), new Error("Response lost")]);
-    await settled();
-    // Reload while the automatically migrated message is awaiting its reply.
-    const sent = posted(h)[0];
-    if (existingSession) assert.equal(sent.session_id, existingSession);
-    else assert.match(sent.session_id, UUID);
-    assert.equal(sent.client_message_id, MESSAGE_ID);
-    assert.equal(sent.message, "ready");
-    assert.equal(h.storage.get(SESSION), sent.session_id);
-    assert.equal(JSON.parse(h.storage.get(PENDING)).session_id, sent.session_id);
-    const reload = harness(Object.fromEntries(h.storage), [restored(sent.session_id), answer]);
-    await settled();
-    assert.deepEqual(posted(reload)[0], sent);
-  });
-}
-
 test("a reply for another session is not rendered or adopted and leaves the same turn retryable", async () => {
   const h = harness({}, [response({ response: "Other session data", session_id: "other-session", tool_calls: [] }), answer]);
   h.elements.message.value = "ready";

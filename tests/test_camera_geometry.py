@@ -113,19 +113,8 @@ def test_camera_name_suffixes_are_ignored():
     assert geo.camera_streets("Rockefeller Plz @ 48 St (between 5 Ave and 6 Ave)") == ["rockefeller plaza", "48th street"]
 
 
-def test_the_grid_fallback_places_spots_like_the_mapped_grid():
-    center, (avenue, street) = geo.grid_streets("Broadway @ 46 St", CENTER)
-    assert center == CENTER and geo.on_grid([avenue, street])
-    pin = geo.locate(center, street, avenue, "north", "east", 30)
-    assert geo.describe(center, [avenue, street], pin)["side_of_street"] == "north side of 46th Street, about 30 m east of Broadway"
-    with pytest.raises(ValueError, match="not an avenue meeting"):
-        geo.grid_streets("E 63 St @ QBB", CENTER)
-
-
 def test_a_three_street_camera_name_is_not_turned_into_one_invented_street():
     assert geo.camera_streets("Broadway @ 6 Ave / 33 St") is None
-    with pytest.raises(ValueError, match="Cannot read two streets"):
-        geo.grid_streets("Broadway @ 6 Ave / 33 St", CENTER)
 
 
 def test_a_spot_on_a_wide_avenues_sidewalk_is_described_on_the_avenue():

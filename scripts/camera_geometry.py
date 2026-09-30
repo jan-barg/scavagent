@@ -176,33 +176,6 @@ def intersection_streets(camera_name, mount: LatLng, radius_m=250, urls=None):
     return center, streets
 
 
-AVENUE_WORDS = re.compile(  # Manhattan's north-south grid avenues, not any name the parser guessed "avenue" for
-    r"^(\d+(st|nd|rd|th) avenue|avenue of the americas|park avenue( south)?|lexington avenue|madison avenue|"
-    r"amsterdam avenue|columbus avenue|york avenue|west end avenue|broadway|central park west|rockefeller plaza|"
-    r"lenox avenue|malcolm x boulevard|adam clayton powell jr boulevard|frederick douglass boulevard|"
-    r"st nicholas avenue|saint nicholas avenue|manhattan avenue|convent avenue|edgecombe avenue)$", re.IGNORECASE)
-NUMBERED_STREET = re.compile(r"^((east|west) )?\d+(st|nd|rd|th) street$|^central park south$", re.IGNORECASE)
-
-
-def grid_streets(camera_name, mount: LatLng):
-    """Fallback when OpenStreetMap has no shared node: the regular grid around the camera's listed position.
-
-    Only for an avenue meeting a numbered street. The pins it gives are approximate (the listed position is
-    not the intersection's center), so callers must say so.
-    """
-    names = camera_streets(camera_name)
-    if not names:
-        raise ValueError(f"Cannot read two streets from {camera_name!r}")
-    display = [geocoding._display(n) for n in names]
-    kinds = ["avenue" if AVENUE_WORDS.search(n) else "street" if NUMBERED_STREET.search(n) else None for n in display]
-    if sorted(k or "" for k in kinds) != ["avenue", "street"]:
-        raise ValueError(f"{camera_name!r} is not an avenue meeting a numbered street")
-    g = math.radians(GRID_DEG)
-    along = {"avenue": (math.sin(g), math.cos(g)), "street": (math.cos(g), -math.sin(g))}
-    sidewalk = {"avenue": 12.0, "street": 8.0}
-    return mount, [Street(d, along[k], sidewalk[k]) for d, k in zip(display, kinds)]
-
-
 def _named(tags, pattern):
     """Whether a way's name, or one of its alternate names, matches the street pattern."""
     names = [tags.get("name", "")] + [n.strip() for tag in ALT_NAME_TAGS for n in tags.get(tag, "").split(";")]
