@@ -7,9 +7,9 @@ A chat agent that turns a walk through New York City into a short mystery advent
 - writes a story whose clues you earn at each stop;
 - guides you stop by stop in chat.
 
-At verified viewpoints it can save an NYC DOT traffic-camera still of you as a souvenir. Built by Jan and Kyle for a Columbia agents course (October 2026).
+At verified viewpoints it can save an NYC DOT traffic-camera still of you as a souvenir. Built by Jan Barganowski and Kyle Coletta for a Columbia agents course (October 2026).
 
-**Try it:** https://scavagent-b57mvtutma-ue.a.run.app. The site deploys from `main` through Cloud Run continuous deployment.
+**Try it:** https://scavagent-b57mvtutma-ue.a.run.app. It runs Claude Sonnet 5.5, and the site deploys from `main` through Cloud Run continuous deployment.
 
 ## How to use it
 
@@ -24,7 +24,7 @@ At verified viewpoints it can save an NYC DOT traffic-camera still of you as a s
 2. "I'm at Central Park West and West 86th Street. I have 45 minutes, need to finish at West 72nd Street and Broadway, and must pass West 81st Street and Columbus Avenue. Walking only, architecture theme, and include a camera stop if one fits."
 3. A follow-up once an adventure is under way (for example after query 2, "ready", and reaching the first stop): "Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination."
 
-Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at standing spots a person has approved: 147 in Manhattan (Upper East/West Side and Midtown), each matched on the live camera image and map imagery rather than tested in person, which Scavagent tells the user while offering a retake. In query 2 the camera stop is the viewpoint at Broadway and West 72nd Street, next to the finish; where no spot fits, Scavagent says so. `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
+Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at standing spots a person has approved: 151 in Manhattan (Upper East/West Side and Midtown), each matched on the live camera image and map imagery rather than tested in person, which Scavagent tells the user while offering a retake. In query 2 the camera stop is the viewpoint at Broadway and West 72nd Street, next to the finish; where no spot fits, Scavagent says so. `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
 
 ## Tools
 
@@ -43,13 +43,17 @@ Full descriptions, sources, and configuration are in [docs/TOOLS.md](docs/TOOLS.
 
 ## Run locally
 
-Use Python 3.10 or later and `uv`. Model calls go through Vertex AI with Google Application Default Credentials and the project `agentic-ai-msds` (see [docs/DEPLOY.md](docs/DEPLOY.md)). The model is set by `SCAVAGENT_MODEL`: Gemini 3.5 Flash-Lite today, with a Claude and open-model comparison in progress.
+Use Python 3.10 or later and `uv`. The model is set by `SCAVAGENT_MODEL`.
+- **The deployed site** runs Claude Sonnet 5.5 through Anthropic's API (`anthropic/claude-sonnet-5-5`). If Claude can't answer, Gemini 3.5 Flash-Lite on Vertex AI answers instead. Why Sonnet: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
+- **Locally**, the default is Gemini 3.5 Flash-Lite on Vertex AI. It uses Google Application Default Credentials and the project `agentic-ai-msds` (see [docs/DEPLOY.md](docs/DEPLOY.md)).
 
 ```sh
 uv sync
 gcloud auth application-default login
 uv run app.py
 ```
+
+To run the deployed model locally, export `SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5` and your `ANTHROPIC_API_KEY` before `uv run app.py`.
 
 Open http://localhost:8000. Sessions persist in `.data/scavagent.db`, so a conversation and its progress survive a restart. Other settings are in [.env.example](.env.example). For a synthetic test adventure, start with `SCAVAGENT_DEV_FIXTURES=1 uv run app.py` and ask for "the constrained_route test adventure"; its places and clues are invented and labeled as such.
 

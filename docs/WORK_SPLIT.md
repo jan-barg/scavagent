@@ -1,6 +1,6 @@
 # Work split and development phases
 
-Team: Jan and Kyle. Due October 7, 2026. This is the working allocation; the humans can reassign it. Product details are in [PLAN.md](PLAN.md), shared interfaces in [CONTRACTS.md](CONTRACTS.md), and actual progress in [STATUS.md](STATUS.md).
+Team: Jan Barganowski and Kyle Coletta. Due October 7, 2026. This is the working allocation; the humans can reassign it. Product details are in [PLAN.md](PLAN.md), shared interfaces in [CONTRACTS.md](CONTRACTS.md), and actual progress in [STATUS.md](STATUS.md).
 
 
 ### Ownership

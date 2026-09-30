@@ -1,6 +1,6 @@
 # Scavagent — product and implementation proposal
 
-September 28, 2026. Team: Jan and Kyle. Due: October 7, 2026.
+September 28, 2026. Team: Jan Barganowski and Kyle Coletta. Due: October 7, 2026.
 
 The overall design has been accepted for planning; the ownership and phases below are proposed working assignments. This is not an implemented application or a promise that every integration is ready. It incorporates the updated assignment and supersedes conflicting assumptions in the earlier product notes. Model choice remains deferred; Jev is excluded. Spotify soundtracks are an optional final addition after the core adventure works and has been tested.
 
