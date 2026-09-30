@@ -657,29 +657,39 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         if activity.type == "chat_puzzle" and activity.solution and beat.clue and _within(activity.solution, beat.clue):
             solved[beat.beat_id] = position(beat)
             named.append((position(beat), {_object_kind(m.group(0)) for m in _EARNED_OBJECT.finditer(beat.clue)}))
-    texts = [(f"{b.beat_id} ({b.checkpoint_id or 'chat'})", b, position(b), f"{b.summary} {b.reveals or ''} {b.clue or ''}")
+    texts = [(f"{b.beat_id} ({b.checkpoint_id or 'chat'})'s", b, position(b),
+              (("summary", b.summary), ("reveals", b.reveals or ""), ("clue", b.clue or "")))
              for b in (story.beats if whole else new_beats)]
-    if whole:
-        texts.append(("The solution", finale, end, story.solution))  # it resolves what the finale builds on
-    for label, beat, at, text in texts:
-        built = beat is not None and (beat.beat_id in solved or any(solved.get(ref, end + 1) <= at for ref in beat.uses))
-        for found in _EARNED_OBJECT.finditer(text):
-            if not built and not any(p <= at and _object_kind(found.group(0)) in kinds for p, kinds in named):
-                # Most often the puzzles are there but lack their answer: name them.
-                sources = [beats[ref] for ref in (beat.uses if beat is not None else []) if ref in beats]
-                if beat is not None and beat.checkpoint_id in order:
-                    sources.append(beat)
-                unsolved = [b.checkpoint_id for b in sources if b.checkpoint_id in by_id
-                            and by_id[b.checkpoint_id].activity.type == "chat_puzzle" and b.beat_id not in solved]
-                each = "each " if len(unsolved) > 1 else ""
-                fix = (f"Give {' and '.join(unsolved)} {each}its puzzle's exact answer as activity.solution, and state "
-                       "that answer in the stop's clue." if unsolved else
-                       "List in its uses the stops whose chat_puzzle answers make it up (each with activity.solution, "
-                       "stated in its beat's clue), or leave it out.")
-                flag("OBJECT_UNEARNED", f"{label} mentions \"{found.group(0)}\", but it builds on no puzzle the user "
-                                        f"solves. {fix}",
-                     beat.checkpoint_id if beat is not None and label != "The solution" else None)
-                break
+    if whole:  # the story's solution resolves what the finale builds on
+        texts.append(("The story's", finale, end, (("solution", story.solution),)))
+    any_puzzle = any(c.activity.type == "chat_puzzle" for c in plan.checkpoints)
+    for label, beat, at, parts in texts:
+        if beat is not None and (beat.beat_id in solved or any(solved.get(ref, end + 1) <= at for ref in beat.uses)):
+            continue  # built on an earned clue
+        found = next(((field, match, text) for field, text in parts for match in _EARNED_OBJECT.finditer(text)
+                      if not any(p <= at and _object_kind(match.group(0)) in kinds for p, kinds in named)), None)
+        if found is None:
+            continue
+        field, match, text = found
+        # Most often the puzzles are there but lack their answer: name them. With no puzzle, say so.
+        sources = [beats[ref] for ref in (beat.uses if beat is not None else []) if ref in beats]
+        if beat is not None and beat.checkpoint_id in order:
+            sources.append(beat)
+        unsolved = [b.checkpoint_id for b in sources if b.checkpoint_id in by_id
+                    and by_id[b.checkpoint_id].activity.type == "chat_puzzle" and b.beat_id not in solved]
+        each = "each " if len(unsolved) > 1 else ""
+        if not any_puzzle:
+            fix = ("No stop in this plan is a chat_puzzle, so nothing can earn it: take the word out of that text, or "
+                   "make a stop a chat_puzzle whose activity.solution is the code and whose clue states it.")
+        elif unsolved:
+            fix = (f"Give {' and '.join(unsolved)} {each}its puzzle's exact answer as activity.solution, and state that "
+                   "answer in the stop's clue.")
+        else:
+            fix = ("List in its uses the stops whose chat_puzzle answers make it up (each with activity.solution, stated "
+                   "in its beat's clue), or take the word out of that text.")
+        flag("OBJECT_UNEARNED", f"{label} {field} mentions \"{match.group(0)}\" (\"{_around(text, match)}\"), but it "
+                                f"builds on no puzzle the user solves. {fix}",
+             beat.checkpoint_id if beat is not None and field != "solution" else None)
 
     # --- The theme, through each stop's own sourced claims ---
     if request.theme and "theme" not in request.defaulted_fields:
@@ -785,6 +795,12 @@ def _named_people(texts, source):
 def _object_kind(text):
     lowered = text.lower()
     return next(kind for kind in ("pass", "combination", "coordinate", "key", "code") if kind in lowered)
+
+
+def _around(text, match, width=50):
+    """The words around a match, to quote in a message."""
+    start, end = max(0, match.start() - width), min(len(text), match.end() + width)
+    return ("…" if start else "") + text[start:end].strip() + ("…" if end < len(text) else "")
 
 
 def _within(part, text):

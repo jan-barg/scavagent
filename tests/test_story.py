@@ -257,6 +257,22 @@ def test_a_code_must_come_from_a_solved_puzzle():
     assert "Give stop_1 and stop_2 each its puzzle's exact answer as activity.solution" in messages(unsolved)
 
 
+def test_with_no_puzzle_at_all_the_message_quotes_the_text_to_change():
+    # A live Flash-Lite draft (camera stop and observation) kept "The code to secure the stolen blueprints" in its
+    # finale for ten drafts: no puzzle could earn it, and the message did not say which text held the word.
+    def no_puzzles(d):
+        for stop in d["stops"]:
+            stop["activity"] = {"type": "user_observation", "prompt": "Describe the facade.",
+                                "answer_rule": "Any honest description.", "fallback": "Continue."}
+        d["chat_beats"][0]["reveals"] = "The code to secure the stolen reel."
+
+    result = evaluate(changed(no_puzzles), 5, 6)
+
+    assert codes(result) == ["OBJECT_UNEARNED"]
+    assert "reveals mentions \"code\" (\"The code to secure the stolen reel.\")" in messages(result)
+    assert "No stop in this plan is a chat_puzzle" in messages(result)
+
+
 def test_ordinary_senses_of_code_and_key_are_not_objects():
     def ordinary(d):
         d["stops"][0]["beat"]["summary"] = "Mara: \"A combination of luck and Morse code. That's the key to the mystery.\""
