@@ -57,7 +57,7 @@ Checks: `uv run pytest` (runs without network access) and `node --test tests/fro
 
 ## Project docs
 
-- Status and who owns what: [docs/STATUS.md](docs/STATUS.md), [docs/WORK_SPLIT.md](docs/WORK_SPLIT.md).
+- Status and who owns what: [docs/STATUS.md](docs/STATUS.md), [docs/WORK_SPLIT.md](docs/WORK_SPLIT.md), and who built what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
 - Design: [docs/PLAN.md](docs/PLAN.md), [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md), [docs/CONTRACTS.md](docs/CONTRACTS.md).
 - Deployment: [docs/DEPLOY.md](docs/DEPLOY.md). Course requirements: [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md).
 - Coding-agent instructions: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md). The [original starter README](docs/STARTER_README.md) is kept for provenance.
