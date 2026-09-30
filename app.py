@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from time import monotonic, sleep
@@ -17,7 +18,7 @@ import state
 from schemas import NYC_TIMEZONE, ChatRequest, ChatResponse, tool_error
 from state import SessionRecord, ToolContext, VersionConflict
 from agent import SYSTEM_PROMPT
-from tools import TOOLS, run_tool
+from tools import SESSION_TOOLS, TOOL_MAP, TOOLS, run_tool
 
 # --- Config ---
 
@@ -121,6 +122,7 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
             return reply.content or "I didn't get an answer from the model. Please send that again."
 
         # The harness, not the model, runs each tool and appends the result
+        early = lookups_at_once(reply.tool_calls) if monotonic() < deadline else {}
         for i, call in enumerate(reply.tool_calls):
             try:
                 args = json.loads(call.function.arguments or "{}")
@@ -138,7 +140,7 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
                     next_step="Tell the user it took too long and to send the message again.",
                 )
             elif isinstance(args, dict):
-                result = run_tool(call.function.name, args, ctx)
+                result = early[i] if i in early else run_tool(call.function.name, args, ctx)
             else:
                 result = tool_error(
                     "INVALID_ARGUMENT",
@@ -159,6 +161,30 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
         messages += [{"role": "assistant", "content": reply.content}]  # Any tool call it still made is dropped
         return reply.content
     return "Sorry, I hit my tool-call limit before finishing."
+
+
+def lookups_at_once(calls) -> dict[int, dict]:
+    """Results by position for a round made only of lookups, run concurrently; {} for any other round.
+
+    Lookups (every tool but the session tools) read public sources and never the session, so a
+    round of them can run at once: three research_place calls took 16 s one after another (Kyle,
+    September 29). A round with a session tool keeps running in order, one call at a time."""
+    jobs = {}
+    for i, call in enumerate(calls):
+        name = call.function.name
+        if name not in TOOL_MAP or name in SESSION_TOOLS:
+            return {}
+        try:
+            args = json.loads(call.function.arguments or "{}")
+        except json.JSONDecodeError:
+            continue  # the loop reports it
+        if isinstance(args, dict):
+            jobs[i] = (name, args)
+    if len(jobs) < 2:
+        return {}
+    with ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="lookup") as pool:
+        futures = {i: pool.submit(run_tool, name, args) for i, (name, args) in jobs.items()}
+    return {i: future.result() for i, future in futures.items()}
 
 
 def complete(messages: list[dict], deadline: float, tool_choice: str | None = None, model: str | None = None):
