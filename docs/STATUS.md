@@ -50,6 +50,7 @@ Latest changes/checks (September 30):
 - Deployed: revision `scavagent-00024-ks8` from `f19af1f`. No model calls were made against the deployed agent.
 - Kyle's #28 (double negatives ask for a camera; his STATUS section) was reviewed and merged.
 - Cleanup (#29, reviewed by Claude and merged, deployed as `scavagent-00027-mrj`): removed code, schema fields, and fixtures that nothing used; the optional planner/guide split (`SCAVAGENT_PLANNER_MODEL` is no longer read); the unused grid fallback in `scripts/camera_geometry.py`; and the pre-#3 pending-message migration in `index.html`. Codex reviewed each change as safe. With the network blocked, `uv run --frozen pytest -q` passed 419 and `node --test tests/frontend.test.cjs` passed 36. Kyle's files that changed are listed in [SHARED_FILE_EDITS.md](SHARED_FILE_EDITS.md).
+- Skipping before the start (#32, Jan's live run `cc521363`): the user cut a 3-stop plan to its last stop before starting, the model started and skipped two stops, and the story arrived as a bare catch-up with an unintroduced character. `update_adventure_state` now refuses `skip_checkpoint` while the adventure is proposed, or started in the same message with nothing done yet (that start is undone), and tells the model to re-plan with kind "new". Kyle's prompt and evaluator follow-ups are in issue #32.
 - Jan's decision (September 30): no AI-disclosure line on the page. This is an internal class project, and the course staff know it is an AI.
 
 ## Kyle workstream

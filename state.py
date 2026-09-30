@@ -448,6 +448,7 @@ class ToolContext:
     store: Store
     now: Callable[[], datetime] = field(default=utc_now)
     message_id: str | None = None  # The client_message_id this turn answers, when the client sent one
+    started_adventure: bool = False  # This message started the adventure (see skip_before_start)
 
     def saved_capture(self, checkpoint_id: str) -> PhotoAsset | None:
         """The photo already taken at this camera checkpoint while answering this same message, if any."""
@@ -730,7 +731,35 @@ def set_status(ctx: ToolContext, status: str, *, expected_version: int | None = 
         if status in ("completed", "abandoned"):
             update["current_checkpoint_id"] = None
         state = _commit(ctx, state.model_copy(update=update))
+        ctx.started_adventure = ctx.started_adventure or status == "active"
     return tool_ok({"status": state.status, "state_version": state.version})
+
+
+def skip_before_start(ctx: ToolContext) -> dict | None:
+    """Refuse a skip before the user has begun: dropping stops then calls for a new plan, not skips.
+
+    A skip keeps the story written for every stop, so the skipped stops' setup reaches the user as a bare catch-up
+    and a character they introduced speaks unannounced (Jan's live run, September 30: "can only do Tom's", said
+    before starting). An adventure started in this same message with nothing done yet goes back to proposed, since
+    save_adventure_plan takes a new plan only when no adventure is under way."""
+    adventure = ctx.record.adventure
+    untouched = not (adventure.completed_ids or adventure.skipped_ids or adventure.blocked_ids
+                     or adventure.revealed_beat_ids or adventure.destination_reached_at)
+    just_started = adventure.status == "active" and ctx.started_adventure and untouched
+    if adventure.status != "proposed" and not just_started:
+        return None
+    if just_started:
+        _commit(ctx, adventure.model_copy(update={"status": "proposed"}))
+    return tool_error(
+        "INVALID_ARGUMENT",
+        "Not skipped: the user changed the stops before starting, and skipping would keep a story written for "
+        "stops they won't visit. The adventure is not started.",
+        retryable=False,
+        next_step='Re-plan for the stops they will visit: evaluate_adventure_plan with kind "new" (put "stop_count" in '
+                  "user_stated if they named the stops or how many), with a story whose first stop makes the handler's "
+                  "first contact and introduces each character where they first appear. Save it, present the new "
+                  "briefing, and start only when they say they are ready.",
+    )
 
 
 def reach_destination(ctx: ToolContext, *, expected_version: int | None = None) -> dict:
