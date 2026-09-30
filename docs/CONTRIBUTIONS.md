@@ -1,6 +1,6 @@
 # Who built what
 
-Scavagent was built by Jan (`jgb2170`) and Kyle (`kc3936`). Each directed coding agents: Kyle worked with Claude Code, and Jan with Claude and Codex. Each owns one original tool, reviewed the other's pull requests before they merged, and can explain the other's design. The planned split is in [WORK_SPLIT.md](WORK_SPLIT.md), and edits either person made to the other's files are logged in [SHARED_FILE_EDITS.md](SHARED_FILE_EDITS.md).
+Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`). Each directed coding agents: Kyle worked with Claude Code, and Jan with Claude and Codex. Each owns one original tool, reviewed the other's pull requests before they merged, and can explain the other's design. The planned split is in [WORK_SPLIT.md](WORK_SPLIT.md), and edits either person made to the other's files are logged in [SHARED_FILE_EDITS.md](SHARED_FILE_EDITS.md).
 
 ## Kyle: planning, research, and the plan evaluator
 

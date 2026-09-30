@@ -204,3 +204,7 @@ Why `76c6103`: in local live runs of query 2 with a camera position 5 m from the
   ```
 
 No other file of Jan's changed. `adventure/`, `agent.py`, `scripts/`, `tests/test_planning_tools.py`, `tests/test_story.py`, and `docs/TOOLS.md` are Kyle's; `docs/CONTRIBUTIONS.md` is new (Jan: please check your half).
+
+## Full names (branch `claude/status-readme`, from `main` at `f19af1f`)
+
+- `docs/CONTRIBUTIONS.md` (Kyle's), first sentence only: Jan asked for full names. Original: "Scavagent was built by Jan (`jgb2170`) and Kyle (`kc3936`)." Now: "Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`)." The same change was made to the team lines of the shared `docs/PLAN.md` and `docs/WORK_SPLIT.md`.
