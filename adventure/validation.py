@@ -57,6 +57,9 @@ MIN_CONTINGENCY_MINUTES = 2
 CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of travel and dwell in reserve
 MIN_BRIEFING_CHARS = 200  # about three sentences
 ROOM_FOR_A_STOP_MINUTES = 10  # unused minutes that would fit one more short stop
+STOPS_FOR_MINUTES = ((100, 4), (60, 3), (20, 2))  # a limit the user gives of at least this long: at least this many
+# A clue that is only a number ("22", "1897-1929") is arithmetic, not something the story needs.
+_BARE_NUMBER = re.compile(r"[\d\s.,:;#/+\-=()x×*]+")
 WALK_M_PER_MINUTE = 80  # about 4.8 km/h, for estimating a detour to a camera position
 CAMERA_DWELL_MINUTES = 3
 
@@ -609,9 +612,15 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
     # --- Clues ---
     for beat in stop_beats if whole else new_stop_beats:
         if not (beat.clue or "").strip():
-            flag("CLUE_MISSING", f"{beat.checkpoint_id}'s beat gives the user no clue. Give it a clue: a number, word, "
-                                 "name, or direction they earn there (a chat_puzzle's solution works best), for a later "
-                                 "beat or the finale to use.", beat.checkpoint_id)
+            flag("CLUE_MISSING", f"{beat.checkpoint_id}'s beat gives the user no clue. Give it a clue the story needs: a "
+                                 "name, an alibi, a place, or a time they earn there (a chat_puzzle's solution works "
+                                 "best), for a later beat or the finale to use.", beat.checkpoint_id)
+        elif _BARE_NUMBER.fullmatch(beat.clue.strip()):
+            flag("CLUE_BARE_NUMBER", f"{beat.checkpoint_id}'s clue is only a number (\"{beat.clue.strip()}\"). Make it "
+                                     "something the story needs, stated in words: a name (\"the thief signs as Roxy\"), "
+                                     "an alibi (\"the courier was on stage at 8\"), a place (\"the reel moved to the "
+                                     "Pythian's old studio\"), or a number as what it is (\"locker 1021\"), not digits "
+                                     "to add up.", beat.checkpoint_id)
     for beat in story.beats if whole else new_beats:
         for ref in beat.uses:
             source = beats.get(ref)
@@ -696,7 +705,7 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         # Only a limit the user gave can leave no room for more; a budget the planner chose is not a reason.
         limited = ((request.duration_minutes and "duration_minutes" not in request.defaulted_fields)
                    or (request.deadline and "deadline" not in request.defaulted_fields))
-        needed = 2 if not limited else 3 if available >= 60 else 2 if available >= 20 else 1
+        needed = 2 if not limited else next((n for minutes, n in STOPS_FOR_MINUTES if available >= minutes), 1)
         room = not limited or slack is None or slack >= ROOM_FOR_A_STOP_MINUTES
         if len(plan.checkpoints) < needed and room:
             if limited:

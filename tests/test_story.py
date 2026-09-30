@@ -338,6 +338,24 @@ def test_enough_stops_for_the_time():
     assert evaluate(short, 11)["data"]["passes"]  # an 11-minute walk there leaves no room for another stop
 
 
+def test_two_hours_needs_four_stops():
+    # A two-hour Strokes run on Sonnet had two stops, "thinner than Opus" (docs/MODEL_COMPARISON.md).
+    two_hours = changed(lambda d: d.update(duration_minutes=120, contingency_minutes=3))
+
+    result = evaluate(two_hours, 5, 6)
+
+    assert codes(result) == ["TOO_FEW_STOPS"]
+    assert "2 stop(s) for 120 available minutes" in messages(result) and "at least 4" in messages(result)
+
+
+def test_a_clue_that_is_only_a_number_fails():
+    # Live clues like "22" and "1908" were arithmetic, not something the story needed.
+    for clue in ("22", "1897-1929", " 1021 "):
+        result = evaluate(changed(lambda d: d["stops"][0]["beat"].update(clue=clue)), 5, 6)
+        assert codes(result) == ["CLUE_BARE_NUMBER"], clue
+    assert evaluate(changed(lambda d: d["stops"][0]["beat"].update(clue="locker 1021")), 5, 6)["data"]["passes"]
+
+
 def test_a_time_budget_the_user_never_gave_does_not_excuse_one_stop():
     # A live run gave "a 1960s spy adventure" a 25-minute budget of its own and filled it with one far stop.
     def self_imposed(d):

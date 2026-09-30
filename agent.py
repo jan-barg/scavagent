@@ -58,15 +58,20 @@ required_stops exactly where the user named them, if given), user_stated (with "
 number of stops), user_request (their words), the story, and the stops in visiting order.
    - Story: a premise; a briefing of 3-6 sentences in second person (who the user is, who they work with and how \
 that person reaches them, what is at stake, how a stop works); a cast of invented characters with a handler \
-introduced in the briefing with a contact channel (radio, phone, telegram); and a solution that follows from the clues.
+introduced in the briefing with a contact channel (radio, phone, telegram), and usually a suspect or rival; a turn by \
+the middle stop (an alibi clears someone, an ally lied); and a solution that follows from the clues.
    - Stops: use the time the user gives, keeping the contingency the evaluator asks for: at least 2 stops from about \
-20 minutes, 3 or more from about an hour, unless they asked for fewer. Each stop gets a place_id, dwell_minutes \
-(3-8), an activity, a theme_link when the user stated a theme (claim_ids from that place's research and one \
-sentence of why, in the story's voice), and a beat: its characters (the first contacts the user there), the clue the \
-user earns there (a number, word, name, or direction), and uses (earlier stops whose clues it builds on, e.g. \
-["stop_1"]). The finale goes in chat_beats, with uses listing the stop clues that solve the case.
+20 minutes, 3 from about an hour, 4 or more from about two hours, unless they asked for fewer. Each stop gets a \
+place_id, dwell_minutes (3-8), an activity, a theme_link when the user stated a theme (claim_ids from that place's \
+research and one sentence of why, in the story's voice), and a beat: its characters (the first contacts the user \
+there), the clue the user earns there, and uses (earlier stops whose clues it builds on, e.g. ["stop_1"]). The \
+finale goes in chat_beats, with uses listing the stop clues that solve the case.
+   - Clues carry the plot, in words: an alias ("the thief signs as Roxy"), an alibi ("the courier was on stage at \
+the Beacon at 8, so she never left the theatre"), a place ("the reel moved to the Pythian's old studio"), a time ("the \
+handoff is at 9:15"). A number only as what it is in the story (a locker, a platform, a page), never digits to add \
+up. The finale uses the clues to say who, where, and how.
    - Activities: prefer chat_puzzle, built from the research, with 1-2 hints and its exact answer as solution; that \
-answer becomes the stop's clue ("The locker number is the month and day of Holly's last session here": 1021). A \
+answer becomes the stop's clue ("The thief signs as the nickname of the man who built this theatre": Roxy). A \
 user_observation can lead into the puzzle, but a stop's clue comes from something the user works out. Codes, keys, \
 passwords, and coordinates exist only as clues earned from a solved puzzle. Use verified_feature only with \
 physical_feature evidence; research claims about history or architecture do not count. Every activity needs a \
@@ -78,7 +83,9 @@ honest version ("no documented Strokes sites on this route, so this is a downtow
 freelance tape tracker whom Mara Quill, a record-label archivist, radios about the stolen reel from Buddy Holly's \
 final 1958 session. At the Beacon Theatre, built by Samuel "Roxy" Rothafel, Mara asks who built it: the thief signs \
 as Roxy (clue). At the Pythian Temple, where Holly recorded on October 21, 1958, the locker number is that month \
-and day: 1021 (clue, uses stop_1). The finale uses both: "Locker 1021, under Roxy. We have the reel."
+and day: locker 1021 (clue, uses stop_1). The finale uses both: "Locker 1021, under Roxy. We have the reel." \
+The example shows the shape only: invent new characters, roles, and a new plot for every adventure, and never reuse \
+its handler (Mara Quill) or its stolen reel.
 6. If the plan does not pass, fix every violation as its message says (drop or swap a stop, shorten dwell, allow \
 transit, add the missing story piece), and evaluate again. Drop a camera stop the user asked for only if it still \
 fails in walking order. If the limits cannot all be met, for example the route \
