@@ -48,3 +48,19 @@ def test_arguments_take_a_base_url_and_an_optional_transcript_path():
     assert acceptance_checks.arguments([]) == ("http://127.0.0.1:8000", None)
     assert acceptance_checks.arguments(["https://example.run.app/", "--out", "t.json"]) == ("https://example.run.app", "t.json")
     assert acceptance_checks.arguments(["--out", "t.json", "http://localhost:8000"]) == ("http://localhost:8000", "t.json")
+
+
+def test_the_replan_scenario_reports_and_exits_without_crashing(quiet_chat, monkeypatch):
+    monkeypatch.setattr(sys, "argv", [*sys.argv, "--scenario", "replan"])
+    with pytest.raises(SystemExit) as exit_:
+        guiding_checks.main()
+
+    assert exit_.value.code == 1
+    assert [name for name, _ in acceptance_checks.results] == ["Plan passed and saved"]
+
+
+def test_a_draft_includes_fields_sent_beside_it():
+    # A live Flash-Lite call put user_stated next to "draft"; the tool merges it in, and so must the checks.
+    call = {"args": {"user_stated": ["stop_count"], "draft": {"kind": "new", "stops": []}}}
+    assert acceptance_checks.draft_of(call) == {"user_stated": ["stop_count"], "kind": "new", "stops": []}
+    assert acceptance_checks.draft_of({"args": {"kind": "check"}}) == {"kind": "check"}

@@ -46,7 +46,7 @@ def main():
     check("Q2 geocoded start, required stop, and destination", count_ok(second, "geocode_place") >= 3)
     check("Q2 plan passed evaluate_adventure_plan", good is not None)
     if good:
-        data, draft = good["result"]["data"], good["args"].get("draft", good["args"])
+        data, draft = good["result"]["data"], draft_of(good)
         check("Q2 walks every leg (walking only)", all(leg["modes"] == ["walk"] for leg in data["plan"]["legs"]))
         required = [s for s in draft.get("required_stops") or [] if near(s, COLUMBUS_81)]
         check("Q2 required corner given to the evaluator", bool(required))
@@ -74,7 +74,7 @@ def main():
                         "work out the puzzle, though; tell me the answer and let's keep going.")
     asked_at = datetime.now(timezone.utc)
     third = chat(base, session, QUERY_3)
-    drafts = [c["args"].get("draft", c["args"]) for c in third["tool_calls"] if c["name"] == "evaluate_adventure_plan"]
+    drafts = [draft_of(c) for c in third["tool_calls"] if c["name"] == "evaluate_adventure_plan"]
     deadlines = [parse(d.get("deadline")) or (asked_at + timedelta(minutes=float(d["duration_minutes"]))
                                              if d.get("duration_minutes") else None) for d in drafts]
     rechecked = any(d and abs((d - asked_at).total_seconds() / 60 - 15) <= 3 for d in deadlines)
@@ -116,6 +116,12 @@ def report(out):
     sys.exit(0 if all(ok for _, ok in results) else 1)
 
 
+def draft_of(call):
+    """The draft an evaluate_adventure_plan call sent, with fields sent beside it merged in, as the tool does."""
+    args = call["args"]
+    return {**{key: value for key, value in args.items() if key != "draft"}, **(args.get("draft") or {})}
+
+
 def state(reply):
     """The last get_adventure_state result in the reply, if the model called it."""
     found = [c["result"]["data"] for c in reply["tool_calls"] if c["name"] == "get_adventure_state" and c["result"]["ok"]]
@@ -137,7 +143,7 @@ def check(name, ok):
 
 def check_story(label, call, themed):
     """docs/STORY_DESIGN.md, checked on the draft of the plan that passed."""
-    draft = call["args"].get("draft", call["args"])
+    draft = draft_of(call)
     story, stops = draft.get("story") or {}, draft.get("stops") or []
     briefing = story.get("briefing") or ""
     # The ids the draft builder gives: stops in order, beats numbered over stops with a beat, then chat beats.
