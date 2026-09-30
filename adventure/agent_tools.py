@@ -8,6 +8,7 @@ session tools: the server passes the ToolContext, so the model never names a ses
 """
 
 import os
+import re
 from datetime import timedelta
 
 import state
@@ -23,6 +24,8 @@ from state import ToolContext
 
 DRAFT_FRESH = timedelta(minutes=10)  # an older draft's legs and times no longer start from now
 UNUSED_MINUTES = 12  # a passing plan leaving this much of the user's time unused could add a stop
+# The user asked for a camera stop (grader query 2: "include a camera stop if one fits").
+CAMERA_WORDS = re.compile(r"\b(?:cameras?|webcams?|selfies?|photos? of (?:me|us|myself|ourselves))\b", re.I)
 TRANSIT_REFRESH = timedelta(minutes=10)  # transit times older than this are looked up again
 LOCATION_FRESH = timedelta(minutes=10)
 OFF_ROUTE_M = 200  # a user this far from the leg's start gets directions from where they are
@@ -55,9 +58,9 @@ def evaluate_adventure_plan(ctx: ToolContext, draft: dict | None = None, **field
             context = {"state": progress, "previous": active, "waived_required_ids": waived, "rejected_links": rejected}
         elif kind == "new":
             plan, warnings = build_new_plan(draft, now, lookup)
-            waived = []
+            waived, words = [], _user_words(ctx, draft)
             context = {"stop_count_stated": "stop_count" in (draft.get("user_stated") or []),
-                       "user_text": _user_words(ctx, draft), "rejected_links": rejected}
+                       "user_text": words, "rejected_links": rejected, "camera_finder": _camera_finder(draft, words, dev)}
         else:
             return tool_error("INVALID_ARGUMENT", f"Unknown kind {kind!r}.", retryable=False,
                               next_step="Use kind 'new', 'revision', or 'check'.")
@@ -213,6 +216,24 @@ def _evaluated(plan, now, lookup, dev, context):
     plan = plan.model_copy(update={"estimated_total_minutes": evaluate(plan).report.estimated_total_minutes})
     evaluation = evaluate(plan)
     return plan.model_copy(update={"validation": evaluation.report}), evaluation
+
+
+def _camera_finder(draft, words, dev):
+    """When the user asked for a camera stop, a route search the evaluator runs itself if the plan has none.
+
+    The model may skip find_camera_checkpoints and say no camera fits; this makes that claim checked.
+    Each route is searched once per evaluation (the plan is evaluated twice)."""
+    if "camera_stop" not in (draft.get("user_stated") or []) and not CAMERA_WORDS.search(words):
+        return None
+    searched = {}
+
+    def find(route):
+        key = tuple((round(p["lat"], 6), round(p["lng"], 6)) for p in route)
+        if key not in searched:
+            searched[key] = cameras.find_camera_checkpoints(corridor=[{"lat": lat, "lng": lng} for lat, lng in key],
+                                                            allow_synthetic=dev)
+        return searched[key]
+    return find
 
 
 def _user_words(ctx, draft):

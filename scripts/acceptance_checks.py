@@ -67,6 +67,10 @@ def main():
     if not no_camera and good:
         check("Q2 plan includes the camera stop that was found",
               any(s["activity"] == "camera_capture" for s in good["result"]["data"]["plan"]["stops"]))
+    if good:  # the evaluator searches the route itself when a camera stop was asked for and left out
+        check("Q2 has a camera stop, or the evaluator's own search found none that fits",
+              any(s["activity"] == "camera_capture" for s in good["result"]["data"]["plan"]["stops"])
+              or any("camera" in note for note in good["result"]["data"].get("notes", [])))
     check("Q2 plan saved", ran_ok(second, "save_adventure_plan"))
 
     # Reach the first stop and answer it, so the follow-up happens mid-adventure.

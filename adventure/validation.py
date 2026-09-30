@@ -21,6 +21,8 @@ the user's request and the product rules in docs/PLAN.md:
   used, a clue at every stop that a later beat uses, a finale built on the clues, codes and keys
   earned from solved puzzles, stops tied to a stated theme through their own claims, and enough
   stops for the time;
+- a camera stop the user asked for: when the plan has none, the evaluator searches the route
+  for a verified position itself, and one that fits the free time must be added;
 - a revision: the plan it replaces, completed stops unchanged, revealed beats kept, unresolved
   required stops kept unless the user waived them.
 
@@ -55,6 +57,10 @@ MIN_CONTINGENCY_MINUTES = 2
 CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of travel and dwell in reserve
 MIN_BRIEFING_CHARS = 200  # about three sentences
 ROOM_FOR_A_STOP_MINUTES = 10  # unused minutes that would fit one more short stop
+WALK_M_PER_MINUTE = 80  # about 4.8 km/h, for estimating a detour to a camera position
+CAMERA_DWELL_MINUTES = 3
+
+CameraFinder = Callable[[list[dict]], dict]  # a route polyline -> a find_camera_checkpoints result
 
 CameraLookup = Callable[[str], CameraCheckpoint | None]
 
@@ -152,6 +158,7 @@ def evaluate_plan(
     stop_count_stated: bool = False,
     user_text: str = "",
     rejected_links: set[str] | frozenset = frozenset(),
+    camera_finder: CameraFinder | None = None,
 ) -> Evaluation:
     """Evaluate a new plan; with `previous` and `state`, a revision of the active one; or with
     `origin` and `state`, an adventure under way, from the stop the user last left.
@@ -165,6 +172,8 @@ def evaluate_plan(
     `story_checks=False` skips them when a saved plan is only re-timed. `stop_count_stated`: the user
     asked for a number of stops. `user_text`: the user's words, to recognize real people they name.
     `rejected_links`: URLs an earlier draft in this conversation was already told to drop.
+    `camera_finder` is given when the user asked for a camera stop: if the plan has none, the
+    evaluator searches the route with it instead of trusting that none fits.
     """
     violations: list[Violation] = []
 
@@ -409,6 +418,10 @@ def evaluate_plan(
             available = float(request.duration_minutes)
         _check_story_design(plan, previous, flag, available=available, slack=slack, stop_count_stated=stop_count_stated)
 
+    # --- A camera stop the user asked for ---
+    if camera_finder is not None and not any(c.activity.type == "camera_capture" for c in plan.checkpoints):
+        _check_camera_request(plan, places, camera_finder, slack, flag, notes)
+
     # --- Revision rules ---
     if previous is not None:
         _check_revision(plan, previous, state, set(waived_required_ids), flag)
@@ -487,6 +500,44 @@ def _check_revision(plan, previous, state, waived, flag):
         elif beat_id in old_beats and (new_beats[beat_id].summary, new_beats[beat_id].reveals) != (
                 old_beats[beat_id].summary, old_beats[beat_id].reveals):
             flag("REVEALED_BEAT_CHANGED", f"Revealed beat {beat_id} changed; the user was already told it.")
+
+
+def _check_camera_request(plan, places, camera_finder, slack, flag, notes):
+    """The user asked for a camera stop and the plan has none: search the route for one that fits the free time."""
+    route = [plan.request.start.point, *(places[c.place_id].point for c in plan.checkpoints
+                                          if c.place_id in places and places[c.place_id].point)]
+    if plan.request.destination is not None:
+        route.append(plan.request.destination.point)
+    route = [{"lat": p.lat, "lng": p.lng} for p in route if p is not None]
+    if len(route) < 2:
+        route = route * 2  # one point: a corridor of length zero
+    found = camera_finder(route)
+    if not found.get("ok"):
+        code = (found.get("error") or {}).get("code")
+        why = ("no enabled, verified camera position is near this route" if code == "NO_MATCH" else
+               "the camera feeds near this route are unavailable right now")
+        notes.append(f"The user asked for a camera stop; the evaluator searched the route and {why}. Tell them so in "
+                     "a sentence.")
+        return
+    fits, too_far = [], []
+    for match in found["data"]["checkpoints"]:
+        checkpoint, distance = match["checkpoint"], match["distance_m"]
+        needed = 2 * distance / WALK_M_PER_MINUTE + CAMERA_DWELL_MINUTES
+        (fits if slack is None or needed <= slack else too_far).append((checkpoint, distance, needed))
+    if fits:
+        checkpoint, distance, needed = fits[0]
+        verified = "matched on the camera image" if checkpoint["verification_status"] == "image_verified" else "verified"
+        flag("CAMERA_STOP_MISSING", f"The user asked for a camera stop, and {checkpoint['landmark']} "
+                                    f"(camera_checkpoint_id \"{checkpoint['checkpoint_id']}\", {verified}) stands "
+                                    f"{distance:.0f} m from the route, about {needed:.0f} minutes with the photo, which "
+                                    "the free time covers. Add a stop with that camera_checkpoint_id (no place_id), "
+                                    "activity type camera_capture, and a beat, in walking order by its standing "
+                                    "position.")
+    elif too_far:
+        checkpoint, distance, needed = too_far[0]
+        notes.append(f"The user asked for a camera stop. The nearest verified position, {checkpoint['landmark']}, is "
+                     f"{distance:.0f} m from the route and needs about {needed:.0f} minutes, more than the "
+                     f"{max(slack, 0):.0f} free; tell them it does not fit the time.")
 
 
 def _check_story_design(plan, previous, flag, *, available, slack, stop_count_stated):

@@ -10,7 +10,7 @@ from adventure import agent_tools
 from adventure.agent_tools import evaluate_adventure_plan, save_adventure_plan
 from fake_http import FakeHTTP
 from integrations import research
-from schemas import Claim, LatLng, PlaceEvidence
+from schemas import Claim, LatLng, PlaceEvidence, tool_error, tool_ok
 from state import MemoryStore, SessionRecord, ToolContext
 
 VALHALLA = "valhalla1.openstreetmap.de"
@@ -616,3 +616,71 @@ def test_an_image_verified_camera_can_be_planned(verified_camera):
     cameras.CATALOGUE_PATH.write_text(json.dumps(data))
     refused = evaluate(session(), with_camera("camera_capture"), 5, 9, 1)
     assert "CAMERA_UNAVAILABLE" in [v["code"] for v in refused["data"]["violations"]]
+
+
+# --- A camera stop the user asked for ---
+
+
+def camera_search(*spots, error=None):
+    """A find_camera_checkpoints result for TEST spots (checkpoint id, meters from the route); no DOT request."""
+    if error:
+        return tool_error(error, "TEST: no position.", retryable=False, next_step="TEST")
+    return tool_ok({"checkpoints": [{"checkpoint": {"checkpoint_id": spot, "landmark": f"TEST {spot}",
+                                                    "verification_status": "image_verified"}, "distance_m": meters}
+                                    for spot, meters in spots]})
+
+
+@pytest.fixture
+def camera_finder(monkeypatch):
+    """Replaces the route search the evaluator runs; `answer` is what it returns, `routes` what it was asked."""
+    search = {"answer": camera_search(error="NO_MATCH"), "routes": []}
+
+    def find(corridor=None, **kwargs):
+        search["routes"].append(corridor)
+        return search["answer"]
+
+    monkeypatch.setattr(agent_tools.cameras, "find_camera_checkpoints", find)
+    return search
+
+
+ASKED_FOR_A_CAMERA = "I'm at Central Park West and West 86th. Include a camera stop if one fits."
+
+
+def test_when_the_user_asks_for_a_camera_the_evaluator_searches_the_route_itself(camera_finder):
+    # A live Flash-Lite run skipped find_camera_checkpoints and told the user no camera fit.
+    camera_finder["answer"] = camera_search(("test_cam", 120))
+    result = evaluate(session(), draft(user_request=ASKED_FOR_A_CAMERA), 5, 9)
+
+    [violation] = result["data"]["violations"]
+    assert violation["code"] == "CAMERA_STOP_MISSING"
+    assert '"test_cam"' in violation["message"] and "matched on the camera image" in violation["message"]
+    assert len(camera_finder["routes"]) == 1  # the plan is evaluated twice; the route is searched once
+    assert camera_finder["routes"][0][0] == {"lat": START["lat"], "lng": START["lng"]}
+
+
+def test_no_position_near_the_route_is_a_note_for_the_reply(camera_finder):
+    result = evaluate(session(), draft(user_request=ASKED_FOR_A_CAMERA), 5, 9)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    assert any("no enabled, verified camera position is near this route" in note for note in result["data"]["notes"])
+
+
+def test_a_camera_too_far_for_the_free_time_is_a_note_not_a_violation(camera_finder):
+    camera_finder["answer"] = camera_search(("far_cam", 900))  # about 26 minutes with the photo
+    tight = draft(user_request=ASKED_FOR_A_CAMERA, deadline="2026-10-01T15:40:00-04:00",
+                  user_stated=["deadline", "allowed_modes"])
+    result = evaluate(session(), tight, 5, 9)
+
+    assert result["data"]["passes"], result["data"]["violations"]
+    assert any("does not fit the time" in note for note in result["data"]["notes"])
+
+
+def test_the_search_runs_only_for_a_camera_request_and_a_plan_without_one(camera_finder, verified_camera):
+    camera_finder["answer"] = camera_search(("test_cam", 120))
+    unasked = evaluate(session(), draft(), 5, 9)
+    stated = evaluate(session(), draft(user_stated=["allowed_modes", "camera_stop"]), 5, 9)
+    included = evaluate(session(), with_camera("camera_capture", user_request=ASKED_FOR_A_CAMERA), 5, 9, 1)
+
+    assert unasked["data"]["passes"] and included["data"]["passes"], included["data"]["violations"]
+    assert [v["code"] for v in stated["data"]["violations"]] == ["CAMERA_STOP_MISSING"]
+    assert len(camera_finder["routes"]) == 1  # only the stated request without a camera stop searched
