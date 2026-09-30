@@ -684,3 +684,23 @@ def test_the_search_runs_only_for_a_camera_request_and_a_plan_without_one(camera
     assert unasked["data"]["passes"] and included["data"]["passes"], included["data"]["violations"]
     assert [v["code"] for v in stated["data"]["violations"]] == ["CAMERA_STOP_MISSING"]
     assert len(camera_finder["routes"]) == 1  # only the stated request without a camera stop searched
+
+
+def test_directions_to_a_camera_stop_carry_its_instructions_and_verification(verified_camera):
+    # At the camera the planning turn has usually scrolled out of the model's context.
+    from integrations import cameras
+    data = json.loads(cameras.CATALOGUE_PATH.read_text())
+    data["checkpoints"][0].update(verification_status="image_verified", last_field_verified_at=None,
+                                  last_image_verified_at="2026-09-29T17:00:00+00:00")
+    cameras.CATALOGUE_PATH.write_text(json.dumps(data))
+    ctx = session()
+    save_adventure_plan(ctx, evaluate(ctx, with_camera("camera_capture"), 5, 9, 1)["data"]["draft_id"], start_now=True)
+    for stop in ("stop_1", "stop_2"):
+        state.resolve_checkpoint(ctx, stop, "completed")
+
+    result = agent_tools.get_next_directions(ctx)
+
+    assert result["data"]["to_id"] == "stop_3"
+    assert result["data"]["camera"]["positioning_instructions"] == "TEST: stand by the pole."
+    assert result["data"]["camera"]["verification_status"] == "image_verified"
+    assert any("not tested in person" in w for w in result["warnings"])

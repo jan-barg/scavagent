@@ -161,9 +161,25 @@ def get_next_directions(ctx: ToolContext) -> dict:
     if target == "destination":
         warnings.append("The user is still on the way to the destination. Do not call finish_adventure until they say "
                         "they have arrived.")
-    return tool_ok({"to_id": target, "name": name, **directions, "details": details}, warnings=warnings,
+    camera = _camera_at(plan, target)
+    if camera and camera["verification_status"] == "image_verified":
+        warnings.append("This camera spot was matched on the camera image, not tested in person: say so when you give "
+                        "its positioning instructions, and offer a retake if they cannot find themselves.")
+    return tool_ok({"to_id": target, "name": name, **directions, "details": details, **({"camera": camera} if camera else {})},
+                   warnings=warnings,
                    freshness=Freshness(kind="scheduled" if "transit" in directions["modes"] else "static_reference",
                                        retrieved_at=now))
+
+
+def _camera_at(plan, checkpoint_id):
+    """What the user needs at a camera stop, from the catalogue: its planning context has usually scrolled away."""
+    checkpoint = next((c for c in plan.checkpoints if c.checkpoint_id == checkpoint_id), None)
+    record = camera_lookup()(checkpoint.camera_checkpoint_id) if checkpoint and checkpoint.camera_checkpoint_id else None
+    if record is None:
+        return None
+    return {"checkpoint_id": record.checkpoint_id, "landmark": record.landmark, "side_of_street": record.side_of_street,
+            "positioning_instructions": record.positioning_instructions,
+            "verification_status": record.verification_status}
 
 
 def _endpoint(plan, places, endpoint_id):
