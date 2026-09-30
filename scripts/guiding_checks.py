@@ -11,13 +11,13 @@ get_adventure_state, which the instructions have the model call every turn. Exit
 check fails.
 """
 
-import json
 import re
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from acceptance_checks import chat, check, passing, ran_ok, results, transcript  # scripts/ is on sys.path
+from acceptance_checks import (  # scripts/ is on sys.path
+    arguments, chat, check, passing, ran_ok, report, state, transcript)
 
 # An hour needs at least three stops, so something is still ahead when the user says 15 minutes are left.
 PLAN = "I'm at West End Avenue and West 72nd Street. I have an hour for a music history mystery."
@@ -25,13 +25,7 @@ RESOLVING = ("complete_checkpoint", "skip_checkpoint", "block_checkpoint")
 
 
 def main():
-    args = sys.argv[1:]
-    out = None
-    if "--out" in args:
-        i = args.index("--out")
-        out = args[i + 1]
-        del args[i:i + 2]
-    base = (args[0] if args else "http://127.0.0.1:8000").rstrip("/")
+    base, out = arguments(sys.argv[1:])
     session = str(uuid.uuid4())
 
     plan = chat(base, session, PLAN)
@@ -85,15 +79,7 @@ def main():
 
     check("At most one checkpoint resolved per message",
           all(len(resolved(entry["reply"])) <= 1 for entry in transcript if entry["session_id"] == session))
-
-    width = max(len(name) for name, _ in results)
-    for name, ok in results:
-        print(f"{'PASS' if ok else 'FAIL'}  {name.ljust(width)}")
-    if out:
-        with open(out, "w") as f:
-            json.dump(transcript, f, indent=2)
-        print(f"transcript: {out}")
-    sys.exit(0 if all(ok for _, ok in results) else 1)
+    report(out)
 
 
 def updates(reply, operation):
@@ -104,12 +90,6 @@ def updates(reply, operation):
 
 def resolved(reply):
     return [c for operation in RESOLVING for c in updates(reply, operation)]
-
-
-def state(reply):
-    """The last get_adventure_state result in the reply, if the model called it."""
-    found = [c["result"]["data"] for c in reply["tool_calls"] if c["name"] == "get_adventure_state" and c["result"]["ok"]]
-    return found[-1] if found else None
 
 
 def mentions(text, answer):

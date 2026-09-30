@@ -28,13 +28,7 @@ results, transcript = [], []
 
 
 def main():
-    args = sys.argv[1:]
-    out = None
-    if "--out" in args:
-        i = args.index("--out")
-        out = args[i + 1]
-        del args[i:i + 2]
-    base = (args[0] if args else "http://127.0.0.1:8000").rstrip("/")
+    base, out = arguments(sys.argv[1:])
 
     first = chat(base, str(uuid.uuid4()), QUERY_1)
     check("Q1 answered without a model error", bool(first["response"]) and "Model call failed" not in first["response"])
@@ -94,7 +88,24 @@ def main():
     finished = [c for c in third["tool_calls"] if c["name"] == "update_adventure_state"
                 and c["args"].get("operation") == "finish_adventure"]
     check("Q3 did not finish before the user reached the destination", not finished)
+    report(out)
 
+
+# --- Shared by scripts/guiding_checks.py and scripts/camera_checks.py ---
+
+
+def arguments(args):
+    """(base URL, transcript path or None) from the command line: [BASE_URL] [--out transcript.json]."""
+    args, out = list(args), None
+    if "--out" in args:
+        i = args.index("--out")
+        out = args[i + 1]
+        del args[i:i + 2]
+    return (args[0] if args else "http://127.0.0.1:8000").rstrip("/"), out
+
+
+def report(out):
+    """Print every check, write the transcript if asked, and exit 1 if any check failed."""
     width = max(len(name) for name, _ in results)
     for name, ok in results:
         print(f"{'PASS' if ok else 'FAIL'}  {name.ljust(width)}")
@@ -103,6 +114,12 @@ def main():
             json.dump(transcript, f, indent=2)
         print(f"transcript: {out}")
     sys.exit(0 if all(ok for _, ok in results) else 1)
+
+
+def state(reply):
+    """The last get_adventure_state result in the reply, if the model called it."""
+    found = [c["result"]["data"] for c in reply["tool_calls"] if c["name"] == "get_adventure_state" and c["result"]["ok"]]
+    return found[-1] if found else None
 
 
 def chat(base, session, message):
