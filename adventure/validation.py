@@ -21,6 +21,8 @@ the user's request and the product rules in docs/PLAN.md:
   used, a clue at every stop that a later beat uses, a finale built on the clues, codes and keys
   earned from solved puzzles, stops tied to a stated theme through their own claims, and enough
   stops for the time;
+- a camera stop the user asked for: when the plan has none, the evaluator searches the route
+  for a verified position itself, and one that fits the free time must be added;
 - a revision: the plan it replaces, completed stops unchanged, revealed beats kept, unresolved
   required stops kept unless the user waived them.
 
@@ -55,6 +57,13 @@ MIN_CONTINGENCY_MINUTES = 2
 CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of travel and dwell in reserve
 MIN_BRIEFING_CHARS = 200  # about three sentences
 ROOM_FOR_A_STOP_MINUTES = 10  # unused minutes that would fit one more short stop
+STOPS_FOR_MINUTES = ((100, 4), (60, 3), (20, 2))  # a limit the user gives of at least this long: at least this many
+# A clue that is only a number ("22", "1897-1929") is arithmetic, not something the story needs.
+_BARE_NUMBER = re.compile(r"[\d\s.,:;#/+\-=()x×*]+")
+WALK_M_PER_MINUTE = 80  # about 4.8 km/h, for estimating a detour to a camera position
+CAMERA_DWELL_MINUTES = 3
+
+CameraFinder = Callable[[list[dict]], dict]  # a route polyline -> a find_camera_checkpoints result
 
 CameraLookup = Callable[[str], CameraCheckpoint | None]
 
@@ -152,6 +161,7 @@ def evaluate_plan(
     stop_count_stated: bool = False,
     user_text: str = "",
     rejected_links: set[str] | frozenset = frozenset(),
+    camera_finder: CameraFinder | None = None,
 ) -> Evaluation:
     """Evaluate a new plan; with `previous` and `state`, a revision of the active one; or with
     `origin` and `state`, an adventure under way, from the stop the user last left.
@@ -165,6 +175,8 @@ def evaluate_plan(
     `story_checks=False` skips them when a saved plan is only re-timed. `stop_count_stated`: the user
     asked for a number of stops. `user_text`: the user's words, to recognize real people they name.
     `rejected_links`: URLs an earlier draft in this conversation was already told to drop.
+    `camera_finder` is given when the user asked for a camera stop: if the plan has none, the
+    evaluator searches the route with it instead of trusting that none fits.
     """
     violations: list[Violation] = []
 
@@ -409,6 +421,10 @@ def evaluate_plan(
             available = float(request.duration_minutes)
         _check_story_design(plan, previous, flag, available=available, slack=slack, stop_count_stated=stop_count_stated)
 
+    # --- A camera stop the user asked for ---
+    if camera_finder is not None and not any(c.activity.type == "camera_capture" for c in plan.checkpoints):
+        _check_camera_request(plan, places, camera_finder, slack, flag, notes)
+
     # --- Revision rules ---
     if previous is not None:
         _check_revision(plan, previous, state, set(waived_required_ids), flag)
@@ -489,6 +505,44 @@ def _check_revision(plan, previous, state, waived, flag):
             flag("REVEALED_BEAT_CHANGED", f"Revealed beat {beat_id} changed; the user was already told it.")
 
 
+def _check_camera_request(plan, places, camera_finder, slack, flag, notes):
+    """The user asked for a camera stop and the plan has none: search the route for one that fits the free time."""
+    route = [plan.request.start.point, *(places[c.place_id].point for c in plan.checkpoints
+                                          if c.place_id in places and places[c.place_id].point)]
+    if plan.request.destination is not None:
+        route.append(plan.request.destination.point)
+    route = [{"lat": p.lat, "lng": p.lng} for p in route if p is not None]
+    if len(route) < 2:
+        route = route * 2  # one point: a corridor of length zero
+    found = camera_finder(route)
+    if not found.get("ok"):
+        code = (found.get("error") or {}).get("code")
+        why = ("no enabled, verified camera position is near this route" if code == "NO_MATCH" else
+               "the camera feeds near this route are unavailable right now")
+        notes.append(f"The user asked for a camera stop; the evaluator searched the route and {why}. Tell them so in "
+                     "a sentence.")
+        return
+    fits, too_far = [], []
+    for match in found["data"]["checkpoints"]:
+        checkpoint, distance = match["checkpoint"], match["distance_m"]
+        needed = 2 * distance / WALK_M_PER_MINUTE + CAMERA_DWELL_MINUTES
+        (fits if slack is None or needed <= slack else too_far).append((checkpoint, distance, needed))
+    if fits:
+        checkpoint, distance, needed = fits[0]
+        verified = "matched on the camera image" if checkpoint["verification_status"] == "image_verified" else "verified"
+        flag("CAMERA_STOP_MISSING", f"The user asked for a camera stop, and {checkpoint['landmark']} "
+                                    f"(camera_checkpoint_id \"{checkpoint['checkpoint_id']}\", {verified}) stands "
+                                    f"{distance:.0f} m from the route, about {needed:.0f} minutes with the photo, which "
+                                    "the free time covers. Add a stop with that camera_checkpoint_id (no place_id), "
+                                    "activity type camera_capture, and a beat, in walking order by its standing "
+                                    "position.")
+    elif too_far:
+        checkpoint, distance, needed = too_far[0]
+        notes.append(f"The user asked for a camera stop. The nearest verified position, {checkpoint['landmark']}, is "
+                     f"{distance:.0f} m from the route and needs about {needed:.0f} minutes, more than the "
+                     f"{max(slack, 0):.0f} free; tell them it does not fit the time.")
+
+
 def _check_story_design(plan, previous, flag, *, available, slack, stop_count_stated):
     """docs/STORY_DESIGN.md: for a new plan, the whole story; for a revision, the stops and beats it adds."""
     story, request = plan.story, plan.request
@@ -558,9 +612,15 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
     # --- Clues ---
     for beat in stop_beats if whole else new_stop_beats:
         if not (beat.clue or "").strip():
-            flag("CLUE_MISSING", f"{beat.checkpoint_id}'s beat gives the user no clue. Give it a clue: a number, word, "
-                                 "name, or direction they earn there (a chat_puzzle's solution works best), for a later "
-                                 "beat or the finale to use.", beat.checkpoint_id)
+            flag("CLUE_MISSING", f"{beat.checkpoint_id}'s beat gives the user no clue. Give it a clue the story needs: a "
+                                 "name, an alibi, a place, or a time they earn there (a chat_puzzle's solution works "
+                                 "best), for a later beat or the finale to use.", beat.checkpoint_id)
+        elif _BARE_NUMBER.fullmatch(beat.clue.strip()):
+            flag("CLUE_BARE_NUMBER", f"{beat.checkpoint_id}'s clue is only a number (\"{beat.clue.strip()}\"). Make it "
+                                     "something the story needs, stated in words: a name (\"the thief signs as Roxy\"), "
+                                     "an alibi (\"the courier was on stage at 8\"), a place (\"the reel moved to the "
+                                     "Pythian's old studio\"), or a number as what it is (\"locker 1021\"), not digits "
+                                     "to add up.", beat.checkpoint_id)
     for beat in story.beats if whole else new_beats:
         for ref in beat.uses:
             source = beats.get(ref)
@@ -597,29 +657,39 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         if activity.type == "chat_puzzle" and activity.solution and beat.clue and _within(activity.solution, beat.clue):
             solved[beat.beat_id] = position(beat)
             named.append((position(beat), {_object_kind(m.group(0)) for m in _EARNED_OBJECT.finditer(beat.clue)}))
-    texts = [(f"{b.beat_id} ({b.checkpoint_id or 'chat'})", b, position(b), f"{b.summary} {b.reveals or ''} {b.clue or ''}")
+    texts = [(f"{b.beat_id} ({b.checkpoint_id or 'chat'})'s", b, position(b),
+              (("summary", b.summary), ("reveals", b.reveals or ""), ("clue", b.clue or "")))
              for b in (story.beats if whole else new_beats)]
-    if whole:
-        texts.append(("The solution", finale, end, story.solution))  # it resolves what the finale builds on
-    for label, beat, at, text in texts:
-        built = beat is not None and (beat.beat_id in solved or any(solved.get(ref, end + 1) <= at for ref in beat.uses))
-        for found in _EARNED_OBJECT.finditer(text):
-            if not built and not any(p <= at and _object_kind(found.group(0)) in kinds for p, kinds in named):
-                # Most often the puzzles are there but lack their answer: name them.
-                sources = [beats[ref] for ref in (beat.uses if beat is not None else []) if ref in beats]
-                if beat is not None and beat.checkpoint_id in order:
-                    sources.append(beat)
-                unsolved = [b.checkpoint_id for b in sources if b.checkpoint_id in by_id
-                            and by_id[b.checkpoint_id].activity.type == "chat_puzzle" and b.beat_id not in solved]
-                each = "each " if len(unsolved) > 1 else ""
-                fix = (f"Give {' and '.join(unsolved)} {each}its puzzle's exact answer as activity.solution, and state "
-                       "that answer in the stop's clue." if unsolved else
-                       "List in its uses the stops whose chat_puzzle answers make it up (each with activity.solution, "
-                       "stated in its beat's clue), or leave it out.")
-                flag("OBJECT_UNEARNED", f"{label} mentions \"{found.group(0)}\", but it builds on no puzzle the user "
-                                        f"solves. {fix}",
-                     beat.checkpoint_id if beat is not None and label != "The solution" else None)
-                break
+    if whole:  # the story's solution resolves what the finale builds on
+        texts.append(("The story's", finale, end, (("solution", story.solution),)))
+    any_puzzle = any(c.activity.type == "chat_puzzle" for c in plan.checkpoints)
+    for label, beat, at, parts in texts:
+        if beat is not None and (beat.beat_id in solved or any(solved.get(ref, end + 1) <= at for ref in beat.uses)):
+            continue  # built on an earned clue
+        found = next(((field, match, text) for field, text in parts for match in _EARNED_OBJECT.finditer(text)
+                      if not any(p <= at and _object_kind(match.group(0)) in kinds for p, kinds in named)), None)
+        if found is None:
+            continue
+        field, match, text = found
+        # Most often the puzzles are there but lack their answer: name them. With no puzzle, say so.
+        sources = [beats[ref] for ref in (beat.uses if beat is not None else []) if ref in beats]
+        if beat is not None and beat.checkpoint_id in order:
+            sources.append(beat)
+        unsolved = [b.checkpoint_id for b in sources if b.checkpoint_id in by_id
+                    and by_id[b.checkpoint_id].activity.type == "chat_puzzle" and b.beat_id not in solved]
+        each = "each " if len(unsolved) > 1 else ""
+        if not any_puzzle:
+            fix = ("No stop in this plan is a chat_puzzle, so nothing can earn it: take the word out of that text, or "
+                   "make a stop a chat_puzzle whose activity.solution is the code and whose clue states it.")
+        elif unsolved:
+            fix = (f"Give {' and '.join(unsolved)} {each}its puzzle's exact answer as activity.solution, and state that "
+                   "answer in the stop's clue.")
+        else:
+            fix = ("List in its uses the stops whose chat_puzzle answers make it up (each with activity.solution, stated "
+                   "in its beat's clue), or take the word out of that text.")
+        flag("OBJECT_UNEARNED", f"{label} {field} mentions \"{match.group(0)}\" (\"{_around(text, match)}\"), but it "
+                                f"builds on no puzzle the user solves. {fix}",
+             beat.checkpoint_id if beat is not None and field != "solution" else None)
 
     # --- The theme, through each stop's own sourced claims ---
     if request.theme and "theme" not in request.defaulted_fields:
@@ -645,7 +715,7 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         # Only a limit the user gave can leave no room for more; a budget the planner chose is not a reason.
         limited = ((request.duration_minutes and "duration_minutes" not in request.defaulted_fields)
                    or (request.deadline and "deadline" not in request.defaulted_fields))
-        needed = 2 if not limited else 3 if available >= 60 else 2 if available >= 20 else 1
+        needed = 2 if not limited else next((n for minutes, n in STOPS_FOR_MINUTES if available >= minutes), 1)
         room = not limited or slack is None or slack >= ROOM_FOR_A_STOP_MINUTES
         if len(plan.checkpoints) < needed and room:
             if limited:
@@ -725,6 +795,12 @@ def _named_people(texts, source):
 def _object_kind(text):
     lowered = text.lower()
     return next(kind for kind in ("pass", "combination", "coordinate", "key", "code") if kind in lowered)
+
+
+def _around(text, match, width=50):
+    """The words around a match, to quote in a message."""
+    start, end = max(0, match.start() - width), min(len(text), match.end() + width)
+    return ("…" if start else "") + text[start:end].strip() + ("…" if end < len(text) else "")
 
 
 def _within(part, text):

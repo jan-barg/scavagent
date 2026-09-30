@@ -257,6 +257,22 @@ def test_a_code_must_come_from_a_solved_puzzle():
     assert "Give stop_1 and stop_2 each its puzzle's exact answer as activity.solution" in messages(unsolved)
 
 
+def test_with_no_puzzle_at_all_the_message_quotes_the_text_to_change():
+    # A live Flash-Lite draft (camera stop and observation) kept "The code to secure the stolen blueprints" in its
+    # finale for ten drafts: no puzzle could earn it, and the message did not say which text held the word.
+    def no_puzzles(d):
+        for stop in d["stops"]:
+            stop["activity"] = {"type": "user_observation", "prompt": "Describe the facade.",
+                                "answer_rule": "Any honest description.", "fallback": "Continue."}
+        d["chat_beats"][0]["reveals"] = "The code to secure the stolen reel."
+
+    result = evaluate(changed(no_puzzles), 5, 6)
+
+    assert codes(result) == ["OBJECT_UNEARNED"]
+    assert "reveals mentions \"code\" (\"The code to secure the stolen reel.\")" in messages(result)
+    assert "No stop in this plan is a chat_puzzle" in messages(result)
+
+
 def test_ordinary_senses_of_code_and_key_are_not_objects():
     def ordinary(d):
         d["stops"][0]["beat"]["summary"] = "Mara: \"A combination of luck and Morse code. That's the key to the mystery.\""
@@ -336,6 +352,24 @@ def test_enough_stops_for_the_time():
     assert "under 12 minutes: search find_places around Beacon Theatre (New York City) or the start" in messages(result)
     assert evaluate(asked_for_one, 5)["data"]["passes"]
     assert evaluate(short, 11)["data"]["passes"]  # an 11-minute walk there leaves no room for another stop
+
+
+def test_two_hours_needs_four_stops():
+    # A two-hour Strokes run on Sonnet had two stops, "thinner than Opus" (docs/MODEL_COMPARISON.md).
+    two_hours = changed(lambda d: d.update(duration_minutes=120, contingency_minutes=3))
+
+    result = evaluate(two_hours, 5, 6)
+
+    assert codes(result) == ["TOO_FEW_STOPS"]
+    assert "2 stop(s) for 120 available minutes" in messages(result) and "at least 4" in messages(result)
+
+
+def test_a_clue_that_is_only_a_number_fails():
+    # Live clues like "22" and "1908" were arithmetic, not something the story needed.
+    for clue in ("22", "1897-1929", " 1021 "):
+        result = evaluate(changed(lambda d: d["stops"][0]["beat"].update(clue=clue)), 5, 6)
+        assert codes(result) == ["CLUE_BARE_NUMBER"], clue
+    assert evaluate(changed(lambda d: d["stops"][0]["beat"].update(clue="locker 1021")), 5, 6)["data"]["passes"]
 
 
 def test_a_time_budget_the_user_never_gave_does_not_excuse_one_stop():

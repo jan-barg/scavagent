@@ -1,4 +1,5 @@
 import re
+import time
 
 import pytest
 import requests
@@ -88,6 +89,23 @@ def test_rate_limited_overpass_falls_back_to_the_mirror():
     assert result["ok"], result
     assert result["data"]["match_type"] == "intersection"
     assert not any(NOMINATIM in url for url in http.urls())
+
+
+def test_a_slow_overpass_server_is_raced_by_the_mirror(monkeypatch):
+    # Live answers took 5-15 s; one turn waited 33 s for a timeout before the mirror was tried.
+    answers = {geocoding.OVERPASS_URLS[0]: 1.0, geocoding.OVERPASS_URLS[1]: 0.0}  # seconds to answer
+
+    def fake_fetch(provider, method, url, **kwargs):
+        time.sleep(answers[url])
+        return {"elements": [{"type": "node", "id": 7, "lat": 40.78326, "lon": -73.97455}]}
+
+    monkeypatch.setattr(geocoding, "OVERPASS_HEDGE_S", 0.05)
+    monkeypatch.setattr(geocoding, "fetch_json", fake_fetch)
+    started = time.monotonic()
+    result = geocode_place("Columbus Avenue and West 81st Street")
+
+    assert result["ok"] and result["data"]["provider_ref"] == "osm:node/7"
+    assert time.monotonic() - started < 0.5  # the mirror's answer, not the slow server's
 
 
 def test_every_provider_down_is_a_retryable_upstream_error():

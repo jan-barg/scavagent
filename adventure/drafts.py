@@ -49,7 +49,8 @@ LOCATION_FRESH_MINUTES = 15  # a browser location this recent can start a revisi
 DEPART_WINDOW = timedelta(hours=2)  # a departure further ahead is most likely a UTC/local mix-up
 PAST_GRACE = timedelta(minutes=5)  # a departure further back would time the route from a moment already gone
 ACCURATE_ENOUGH_M = 200  # a browser fix less precise than this does not place the user on a block
-STATED_FIELDS = ("destination", "deadline", "duration_minutes", "required_stops", "allowed_modes", "theme", "stop_count")
+STATED_FIELDS = ("destination", "deadline", "duration_minutes", "required_stops", "allowed_modes", "theme", "stop_count",
+                 "camera_stop")
 
 
 class DraftError(Exception):

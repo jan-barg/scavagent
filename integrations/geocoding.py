@@ -11,7 +11,9 @@ Providers, all keyless:
 """
 
 import re
+import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from functools import lru_cache
 
 from integrations.common import NYC_BOUNDS, UpstreamError, distance_m, fetch_json, in_nyc, reference, utc_now
@@ -19,9 +21,14 @@ from schemas import LatLng, LocationContext, tool_error, tool_ok
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
-    # A mirror with its own rate limit. Slower (about 8 s when checked), so only a fallback.
+    # A mirror with its own rate limit, asked too when the main server is slow or refuses.
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
+# Both servers often take 5-15 s under load (September 29, night), and a turn once spent 33 s on one
+# intersection: the main server ran out its 25 s timeout before the mirror was tried. The next server
+# is asked once the previous one has had this long, and the first answer wins.
+OVERPASS_HEDGE_S = 4
+_overpass_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="overpass")
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 GEOSEARCH_URL = "https://geosearch.planninglabs.nyc/v2/search"
 
@@ -56,6 +63,7 @@ INTERSECTION_SPLIT = re.compile(r"\s+(?:and|at)\s+|\s*[&/@]\s*", re.IGNORECASE)
 ADDRESS_START = re.compile(r"^\d+[a-z]?(?:-\d+)?\s+\S", re.IGNORECASE)
 
 _last_nominatim_call = 0.0
+_nominatim_lock = threading.Lock()  # geocodes asked for in one round can run at once
 
 
 def geocode_place(text):
@@ -223,15 +231,30 @@ def _shared_nodes(pattern_a, pattern_b):
              f'way["highway"]["name"~"{a}",i]{bbox}->.a;'
              f'way["highway"]["name"~"{b}",i]{bbox}->.b;'
              f'node(w.a)(w.b);out;')
-    error = None
-    for url in OVERPASS_URLS:
-        try:
-            body = fetch_json("overpass", "POST", url, data={"data": query}, timeout=25)
-        except UpstreamError as e:
-            error = e  # rate limits and overload are common; try the mirror
-            continue
-        return tuple((el["id"], el["lat"], el["lon"]) for el in body.get("elements", []) if el.get("type") == "node")
+    pending, error = set(), None
+    for url in [*OVERPASS_URLS, None]:
+        if url is not None:
+            pending.add(_overpass_pool.submit(_overpass_nodes, url, query))
+        # Wait for any answer; after OVERPASS_HEDGE_S without one, ask the next server as well.
+        while pending:
+            done, pending = wait(pending, timeout=OVERPASS_HEDGE_S if url else None, return_when=FIRST_COMPLETED)
+            if not done:
+                break
+            for future in done:
+                nodes, failure = future.result()
+                if failure is None:
+                    return nodes
+                error = failure  # rate limits and overload are common; the other server may answer
     raise error
+
+
+def _overpass_nodes(url, query):
+    """(nodes, None) from one Overpass server, or (None, the UpstreamError)."""
+    try:
+        body = fetch_json("overpass", "POST", url, data={"data": query}, timeout=25)
+    except UpstreamError as e:
+        return None, e
+    return tuple((el["id"], el["lat"], el["lon"]) for el in body.get("elements", []) if el.get("type") == "node"), None
 
 
 def _address(query):
@@ -259,11 +282,12 @@ def _address(query):
 
 def _named_place(query, is_intersection=False):
     global _last_nominatim_call
-    # Nominatim's usage policy allows at most one request per second.
-    wait = 1.0 - (time.monotonic() - _last_nominatim_call)
-    if wait > 0:
-        time.sleep(wait)
-    _last_nominatim_call = time.monotonic()
+    # Nominatim's usage policy allows at most one request per second, across concurrent geocodes too.
+    with _nominatim_lock:
+        pause = 1.0 - (time.monotonic() - _last_nominatim_call)
+        if pause > 0:
+            time.sleep(pause)
+        _last_nominatim_call = time.monotonic()
 
     south, west, north, east = NYC_BOUNDS
     hits = fetch_json("nominatim", "GET", NOMINATIM_URL, params={

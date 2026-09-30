@@ -99,6 +99,38 @@ Latest changes/checks (September 29, afternoon: story design v2, branch `kyle/st
   3. State: track arrival at the destination so `finish_adventure` refuses while the user is still on the way. Runs 5 and 6 finished early at query 3.
   4. Model: rerun `scripts/acceptance_checks.py` once Claude is configured. Flash-Lite's query-3 guiding varies from run to run.
 
+Latest changes/checks (September 29, night: cameras, story depth, guiding, speed; branch `kyle/cameras-and-depth`, pull request open for review, not merged). Jan's list for the night, item by item. The three follow-ups from the block above are closed by Jan's #14 and #15.
+
+- **Camera stops in planning (1):**
+  - The camera session's edits to Kyle's files in #17 are sound.
+  - A requested camera stop is now enforced. When the user's words ask for a camera (or `"camera_stop"` is in `user_stated`) and the plan has none, `evaluate_adventure_plan` runs `find_camera_checkpoints` along the route itself. A verified position whose detour and photo fit the free time becomes `CAMERA_STOP_MISSING`, naming the id to add; anything else becomes a note for the reply.
+  - `get_next_directions` to a camera stop carries the spot's instructions and verification status. The planning turn has scrolled away by then, and `get_adventure_state` shows only the id.
+  - Grader query 2 with a real camera: see `scripts/camera_checks.py` below.
+- **Deeper stories (2):**
+  - `TOO_FEW_STOPS` asks for 4 stops from 100 minutes.
+  - A new check, `CLUE_BARE_NUMBER`, fails clues that are only a number.
+  - The prompt asks for clues that carry the plot (an alias, an alibi, a place, a time) and a turn by the middle stop. Its example no longer names a handler: models kept reusing "Mara Quill".
+- **Guiding (3):**
+  - `scripts/guiding_checks.py` has 18 checks over arrival, a hint, a wrong answer, the right answer, a skip, and "only 15 minutes left".
+  - The prompt: a wrong answer gets the next hint and never the answer, giving up means the fallback and a skip, and an answer always belongs to the current stop.
+- **Planning speed (4):**
+  - A round made only of lookup tools now runs at once (Jan's `app.py`, logged in `docs/SHARED_FILE_EDITS.md`).
+  - The Overpass mirror is asked when the main server hasn't answered after 4 s.
+  - `OBJECT_UNEARNED` quotes the text to change.
+  - Measured on Sonnet before these changes: planning turns took 37–95 s, of which the model took 28–54 s. Tools took the rest: an intersection took 5–33 s on Overpass, and three research calls in one round took 16 s one after another. The evaluator itself takes under half a second.
+- **Walk test (5):** a plan to follow is in [WALK_TEST.md](WALK_TEST.md).
+- **Grading docs (6):** the evaluator section of [TOOLS.md](TOOLS.md) is rewritten for graders, and [CONTRIBUTIONS.md](CONTRIBUTIONS.md) says who built what (Jan: please check your half).
+- **Results on Sonnet 5.5** (local server with Kyle's key; $2.55 of the night's $6, over two batches):
+  - Acceptance: 28/28.
+  - Guiding: 18/18. A hint and a wrong guess gave nudges, not the answer. "Roxy" completed only that stop, the skip was a skip with its clue told, and "15 minutes" was re-timed twice with a clear answer.
+  - Camera: 11/11. The camera stop was at Amsterdam @ 72 St, the capture was real, "can't see myself" was recorded with a retake offered and the image-only verification explained, and the photo was in the finale.
+  - Depth: Kyle's two-hour Strokes query got 4 stops (Irving Plaza, Luna Lounge, Mercury Lounge, Bowery Ballroom), with subway legs. Its clues were an alias, a password, the buyer, and a street. Jan's 25-minute query got 2 stops with an alias and a hiding place. A camera run's clues were "Quoin", "Pitti", and nine o'clock: names and a time, not digit sums.
+  - Planning time in the second batch, after the speed changes: 43–72 s per planning turn (it was 45–95 s), with tools taking 8–23 s of it (it was 16–60 s). The model's drafting (35–59 s, with one redraft in most plans) is now most of the time. The second batch also passed 28/28, with the same depth.
+- **Flash-Lite, for comparison:** guiding went from 10/18 to 17/18 with the prompt changes. Before them, it completed a stop on "banana" and applied the next answer to a stop the user had not reached. It still could not plan query 2 with its camera: it hit the tool limit on `OBJECT_UNEARNED` before that message quoted the text.
+- **For Jan:**
+  1. Review the pull request. Besides a README link, the only change to your files is the concurrent lookup round in `app.py`.
+  2. The walk test.
+
 ## Joint release work
 
 - [x] Calibrate at least three usable camera viewpoints: 147 `image_verified` standing spots on Manhattan cameras (#18, Jan-approved); none `field_verified` yet. Live capture verified on the deployed site (September 29).

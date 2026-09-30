@@ -178,3 +178,29 @@ Made on `claude/camera-calibration` so a field-verified camera position reaches 
 When `main` (with Kyle's story design v2 prompt) was merged into this branch, the three camera sentences were re-applied to the rewritten `agent.py` and the camera-last ordering was kept beside the new "or swap it" suggestion text, in the merge commit; revert those hunks there too.
 
 Why `76c6103`: in local live runs of query 2 with a camera position 5 m from the start, Flash-Lite dropped the camera in 5 of 5 runs and said no position fit. It either put the camera at the start with a `user_observation` activity (the plan passed but would never capture) or followed the first cut suggestion, which named the camera stop ("saves up to 16 minutes" for a stop 0.6 minutes from the start). With the three changes, 2 of 2 runs kept it.
+
+## Cameras, story depth, and guiding (branch `kyle/cameras-and-depth`, from `main` at `bcc3ea9`)
+
+- `README.md` ("Project docs" only): one link added to `docs/CONTRIBUTIONS.md`. Original line:
+
+  ```markdown
+  - Status and who owns what: [docs/STATUS.md](docs/STATUS.md), [docs/WORK_SPLIT.md](docs/WORK_SPLIT.md).
+  ```
+
+- `app.py` (the harness): a round made only of lookup tools (every tool but the session tools) runs its calls at once (`lookups_at_once`), and the trace keeps the model's order. A round with any session tool runs one call at a time, as before. Why: on Sonnet, three `research_place` calls in one round took 16 s one after another, and three `geocode_place` calls took 12 s. Test: `tests/test_lookups_at_once.py`. To revert, drop `lookups_at_once` and the `early` lookup. The original lines:
+
+  ```python
+  from tools import TOOLS, run_tool
+  ```
+
+  ```python
+          # The harness, not the model, runs each tool and appends the result
+          for i, call in enumerate(reply.tool_calls):
+  ```
+
+  ```python
+              elif isinstance(args, dict):
+                  result = run_tool(call.function.name, args, ctx)
+  ```
+
+No other file of Jan's changed. `adventure/`, `agent.py`, `scripts/`, `tests/test_planning_tools.py`, `tests/test_story.py`, and `docs/TOOLS.md` are Kyle's; `docs/CONTRIBUTIONS.md` is new (Jan: please check your half).

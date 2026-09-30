@@ -14,25 +14,60 @@ Tools marked as session tools receive the server's session context; the model ne
 
 ## `evaluate_adventure_plan`: the plan evaluator (Kyle's original tool)
 
-The model proposes an adventure as a draft: where it starts, what the user asked for, the story, and the stops in order, each with an activity and a story beat. The story follows [STORY_DESIGN.md](STORY_DESIGN.md): a briefing, a cast of invented characters (a handler introduced in the briefing with a contact channel), and at each stop a beat naming its characters, the clue the user earns there, and the earlier clues it `uses`; a `chat_puzzle` carries its exact `solution`, a stop in a themed plan carries a `theme_link` to its own claims, and the finale in `chat_beats` builds on the stop clues. The tool builds the draft into a real plan, then checks it. A plan becomes active only after it passes (`state.save_plan` refuses anything else).
+The agent never presents a plan it wrote freehand. It sends a **draft** to this tool: where the user starts, what they asked for (time, destination, required stops, modes, theme, a camera stop), the story, and the stops in visiting order. The tool builds the draft into a real plan, checks it, and returns concrete violations with the fix for each. Only a passing plan can be saved (`save_adventure_plan`, and `state.save_plan` refuses anything else).
 
-**Building the plan** (`adventure/drafts.py`). Each stop's place and evidence come from what `find_places` and `research_place` actually returned, so the model cannot cite a fact the tools never produced. Every leg is routed on foot or by subway/bus from the planned departure time, and the stops get stable ids. A revision keeps the completed stops, the story, and every clue already revealed. It moves clues from dropped or skipped stops into chat and routes the rest from the user's current location.
+**Building the plan** (`adventure/drafts.py`):
 
-**Checking it** (`adventure/validation.py`). The evaluator rebuilds the timeline from the legs, the wait for any train, and the time at each stop, then reports concrete violations:
+- Each stop's place and evidence come from what `find_places` and `research_place` actually returned, so the model cannot cite a fact the tools never produced.
+- Every leg is routed on foot, or by subway and bus with the wait for the train, from the planned departure.
+- The stops, beats, and legs get stable ids.
+- A revision keeps the completed stops, the story, and every clue already revealed. It moves clues from dropped or skipped stops into chat, and routes the rest from where the user is now.
+
+The story fields follow [STORY_DESIGN.md](STORY_DESIGN.md):
+
+- a briefing, and a cast of invented characters with a handler who has a contact channel;
+- at each stop, a beat naming its characters, the clue the user earns, and the earlier clues it `uses`;
+- a `solution` for each puzzle, and a `theme_link` to the stop's own claims;
+- a finale that builds on the clues.
+
+**Checking it** (`adventure/validation.py`). The evaluator rebuilds the timeline from the legs, the waits for trains, and the time at each stop. It runs no model and makes no network call, except to search the route for a camera position the user asked for. It checks:
 
 | Area | Checks (violation codes) |
 |---|---|
-| Time | Finish plus contingency against the deadline (`DEADLINE_EXCEEDED`) or budget (`DURATION_EXCEEDED`); contingency of at least 10% of travel and dwell (`CONTINGENCY_TOO_SMALL`); the stated total matches the legs (`ESTIMATE_MISMATCH`) |
-| The user's request | Each required place is a stop within 150 m of where the user said (`REQUIRED_STOP_MISSING`, `REQUIRED_MISMARKED`), in their order (`REQUIRED_ORDER`), inside its hours (`WINDOW_MISSED`), with enough time (`DWELL_TOO_SHORT`); only allowed modes (`MODE_NOT_ALLOWED`) |
-| Route data | Legs connect the visiting order (`ROUTE_GAP`, `EMPTY_ROUTE`); transit timings neither stale nor already missed (`STALE_ROUTE`); no synthetic fixture data in a live plan (`SYNTHETIC_DATA`) |
-| Physical honesty | A physical task only with physical-feature evidence about that stop's own place (`UNSUPPORTED_PHYSICAL_TASK`, `EVIDENCE_ELSEWHERE`); no invented object for the user to find, and no invented person handing them one (`INVENTED_PROP`); camera stops only at enabled, field-verified positions near the stop (`CAMERA_UNAVAILABLE`, `CAMERA_ELSEWHERE`) |
-| Story | Every optional stop moves the story (`STOP_WITHOUT_STORY`); beats tied to the right stop and used once (`BEAT_MISMATCH`, `BEAT_REUSED`, `ORPHAN_BEAT`); no clue stranded at a skipped stop (`CLUE_STRANDED`); no real person in the fiction: an architect from the sources acting in the plot or cast (stating what they built is fine), a cast member sharing a name with someone the sources or the user name, or a voice "sounding like" someone (`REAL_PERSON_IN_FICTION`); a premise and a solution (`MISSING_PREMISE`, `MISSING_SOLUTION`); a puzzle has hints (`MISSING_HINTS`); links only from the claims' `source_urls`, saying so when a draft repeats a rejected one (`UNSOURCED_LINK`) |
-| Story design ([STORY_DESIGN.md](STORY_DESIGN.md); a new plan, and what a revision adds) | A briefing (`MISSING_BRIEFING`) with a handler who has a contact channel (`HANDLER_MISSING`); characters introduced in the briefing or in an earlier or the same stop's beat (`CAST_UNINTRODUCED`), and every cast member in some beat (`CAST_UNUSED`); a clue at every stop (`CLUE_MISSING`) that a later beat uses (`CLUE_UNUSED`), never before the user has it (`CLUE_OUT_OF_ORDER`); a finale built on at least two stop clues, or one with one stop (`SOLUTION_UNEARNED`); codes, keys, combinations, passwords, and coordinates only from solved `chat_puzzle`s: at such a stop, or in a beat that builds on their clues (`OBJECT_UNEARNED`); with a stated theme, each chosen stop linked through its own claims (`THEME_UNLINKED`); at least 2 stops from 20 available minutes and 3 from 60, unless the user asked for fewer or their own time limit leaves no room, and 2 when the user gave no limit (`TOO_FEW_STOPS`) |
-| Revisions | Supersedes the active plan (`REVISION_LINEAGE`); completed stops unchanged (`COMPLETED_CHANGED`); revealed clues kept word for word (`REVEALED_BEAT_DROPPED`, `REVEALED_BEAT_CHANGED`); a required stop dropped only with the user's waiver (`REQUIRED_STOP_DROPPED`) |
+| Time | The finish plus contingency meets the deadline (`DEADLINE_EXCEEDED`) or budget (`DURATION_EXCEEDED`). Contingency is at least 10% of travel and dwell (`CONTINGENCY_TOO_SMALL`). The stated total matches the legs (`ESTIMATE_MISMATCH`). |
+| The user's request | Each required place is a stop within 150 m of where the user said (`REQUIRED_STOP_MISSING`, `REQUIRED_MISMARKED`), in their order (`REQUIRED_ORDER`), inside its hours (`WINDOW_MISSED`), and with enough time (`DWELL_TOO_SHORT`). Legs use only the allowed modes (`MODE_NOT_ALLOWED`). A camera stop the user asked for is included when a verified position near the route fits the free time: the evaluator searches for one itself rather than trusting "none fits" (`CAMERA_STOP_MISSING`). |
+| Route data | The legs connect the visiting order (`ROUTE_GAP`, `EMPTY_ROUTE`). Transit timings are neither stale nor already missed (`STALE_ROUTE`). A live plan has no synthetic fixture data (`SYNTHETIC_DATA`). |
+| Physical honesty | A physical task needs physical-feature evidence about that stop's own place (`UNSUPPORTED_PHYSICAL_TASK`, `EVIDENCE_ELSEWHERE`). No object is invented for the user to find, and no person is invented to hand them one (`INVENTED_PROP`). Camera stops are only at enabled, verified positions near the stop (`CAMERA_UNAVAILABLE`, `CAMERA_ELSEWHERE`). |
+| Sources and people | Links come only from the claims' `source_urls`, and the message says when a draft repeats a rejected link (`UNSOURCED_LINK`). No real person is in the fiction (`REAL_PERSON_IN_FICTION`). That covers an architect from the sources acting in the plot or cast (stating what they built is fine), a cast member sharing a name with someone the sources or the user name, and a voice "sounding like" someone. |
+| Story | Every optional stop moves the story (`STOP_WITHOUT_STORY`). Beats are tied to the right stop and used once (`BEAT_MISMATCH`, `BEAT_REUSED`, `ORPHAN_BEAT`). No clue is stranded at a skipped stop (`CLUE_STRANDED`). There is a premise and a solution (`MISSING_PREMISE`, `MISSING_SOLUTION`), and each puzzle has hints (`MISSING_HINTS`). |
+| Story design (a new plan, and what a revision adds) | There is a briefing (`MISSING_BRIEFING`) with a handler who has a contact channel (`HANDLER_MISSING`). Characters are introduced in the briefing or in an earlier or the same stop's beat (`CAST_UNINTRODUCED`), and every cast member appears in some beat (`CAST_UNUSED`). Every stop has a clue (`CLUE_MISSING`), in words, not a bare number (`CLUE_BARE_NUMBER`), that a later beat uses (`CLUE_UNUSED`), never before the user has it (`CLUE_OUT_OF_ORDER`). The finale builds on at least two stop clues, or on one when there is one stop (`SOLUTION_UNEARNED`). Codes, keys, combinations, passwords, and coordinates come only from solved puzzles (`OBJECT_UNEARNED`). With a stated theme, each chosen stop is linked through its own claims (`THEME_UNLINKED`). |
+| Enough stops | When the user gives a time limit, the plan has at least 2 stops from 20 minutes, 3 from 60, and 4 from 100, unless the user asked for fewer or their own limit leaves no room. With no limit, it has 2 (`TOO_FEW_STOPS`). |
+| Revisions | A revision supersedes the active plan (`REVISION_LINEAGE`), and completed stops stay unchanged (`COMPLETED_CHANGED`). Revealed clues are kept word for word (`REVEALED_BEAT_DROPPED`, `REVEALED_BEAT_CHANGED`). A required stop is dropped only with the user's waiver (`REQUIRED_STOP_DROPPED`). |
 
-It also returns the timeline (arrival at each stop, New York time), the finish time, slack against the limit, notes (e.g. a stop with no sourced facts should carry fiction only), and, when the plan runs long, which optional stops to drop and roughly how much each saves. `kind: "check"` re-times the adventure under way from now, for example against "I only have 15 minutes", without changing it.
+With the violations it returns:
 
-**Why it is original.** It is not a wrapper around an API. It turns the product's rules (real places, honest time, invented but clearly fictional stories, no promises about physical things nobody verified, no lost progress when plans change) into checks with concrete, fixable violations. The model gets the specific rule it broke and what to change. The evaluator cannot certify that a quoted source is true; it checks arithmetic, references, and the rules above. The tests in `tests/test_validation.py` break one rule at a time against labeled fixtures; `tests/test_story.py` does the same for the story design, from the design's worked example, and replays the two live runs in `fixtures/story_regressions/` that the evaluator used to accept.
+- the timeline, with arrival at each stop in New York time;
+- the finish time and the slack against the limit;
+- notes, for example "no verified camera position is near this route", which the reply should repeat;
+- when the plan runs long, which optional stops to drop or swap, and roughly how much each saves.
+
+`kind: "check"` re-times the adventure under way from now without changing it, for example against "I only have 15 minutes".
+
+**What the model sees.** Each message names the rule and the fix. From live runs:
+
+- `REQUIRED_MISMARKED`: "stop_1 (American Museum of Natural History) is marked required but is not at a place the user required, 270 m from West 81st Street and Columbus Avenue. Keep it as an optional stop (required_by_user false), and put the required stop at the user's place itself."
+- `CLUE_BARE_NUMBER`: "stop_2's clue is only a number ("22"). Make it something the story needs, stated in words: a name, an alibi, a place, or a number as what it is ("locker 1021"), not digits to add up."
+- `OBJECT_UNEARNED`: "beat_3 (chat) mentions "combination", but it builds on no puzzle the user solves. Give stop_1 and stop_2 each its puzzle's exact answer as activity.solution, and state that answer in the stop's clue."
+
+**Why it is original.** It isn't a wrapper around an API. It turns the product's rules into checks with concrete, fixable violations: real places, honest time, fiction kept apart from fact, no promises about physical things nobody verified, a story whose clues add up, and no lost progress when plans change. Several rules came from live runs where a plan passed and still disappointed ([STORY_DESIGN.md](STORY_DESIGN.md) records them).
+
+**Tests and limits.**
+
+- `tests/test_validation.py` breaks one rule at a time against labeled fixtures.
+- `tests/test_story.py` does the same for the story design, starting from the design's worked example. It also replays the two live runs in `fixtures/story_regressions/` that an earlier version accepted.
+- `tests/test_planning_tools.py` covers drafts, revisions, saving, and camera requests.
+
+The evaluator checks arithmetic, references, and the rules above. It can't certify that a quoted source is true, and it doesn't see the agent's chat replies, so the instructions cover those.
 
 ## Places and research
 

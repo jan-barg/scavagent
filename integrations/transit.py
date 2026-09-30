@@ -17,6 +17,7 @@ its first vehicle would already have left.
 """
 
 import os
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -36,6 +37,7 @@ MAX_FUTURE = timedelta(days=100)
 _credentials = None
 _cache = {}  # request key -> (expires at, Google's route)
 _usage = {"day": None, "count": 0}
+_usage_lock = threading.Lock()  # legs routed at once still count once each
 
 
 def transit_leg(origin, destination, depart_at: datetime, transit_types=("subway", "bus")) -> dict:
@@ -190,13 +192,14 @@ def _auth_headers():
 
 def _count_request():
     today = datetime.now(timezone.utc).date()
-    if _usage["day"] != today:
-        _usage.update(day=today, count=0)
     limit = int(os.environ.get("SCAVAGENT_ROUTES_DAILY_LIMIT", "500"))
-    if _usage["count"] >= limit:
-        raise UpstreamError("google-routes", f"this server's daily limit of {limit} transit lookups is used up",
-                            retryable=False)
-    _usage["count"] += 1
+    with _usage_lock:
+        if _usage["day"] != today:
+            _usage.update(day=today, count=0)
+        if _usage["count"] >= limit:
+            raise UpstreamError("google-routes", f"this server's daily limit of {limit} transit lookups is used up",
+                                retryable=False)
+        _usage["count"] += 1
 
 
 def _explained(error: UpstreamError) -> UpstreamError:
