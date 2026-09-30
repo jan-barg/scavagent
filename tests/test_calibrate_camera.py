@@ -48,7 +48,7 @@ def notes(tmp_path):
         "side_of_street": "TEST side", "positioning_instructions": "TEST: stand by the pole, face east.",
         "reference_view_notes": "TEST view", "visibility_notes": "", "person_region": [0.0, 0.4, 0.2, 0.8],
         "participant_visible": True, "verified_at": "2026-09-30T13:05:00-04:00", "verified_by": "TEST",
-        "evidence_stills": [str(still)], "fallback_checkpoint_id": None,
+        "evidence_stills": [str(still)],
     }
 
 

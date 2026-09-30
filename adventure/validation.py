@@ -37,6 +37,7 @@ from datetime import datetime, timedelta
 from typing import Callable
 from zoneinfo import ZoneInfo
 
+from integrations.common import distance_m
 from schemas import (
     NYC_TIMEZONE,
     VERIFIED_CAMERA_STATUSES,
@@ -314,7 +315,7 @@ def evaluate_plan(
     for checkpoint in required:
         place = places.get(checkpoint.place_id)
         if not any(_same_place(stop.place, place) for stop in request.required_stops):
-            nearest = min(((_meters(s.place.point.lat, s.place.point.lng, place.point.lat, place.point.lng), s)
+            nearest = min(((distance_m(s.place.point.lat, s.place.point.lng, place.point.lat, place.point.lng), s)
                            for s in request.required_stops if s.place.point and place and place.point),
                           key=lambda pair: pair[0], default=None)
             detail = f", {nearest[0]:.0f} m from {nearest[1].place.place_text}" if nearest else ""
@@ -474,8 +475,8 @@ def _check_checkpoint(checkpoint: Checkpoint, place, claims, camera_lookup, allo
         if not usable:
             flag("CAMERA_UNAVAILABLE", f"Camera checkpoint {checkpoint.camera_checkpoint_id} is unknown, disabled, or "
                                        "not verified; use a non-camera activity.", cid)
-        elif place.point is not None and _meters(camera.stand_location.lat, camera.stand_location.lng,
-                                                  place.point.lat, place.point.lng) > SAME_PLACE_M:
+        elif place.point is not None and distance_m(camera.stand_location.lat, camera.stand_location.lng,
+                                                      place.point.lat, place.point.lng) > SAME_PLACE_M:
             flag("CAMERA_ELSEWHERE", f"The standing position for {camera.checkpoint_id} is more than {SAME_PLACE_M} m "
                                      f"from {place.name}.", cid)
 
@@ -869,14 +870,8 @@ def _same_place(location, place):
     if place is None:
         return False
     if location.point is not None and place.point is not None:
-        return _meters(location.point.lat, location.point.lng, place.point.lat, place.point.lng) <= SAME_PLACE_M
+        return distance_m(location.point.lat, location.point.lng, place.point.lat, place.point.lng) <= SAME_PLACE_M
     return bool(location.place_text) and location.place_text.strip().lower() == place.name.strip().lower()
-
-
-def _meters(lat1, lng1, lat2, lng2):
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lng2 - lng1) / 2) ** 2
-    return 2 * 6_371_000 * math.asin(math.sqrt(a))
 
 
 def _clock(moment: datetime) -> str:

@@ -208,3 +208,21 @@ No other file of Jan's changed. `adventure/`, `agent.py`, `scripts/`, `tests/tes
 ## Full names (branch `claude/status-readme`, from `main` at `f19af1f`)
 
 - `docs/CONTRIBUTIONS.md` (Kyle's), first sentence only: Jan asked for full names. Original: "Scavagent was built by Jan (`jgb2170`) and Kyle (`kc3936`)." Now: "Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`)." The same change was made to the team lines of the shared `docs/PLAN.md` and `docs/WORK_SPLIT.md`.
+
+## Redundancy cleanup (branch `claude/redundancy-cleanup`, from `main` at `3ca0f5c`)
+
+Jan asked for code that nothing uses to be removed, and Codex reviewed each change as safe. Kyle's files that changed:
+
+- `adventure/validation.py`: `_meters` was an exact copy of `integrations.common.distance_m`. Its three callers now use `distance_m`, imported from `integrations.common`. The original:
+
+  ```python
+  def _meters(lat1, lng1, lat2, lng2):
+      p1, p2 = math.radians(lat1), math.radians(lat2)
+      a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lng2 - lng1) / 2) ** 2
+      return 2 * 6_371_000 * math.asin(math.sqrt(a))
+  ```
+
+- `adventure/drafts.py`: `_contingency(draft, request, legs, checkpoints)` is now `_contingency(draft, legs, checkpoints)`, because `request` was never used. Both callers were updated.
+- `fixtures/integrations/*.json` (4 files) and `scripts/capture_integration_fixtures.py` were deleted. Nothing loaded the captures, and their `find_places` results predate `matched_terms`. The same-named `fixtures/*.json` are separate files and stay.
+
+To restore any of them: `git checkout 3ca0f5c -- adventure/validation.py adventure/drafts.py fixtures/integrations scripts/capture_integration_fixtures.py`.

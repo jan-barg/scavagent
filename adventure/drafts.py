@@ -112,7 +112,7 @@ def build_new_plan(draft: dict, now: datetime, camera_lookup: CameraLookup | Non
     plan = _plan(
         plan_id=f"plan_{uuid.uuid4().hex[:12]}", version=1, request=request, places=list(places.values()),
         checkpoints=checkpoints, legs=legs, story=_story(draft.get("story"), beats), estimated_total_minutes=0,
-        contingency_minutes=_contingency(draft, request, legs, checkpoints), created_at=now,
+        contingency_minutes=_contingency(draft, legs, checkpoints), created_at=now,
     )
     return plan, warnings
 
@@ -213,7 +213,7 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
     plan = _plan(
         plan_id=f"plan_{uuid.uuid4().hex[:12]}", version=old.version + 1, supersedes_plan_id=old.plan_id,
         request=request, places=list(places.values()), checkpoints=checkpoints, legs=legs, story=story,
-        estimated_total_minutes=0, contingency_minutes=_contingency(draft, request, legs, remaining), created_at=now,
+        estimated_total_minutes=0, contingency_minutes=_contingency(draft, legs, remaining), created_at=now,
     )
     return plan, waived, warnings
 
@@ -441,7 +441,7 @@ def _route(points, request, depart_at):
     return [RouteLeg.model_validate(leg) for leg in result["data"]["legs"]], result["warnings"]
 
 
-def _contingency(draft, request, legs, checkpoints):
+def _contingency(draft, legs, checkpoints):
     if draft.get("contingency_minutes") is not None:
         return parse_minutes(draft["contingency_minutes"], "contingency_minutes")
     busy = sum(leg.duration_minutes for leg in legs) + sum(c.dwell_minutes for c in checkpoints)

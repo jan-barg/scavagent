@@ -15,7 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 class Element extends EventTarget {
   constructor(tag = "div") {
     super();
-    this.tagName = tag; this.children = []; this.value = ""; this.style = {};
+    this.tagName = tag; this.children = []; this.value = ""; this.readOnly = false; this.style = {};
     this.className = ""; this.scrollHeight = 44; this.listeners = {}; this._text = ""; this.textChanges = [];
     this.classList = {
       add: name => { this.className += " " + name; },
@@ -199,26 +199,6 @@ test("409 keeps the pending turn for an automatic retry with a refreshed locatio
   assert.equal(retry.location.point.lat, 40.79);
   assert(!h.storage.has(PENDING));
 });
-
-for (const existingSession of [null, "existing-session"]) {
-  test("legacy null-session pending message migrates with " + (existingSession ? "an existing session" : "a new session"), async () => {
-    const initial = { [PENDING]: JSON.stringify({ message: "ready", session_id: null, client_message_id: MESSAGE_ID }) };
-    if (existingSession) initial[SESSION] = existingSession;
-    const h = harness(initial, [...(existingSession ? [restored(existingSession)] : []), new Error("Response lost")]);
-    await settled();
-    // Reload while the automatically migrated message is awaiting its reply.
-    const sent = posted(h)[0];
-    if (existingSession) assert.equal(sent.session_id, existingSession);
-    else assert.match(sent.session_id, UUID);
-    assert.equal(sent.client_message_id, MESSAGE_ID);
-    assert.equal(sent.message, "ready");
-    assert.equal(h.storage.get(SESSION), sent.session_id);
-    assert.equal(JSON.parse(h.storage.get(PENDING)).session_id, sent.session_id);
-    const reload = harness(Object.fromEntries(h.storage), [restored(sent.session_id), answer]);
-    await settled();
-    assert.deepEqual(posted(reload)[0], sent);
-  });
-}
 
 test("a reply for another session is not rendered or adopted and leaves the same turn retryable", async () => {
   const h = harness({}, [response({ response: "Other session data", session_id: "other-session", tool_calls: [] }), answer]);

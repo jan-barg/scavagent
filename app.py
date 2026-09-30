@@ -63,10 +63,6 @@ def model_options(model: str) -> dict:
 
 
 MODEL_OPTIONS = model_options(MODEL)
-# Optional split: this model plans adventures (and replans them), and SCAVAGENT_MODEL guides the walk once one is
-# proposed or active. Unset, SCAVAGENT_MODEL does everything.
-PLANNER_MODEL = os.environ.get("SCAVAGENT_PLANNER_MODEL") or None
-PLANNING_TOOLS = {"evaluate_adventure_plan", "save_adventure_plan"}  # A guide that calls these hands the turn over
 # When a model can't answer (no credit, a key it rejects, unreachable, or still overloaded after one quick retry), this
 # one answers the turn instead, and turns skip the failed model for FALLBACK_COOLDOWN seconds. Empty turns it off.
 FALLBACK_MODEL = os.environ.get("SCAVAGENT_FALLBACK_MODEL", "vertex_ai/gemini-3.5-flash-lite") or None
@@ -77,15 +73,14 @@ _skip_until: dict[str, float] = {}  # model -> monotonic time before which turns
 
 
 def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | None = None,
-              model: str | None = None, planner: str | None = None) -> str:
+              model: str | None = None) -> str:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text. Every tool call is appended to `tool_calls` as it runs,
     so the caller keeps the trace even if a later model call raises. Session tools
-    receive `ctx`, which the server binds to the current session. With a `planner`, a reply from
-    `model` that asks to evaluate or save a plan is dropped unrun, and the planner redoes the turn
-    from the user's message (tools that already ran stay in the trace and in the session's state).
-    A model that can't answer (see `unusable`) hands the turn to its fallback the same way.
+    receive `ctx`, which the server binds to the current session. A model that can't answer (see
+    `unusable`) hands the turn to its fallback, which redoes it from the user's message (tools that
+    already ran stay in the trace and in the session's state).
     """
     model = model or MODEL
     turn_start = len(messages)
@@ -102,15 +97,10 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
             _skip_until[model] = monotonic() + FALLBACK_COOLDOWN
             del messages[turn_start:]
             messages[0] = system_message(fallback)
-            model, planner = fallback, (planner if planner != fallback else None)
+            model = fallback
             continue
         if reply is None:
             return "That took me too long, so I stopped. Please send your message again."
-        if planner and any(call.function.name in PLANNING_TOOLS for call in reply.tool_calls or []):
-            del messages[turn_start:]
-            messages[0] = system_message(planner)
-            model, planner = planner, None
-            continue
 
         # Append assistant's reply (text, tool calls, or both) to the context.
         # model_dump() keeps it a plain dict: the raw object carries provider-specific
@@ -416,18 +406,14 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     # The user's message joins the stored conversation only when the turn ends, so a save
     # during the turn (a captured photo) never stores half a turn.
     newest = user_message(request.message, app_context(record, now))
-    # With a planner configured, it takes any turn with no adventure under way; the guide takes the rest.
-    model = PLANNER_MODEL if PLANNER_MODEL and record.adventure.status not in ("proposed", "active") else MODEL
-    planner = PLANNER_MODEL if model != PLANNER_MODEL else None
-    model, planner = usable_now(model), planner and usable_now(planner)  # Skip a model that just failed
-    planner = planner if planner != model else None
+    model = usable_now(MODEL)  # Skip a model that just failed
     conversation = [system_message(model)] + recent(without_reasoning(record.messages) + [newest])
     new_from = len(conversation)  # The model's messages for this turn start after the newest message
 
     tool_calls = []
     try:
         ctx = ToolContext(record=record, store=store, message_id=request.client_message_id)
-        response = run_agent(conversation, tool_calls, ctx, model=model, planner=planner)
+        response = run_agent(conversation, tool_calls, ctx, model=model)
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         # Provider errors can quote request details, so those go only to the server log.

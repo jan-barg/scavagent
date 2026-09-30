@@ -19,7 +19,6 @@
     .welcome { padding:12px 0 24px; max-width:620px; }
     .eyebrow { color:var(--accent); font-size:10px; text-transform:uppercase; letter-spacing:2px; font-weight:750; }
     h1 { font-family:Georgia,"Times New Roman",serif; font-weight:400; font-size:clamp(42px,8vw,64px); line-height:1.02; letter-spacing:-2.5px; margin:17px 0 22px; }
-    h1 em { font-weight:400; }
     .intro { max-width:450px; color:var(--muted); font-size:15px; line-height:1.65; }
     .example { margin:26px 0 12px; padding:18px 20px; border-left:2px solid var(--accent); background:#edeedf; font-size:14px; line-height:1.7; }
     .example span { display:block; font-size:9px; letter-spacing:1.6px; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
@@ -108,7 +107,7 @@ function readPending() {
     const value = JSON.parse(readStored(PENDING_KEY));
     if (value && typeof value.message === "string" && value.message.length <= 8000 &&
         typeof value.client_message_id === "string" && /^[0-9a-f-]{36}$/i.test(value.client_message_id) &&
-        (value.session_id === null || value.session_id === sessionId)) return value;
+        typeof value.session_id === "string" && value.session_id === sessionId) return value;
   } catch { /* Ignore corrupt or unavailable browser storage. */ }
   return null;
 }
@@ -122,7 +121,6 @@ function uuid() {
 function scrollToLatest() { trail.scrollTop = trail.scrollHeight; }
 function refreshControls() {
   input.disabled = busy;
-  input.readOnly = false;
   sendButton.disabled = busy || !input.value.trim();
   input.style.height = "44px";
   input.style.height = Math.min(input.scrollHeight, 150) + "px";
@@ -252,7 +250,7 @@ document.addEventListener("visibilitychange", () => {
 });
 setInterval(() => { if (document.visibilityState === "visible") refreshLocation(); }, 60_000);
 
-async function fetchWithTimeout(url, options, milliseconds, readResponse = response => response) {
+async function fetchWithTimeout(url, options, milliseconds, readResponse) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), milliseconds);
   try { return await readResponse(await fetch(url, { ...options, signal:controller.signal, credentials:"same-origin", cache:"no-store" })); }
@@ -302,9 +300,8 @@ async function send(event) {
     sessionId = uuid();
     store(SESSION_KEY, sessionId);
   }
-  if (!pending || pending.session_id === null) {
-    // Upgrade older pending messages without changing their text or request ID.
-    pending = pending ? { ...pending, session_id:sessionId } : { message:text, session_id:sessionId, client_message_id:uuid() };
+  if (!pending) {
+    pending = { message:text, session_id:sessionId, client_message_id:uuid() };
     store(PENDING_KEY, JSON.stringify(pending));
   }
   busy = true; input.value = ""; refreshControls();

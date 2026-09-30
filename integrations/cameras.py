@@ -1,7 +1,6 @@
 """NYC DOT stills and Scavagent's pedestrian checkpoint selector.
 
-Integration: extend TOOLS with CAMERA_TOOLS. Bind the capture handler per request
-with functools.partial(capture_camera_checkpoint, save_asset=session_save_asset).
+tools.py registers CAMERA_TOOLS and wraps the capture with the session's save_asset.
 Never let the model supply save_asset, checkpoint records, URLs, or a session ID.
 Storage owns persistence, media authorization, and replay protection; call capture
 only after the user types readiness. The finder probes but does not save images.
@@ -398,4 +397,3 @@ CAMERA_TOOLS = [
         "parameters": {"type": "object", "properties": {"checkpoint_id": {"type": "string", "minLength": 1, "maxLength": 128}}, "required": ["checkpoint_id"], "additionalProperties": False},
     }},
 ]
-CAMERA_TOOL_MAP = {"find_camera_checkpoints": find_camera_checkpoints, "capture_camera_checkpoint": capture_camera_checkpoint}
