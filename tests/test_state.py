@@ -242,11 +242,12 @@ class ContendedFirestore:
     another writer commits during our first attempt, so our commit is rejected and the transaction reruns."""
 
     def __init__(self):
-        self.docs, self.rival = {}, None
+        self.docs, self.rival, self.applied = {}, None, []  # applied: (kind, doc id) of each committed write
 
     def document(self, doc_id):
         data = lambda: self.docs.get(doc_id)
-        snapshot = lambda transaction=None: SimpleNamespace(exists=data() is not None, get=lambda key: data()[key])
+        snapshot = lambda transaction=None: SimpleNamespace(exists=data() is not None, get=lambda key: data()[key],
+                                                            to_dict=lambda: dict(data()))
         return SimpleNamespace(id=doc_id, get=snapshot, delete=lambda: self.docs.pop(doc_id, None))
 
     def transactional(self, fn):
@@ -258,9 +259,20 @@ class ContendedFirestore:
                     self.docs.update([self.rival])  # The rival wins; our first attempt is discarded
                     continue
                 for doc, data in transaction.writes:
-                    self.docs.pop(doc.id) if data is None else self.docs.update({doc.id: data})
+                    if data is None:
+                        self.docs.pop(doc.id)
+                    elif isinstance(data, FieldUpdate):  # Firestore's update: merges fields into an existing doc
+                        self.docs[doc.id] = {**self.docs[doc.id], **data.fields}
+                    else:
+                        self.docs.update({doc.id: data})
+                    self.applied.append(("delete" if data is None else "update" if isinstance(data, FieldUpdate)
+                                         else "set", doc.id))
                 return result
         return run
+
+
+class FieldUpdate(SimpleNamespace):
+    """A transaction.update: only these fields change."""
 
 
 class FakeTransaction:
@@ -269,6 +281,9 @@ class FakeTransaction:
 
     def set(self, doc, data):
         self.writes.append((doc, data))
+
+    def update(self, doc, fields):
+        self.writes.append((doc, FieldUpdate(fields=fields)))
 
     def delete(self, doc):
         self.writes.append((doc, None))

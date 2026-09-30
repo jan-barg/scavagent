@@ -26,6 +26,7 @@ from pydantic import Field
 from schemas import (
     AdventurePlan,
     AdventureState,
+    Character,
     Checkpoint,
     LocationContext,
     PhotoAsset,
@@ -201,6 +202,8 @@ class Store(Protocol):
     def delete(self, session_id: str) -> None: ...
     def claim(self, session_id: str, message_id: str, now: datetime) -> str | None: ...
     def release(self, session_id: str, message_id: str, token: str) -> None: ...
+    def set_progress(self, session_id: str, message_id: str, token: str, progress: dict) -> bool: ...
+    def progress(self, session_id: str, message_id: str, now: datetime) -> dict | None: ...
     def put_asset(self, asset_id: str, data: bytes, content_type: str, session_id: str) -> None: ...
     def get_asset(self, asset_id: str) -> tuple[bytes, str] | None: ...
 
@@ -209,6 +212,8 @@ class Store(Protocol):
 # They live apart from the session record: claiming one message must not make another turn's save stale.
 # claim() returns a token, or None while a live turn holds the message. release() drops the claim only if
 # it still holds that token, so a turn that overran its claim cannot free the claim of the turn that took over.
+# A running turn also keeps its live steps on its claim (set_progress, for GET /progress): only the token's owner
+# writes them, they are read only while the claim is live, and release() drops them with the claim.
 
 
 def _dump(record: SessionRecord) -> str:
@@ -231,10 +236,16 @@ def _claim_is_live(started_at: datetime | None, now: datetime) -> bool:
     return started_at is not None and now - started_at < IN_FLIGHT_TIMEOUT
 
 
+def _live_progress(started_at: datetime, raw: str | None) -> dict:
+    """What progress() returns for a live claim: when it started, plus the steps written so far (maybe none)."""
+    return {"phase": None, "steps": [], **(json.loads(raw) if raw else {}), "started_at": started_at}
+
+
 class MemoryStore:
     def __init__(self):
         self._sessions: dict[str, str] = {}
         self._claims: dict[tuple[str, str], tuple[datetime, str]] = {}  # -> (started_at, token)
+        self._progress: dict[tuple[str, str], tuple[str, str]] = {}  # -> (token, progress JSON)
         self._assets: dict[str, tuple[bytes, str]] = {}
         self._lock = threading.Lock()
 
@@ -265,6 +276,22 @@ class MemoryStore:
         with self._lock:
             if self._claims.get((session_id, message_id), (None, None))[1] == token:
                 del self._claims[(session_id, message_id)]
+                self._progress.pop((session_id, message_id), None)
+
+    def set_progress(self, session_id, message_id, token, progress):
+        with self._lock:
+            if self._claims.get((session_id, message_id), (None, None))[1] != token:
+                return False
+            self._progress[(session_id, message_id)] = (token, json.dumps(progress))
+            return True
+
+    def progress(self, session_id, message_id, now):
+        with self._lock:
+            started_at, token = self._claims.get((session_id, message_id), (None, None))
+            if not _claim_is_live(started_at, now):
+                return None
+            owner, raw = self._progress.get((session_id, message_id), (None, None))
+            return _live_progress(started_at, raw if owner == token else None)
 
     def put_asset(self, asset_id, data, content_type, session_id):
         self._assets[asset_id] = (data, content_type)
@@ -288,6 +315,9 @@ class SqliteStore:
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS assets (id TEXT PRIMARY KEY, session_id TEXT, content_type TEXT, data BLOB)"
         )
+        # Databases made before live progress have no progress column.
+        if "progress" not in {row[1] for row in self._db.execute("PRAGMA table_info(claims)")}:
+            self._db.execute("ALTER TABLE claims ADD COLUMN progress TEXT")
 
     @contextmanager
     def _transaction(self):
@@ -342,6 +372,20 @@ class SqliteStore:
                 "DELETE FROM claims WHERE session_id = ? AND message_id = ? AND token = ?",
                 (session_id, message_id, token),
             )
+
+    def set_progress(self, session_id, message_id, token, progress):
+        with self._transaction():
+            return self._db.execute(
+                "UPDATE claims SET progress = ? WHERE session_id = ? AND message_id = ? AND token = ?",
+                (json.dumps(progress), session_id, message_id, token),
+            ).rowcount == 1
+
+    def progress(self, session_id, message_id, now):
+        row = self._query(
+            "SELECT started_at, progress FROM claims WHERE session_id = ? AND message_id = ?", (session_id, message_id)
+        )
+        started_at = datetime.fromisoformat(row[0]) if row else None
+        return _live_progress(started_at, row[1]) if _claim_is_live(started_at, now) else None
 
     def put_asset(self, asset_id, data, content_type, session_id):
         with self._transaction():
@@ -414,6 +458,27 @@ class FirestoreStore:
                 transaction.delete(doc)
 
         drop(self._db.transaction())
+
+    def set_progress(self, session_id, message_id, token, progress):
+        doc = self._claim_doc(session_id, message_id)
+
+        # An update, never a set: a set would replace the claim, started_at included, and break its expiry.
+        @self._firestore.transactional
+        def write(transaction):
+            snapshot = doc.get(transaction=transaction)
+            if not snapshot.exists or snapshot.get("token") != token:
+                return False
+            transaction.update(doc, {"progress": json.dumps(progress)})
+            return True
+
+        return write(self._db.transaction())
+
+    def progress(self, session_id, message_id, now):
+        snapshot = self._claim_doc(session_id, message_id).get()
+        if not snapshot.exists or not _claim_is_live(snapshot.get("started_at"), now):
+            return None
+        data = snapshot.to_dict()
+        return _live_progress(data["started_at"], data.get("progress"))
 
     def put_asset(self, asset_id, data, content_type, session_id):
         blob = self._bucket.blob(f"assets/{asset_id}")
@@ -851,3 +916,47 @@ def state_summary(record: SessionRecord) -> dict:
         "finale_if_finished": finale.model_dump(mode="json") if finale and state.current_checkpoint_id is None else None,
     }
     return summary
+
+
+# --- What the page shows ---
+
+
+def board_summary(record: SessionRecord) -> dict:
+    """The page's current-stop sign and case board (GET /adventure). Safe to show by construction.
+
+    A stop's name and address are sent only once it is resolved or current (the first stop is current from the
+    briefing on, and the briefing names it), so a later stop's name cannot give away where a clue points. Clues
+    come only from revealed beats. The solution is sent only once the adventure is over (completed or abandoned).
+    Answer rules, hints, activity prompts, unrevealed beats, and every cast member but the handler never are.
+    """
+    state, plan = record.adventure, active_plan(record)
+    if plan is None:
+        return {"status": "idle"}
+    places = {p.place_id: p for p in plan.places}
+    outcome = {i: "done" for i in state.completed_ids} | {i: "skipped" for i in state.skipped_ids}
+    outcome |= {i: "blocked" for i in state.blocked_ids}
+    number = {c.checkpoint_id: n for n, c in enumerate(plan.checkpoints, 1)}
+    stops = []
+    for n, c in enumerate(plan.checkpoints, 1):
+        status = outcome.get(c.checkpoint_id) or ("current" if c.checkpoint_id == state.current_checkpoint_id else "locked")
+        place = places.get(c.place_id) if status != "locked" else None
+        stops.append({"n": n, "name": place.name if place else None, "address": place.address if place else None,
+                      "status": status, "camera": c.camera_checkpoint_id is not None})
+    handler = next((c for c in plan.story.cast if isinstance(c, Character) and (c.role or "").lower() == "handler"),
+                   None) or next((c for c in plan.story.cast if isinstance(c, Character) and c.contact
+                                  and c.introduced_in == "briefing"), None)
+    camera_stop = {c.camera_checkpoint_id: number[c.checkpoint_id] for c in plan.checkpoints if c.camera_checkpoint_id}
+    return {
+        "status": state.status,
+        "briefing": plan.story.briefing,
+        "handler": {"name": handler.name, "contact": handler.contact} if handler else None,
+        "stops": stops,
+        "clues": [{"text": b.clue, "stop": number.get(b.checkpoint_id)} for b in plan.story.beats
+                  if b.clue and b.beat_id in state.revealed_beat_ids],
+        "photos": [{"media_url": p.media_url, "visibility": p.visibility, "stop": camera_stop.get(p.checkpoint_id)}
+                   for p in record.photos.values()],
+        "destination": plan.request.destination.place_text if plan.request.destination else None,
+        "destination_reached": state.destination_reached_at is not None,
+        "solution": plan.story.solution if state.status in ("completed", "abandoned") else None,
+        "estimated_minutes": round(plan.estimated_total_minutes),
+    }
