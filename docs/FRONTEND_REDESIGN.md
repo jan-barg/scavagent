@@ -1,6 +1,6 @@
 # Frontend redesign: Street Blade, Lou, and the live log
 
-Status: waiting for greenlight (September 30, 2026). Written by Claude, in the frontend session on `jan/frontend-redesign`, for Jan's main agent to review before implementation. Nothing is implemented yet.
+Status: revised after the main agent's review (September 30, 2026). All seven requested changes are adopted; [Review changes](#review-changes) lists where each one landed. Waiting for greenlight. Written by Claude, in the frontend session on `jan/frontend-redesign`. Nothing is implemented yet.
 
 - Clickable mockup (the approved design): https://claude.ai/artifact/CNi2h9BNEpM9Ux9eTcbcq4
 - Phase 1 proposal (the alternatives, and why polling rather than streaming): https://claude.ai/artifact/EZdaiJ6mic6ju26FUa1TWi
@@ -15,7 +15,7 @@ Status: waiting for greenlight (September 30, 2026). Written by Claude, in the f
 | Ignore the October 2 feature freeze for this work | Jan's call. Aim to land before the walk test (October 3–4) |
 | The Lou voice edit to Kyle's `agent.py` (diff below) | **Needs greenlight**, and Kyle should hear about it |
 | New `GET /adventure` for the current-stop sign and the case board | **Needs greenlight** (a contract addition) |
-| One Sonnet run of `scripts/guiding_checks.py` on a local server before merge, about $1–2 | **Needs Jan's go** |
+| Required before merge, after Kyle's greenlight: one Sonnet run on a local server each of `scripts/acceptance_checks.py`, `scripts/guiding_checks.py`, and `scripts/guiding_checks.py --scenario replan`. About $3–5. | **Needs Jan's go** (it costs money) |
 
 ## Why
 
@@ -43,6 +43,7 @@ Status: waiting for greenlight (September 30, 2026). Written by Claude, in the f
 | Proposed | "Briefing ready", "First stop: …", the stop count and minutes |
 | Active | "Stop N of M", the stop name, its address |
 | Completed | "Case closed", the story's solution, "All M stops done" |
+| Abandoned | "Ended early", the story's solution, "N of M stops done" |
 
 ### The case board (read-only)
 
@@ -98,18 +99,21 @@ Last is one typed example as plain text, not a chip, with a note that location i
   - `progress.thinking()` before each model call;
   - `progress.started(i, name, args)` before a tool;
   - `progress.finished(i, result)` after it.
-  - `i` is the call's position in this turn's `tool_calls`, so the log and the final trace have the same order.
+  - `i` is the call's position in this turn's `tool_calls`, so the log and the final trace have the same order. `lookups_at_once` sees only its own round, so `run_agent` passes it the round's offset (`len(tool_calls)` when the round starts), and the round's steps are numbered `offset + j`.
   - `lookups_at_once` marks all jobs in a round as started with the same `round` number. Each future's done-callback marks its own step finished, which is how concurrent lookups resolve one by one.
 - **The reporter.** `chat()` creates a `ProgressReporter` only when there is a `client_message_id`. It is bound to the session, the message, and the claim token.
-  - It keeps the steps in memory, and a writer thread flushes them to the claim at most once a second.
-  - A write failure is logged and never fails the turn.
-  - The writer stops before `release`.
+  - **Thread-safe.** Three threads touch it: the request thread (the hooks), the lookup pool (done-callbacks), and its own writer. One lock guards the steps. Hooks change them only under the lock, and the writer takes a snapshot under the lock and writes outside it.
+  - **Never fatal.** Every hook body is wrapped, so an exception inside a hook is logged and swallowed and the turn continues. A failed write is logged the same way.
+  - **Stopped before release, on both paths.** The writer thread is stopped (and joined, with a short timeout) in a `finally` that runs before `store.release`. That covers the normal release and the error path at `app.py:391` (`except Exception: store.release(...); raise`), so no write can land after the claim is gone.
+  - The writer flushes at most once a second.
 - **`GET /progress?session_id&client_message_id`** returns:
   ```json
   {"session_id": "...", "client_message_id": "...", "state": "running", "started_at": "...", "phase": "tools",
    "steps": [{"i": 0, "round": 1, "name": "geocode_place", "subject": "72nd and West End", "status": "ok"}]}
   ```
-  - `state`: `running` while a claim is live; `done` once `record.replies` has the id (the page can fetch the reply at once instead of waiting out the 5 s retry); `unknown` when there is neither (not started yet, or an expired claim).
+  - **Read order, so a poll is cheap.** The endpoint reads the claim first: one small document. A *live* claim answers `running` with its steps, and the session is never loaded. "Live" uses the same rule as `claim()` (`state._claim_is_live`: started less than `IN_FLIGHT_TIMEOUT` ago). Only when there is no live claim does it load the session record (up to 800 KB, `state.MAX_RECORD_BYTES`) to tell the other two states apart:
+    - `done`: `record.replies` has the id. The page can fetch the reply at once instead of waiting out the 5 s retry.
+    - `unknown`: no reply either. The turn hasn't started, or its claim expired because it crashed. An expired claim is never reported as `running`, even though it stays in storage until it is replaced.
   - `phase`: `thinking`, `tools`, or null.
   - `status`: `running`, `ok`, or `failed`. A step is `failed` when `result.ok` is false, or when `evaluate_adventure_plan` returns `passes: false`, the same rule the page uses today.
   - Invalid ids get 400, as in `/history`.
@@ -135,12 +139,17 @@ Last is one typed example as plain text, not a chip, with a note that location i
    "clues": [{"text": "The thief signs as Roxy.", "stop": 1}], "photos": [{"media_url": "/media/...", "visibility": "unconfirmed"}],
    "solution": null, "estimated_minutes": 38}
   ```
-  - A stop's `status` is `done`, `skipped`, `blocked`, `current`, or `locked`.
+  - The top-level `status` is `idle`, `proposed`, `active`, `completed`, or `abandoned`.
+  - A stop's `status` is `done`, `skipped`, `blocked`, `current`, or `locked`. For an abandoned adventure, the stops that were never reached stay `locked`.
   - Names and addresses are sent only for stops that are resolved or current. While the plan is proposed, the first stop is also named, because the briefing reply names it.
-  - `clues` come only from revealed beats. `solution` is sent only when the status is `completed`.
+  - `clues` come only from revealed beats. `solution` is sent only when the status is `completed` or `abandoned`: the adventure is over, so nothing is left to spoil. The sign shows "Ended early" for an abandoned adventure (see the sign table above).
   - It never sends answer rules, hints, activity prompts or solutions, unrevealed beats, or any cast member but the handler.
   - An unknown session gets 404, and a session with no plan gets `{"status": "idle"}`.
 - **`/static`** is a `StaticFiles` mount for the fonts. `/` still serves `index.html`.
+- **Licenses ship with the assets.**
+  - `static/fonts/` holds the two font files plus `OFL-Overpass.txt` and `OFL-AtkinsonHyperlegible.txt`, the SIL Open Font License texts with each family's copyright line.
+  - `static/licenses/phosphor-MIT.txt` holds Phosphor's MIT notice. `index.html` carries a one-line comment beside the inline icon sprite that points to it.
+  - The "Sources and attribution" section of `docs/TOOLS.md` credits Overpass (OFL), Atkinson Hyperlegible (OFL, Braille Institute), and Phosphor Icons (MIT).
 
 ### `state.py` (Jan's)
 
@@ -148,7 +157,8 @@ Last is one typed example as plain text, not a chip, with a note that location i
 - **Where each store keeps it:**
   - `MemoryStore`: next to the claim.
   - `SqliteStore`: a new `progress TEXT` column on `claims`, added with `ALTER TABLE` when missing, so existing `.data` databases keep working.
-  - `FirestoreStore`: a `progress` field on the existing `…_claims` document, with the token checked in a transaction.
+  - `FirestoreStore`: a `progress` field on the existing `…_claims` document. The write is a `transaction.update(doc, {"progress": ...})` inside a transaction that first reads the document and checks the token, never a `set`. A `set` would replace the whole claim, including `started_at`, and break its expiry.
+- **`progress()` returns the progress only for a live claim,** by the same `_claim_is_live` rule as `claim()`, and `None` otherwise.
 - **`release` is unchanged.** It deletes the claim, so the progress goes with it.
 
 ### Unchanged
@@ -223,12 +233,19 @@ The honesty rules (sourced facts with their links, no invented physical props, r
 
 - **pytest, offline:**
   - `/progress` content: steps, whitelisted subjects, and no arguments from the plan check or state tools.
-  - Ordering, including a concurrent round finishing out of order.
-  - A write from a stale token is refused.
+  - Ordering, including a concurrent round finishing out of order, and a lookup round after earlier tool calls in the same turn (step numbers offset, matching `tool_calls`).
+  - **Load count:** polling a running turn never loads the session (a counting store wrapper asserts zero `load` calls). With no live claim, one load per poll decides `done` or `unknown`.
+  - **Expired claim:** a claim older than `IN_FLIGHT_TIMEOUT` reads as `unknown` (or `done` if the reply is stored), never `running`.
+  - **Thread safety:** hooks and done-callbacks fired from many threads while the writer snapshots never lose or corrupt a step.
+  - **A failing hook doesn't fail the turn:** a reporter whose hooks raise still returns the normal `/chat` reply.
+  - **The writer stops before release on both paths:** no progress write after release, either after a normal turn or when `run_turn` raises (the `app.py:391` path).
+  - A write from a stale token is refused, for all three stores (memory, SQLite, and the Firestore fake in `tests/test_state.py`).
+  - **Firestore uses an update, not a set:** after a progress write, the claim's `started_at` and `token` are unchanged and expiry still works. The fake records `update` against `set`.
   - The progress survives a new store instance ("another server") and is gone after release; `done` after the reply is stored.
   - `unknown` before a claim.
   - `/chat` unchanged: the response keys and `tool_calls` shape, both with and without `client_message_id`, and a 409 still a 409.
-  - `/adventure` spoiler safety: no solution before completion, no hints or answer rules, locked names.
+  - `/adventure` spoiler safety: no solution while proposed or active, no hints or answer rules, locked names.
+  - `/adventure` for an **abandoned** adventure: `status: "abandoned"`, the solution present, unreached stops locked. Also for a completed one: the solution present.
   - SQLite migration of an old `claims` table.
 - **Node:** the harness's fake DOM grows what the new UI needs. New tests cover:
   - the block renderer (briefing, character panel, lists, case file), still DOM-safe;
@@ -237,9 +254,16 @@ The honesty rules (sourced facts with their links, no invented physical props, r
   - backoff on 404, and no overlapping sends;
   - `done` shortening the wait;
   - new replies scrolling to their top;
-  - the board rendering only what the server sent.
+  - the board rendering only what the server sent;
+  - the sign for each status, including "Ended early" for an abandoned adventure.
 - **Both suites stay green:** 432 pytest and 36 Node today. The PR shows that the new tests fail when each feature is removed.
 - **Screenshots, with no model calls.** Phone and desktop screenshots come from the in-app browser against a local server with `SCAVAGENT_DEV_FIXTURES=1` and a scripted fake model (the script stays in the session scratchpad, not the repo).
+- **Required Sonnet runs before merge,** after Kyle greenlights the `agent.py` edit and Jan gives the go (about $3–5 in total). The voice edit reformats every reply graders read, so each of these runs once against a local server with `SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5`:
+  - `scripts/acceptance_checks.py`;
+  - `scripts/guiding_checks.py`;
+  - `scripts/guiding_checks.py --scenario replan`.
+
+  The PR reports the results and the transcripts' formatting: the briefing blockquote, character lines, numbered directions, and the case file.
 
 ## Docs in the same PR
 
@@ -247,15 +271,17 @@ The honesty rules (sourced facts with their links, no invented physical props, r
 - `README.md`: how to use the page (Lou, the sign, the case board, the live log).
 - `docs/STATUS.md`: Jan's section.
 - `docs/SHARED_FILE_EDITS.md`: the `agent.py` edit.
+- `docs/TOOLS.md`: font and icon credits in "Sources and attribution".
 - This file: kept as the design record.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| The formatting depends on the model | The renderer falls back to paragraphs, and the sign and board come from state. The optional Sonnet check covers the main model. |
-| A prompt change just before the walk test | It is small and additive. The Sonnet check (about $1–2) is optional, or the walk test is the first live check. |
-| Firestore writes during a turn | A background thread, at most one write a second, failures logged and never fatal |
+| The formatting depends on the model | The renderer falls back to paragraphs, and the sign and board come from state. The required Sonnet runs check the main model. |
+| A prompt change just before the walk test | It is small and additive, and it doesn't merge until the three required Sonnet runs pass (about $3–5). |
+| Firestore writes during a turn | A background thread under one lock, at most one write a second, token-checked `update` (never `set`). Failures are logged and never fatal, and the writer is stopped before release on both paths. |
+| Polling cost | A running turn's poll reads only the small claim document. The session record is loaded only when no live claim exists. |
 | Spoilers through `/progress` or `/adventure` | Whitelists, plus tests asserting that solutions, hints, and answer rules never appear |
 | `index.html` grows from about 360 lines to about 900 | Still one file with one script, so the harness keeps working |
 | Access | Both endpoints use the session id as the capability, like `/history` |
@@ -266,17 +292,32 @@ About one working day in total:
 
 | Work | Time |
 |---|---|
-| Server and pytest | 3–4 h |
+| Server and pytest, including the review's concurrency and storage tests | 4–5 h |
 | `index.html` and Node tests | 5–6 h |
-| Prompt and docs | about 1 h |
+| Prompt, docs, and licenses | about 1 h |
+| Required Sonnet runs (after Kyle's greenlight and Jan's go) | about 1 h, $3–5 |
 | Screenshots and PR | about 1 h |
 
-With a greenlight tonight, the PR can be ready for review on the evening of October 1. That leaves October 2 to review and merge, and Cloud Run deploys it before the walk test.
+With a greenlight tonight, the PR can be ready for review on the evening of October 1. The prompt edit merges only once Kyle has greenlit it and the Sonnet runs pass. If either comes late, the rest of the PR can merge first and the prompt edit can follow as its own small commit.
+
+## Review changes
+
+The main agent's review asked for seven changes. All are adopted:
+
+| # | Requested | Where |
+|---|---|---|
+| 1 | `/progress` reads the claim first and loads the session only without a live claim; a test counts loads | Server, `/progress` read order; Tests, load count |
+| 2 | An expired claim reads as `unknown`, by `claim()`'s liveness rule | Server, `/progress` and `progress()`; Tests, expired claim |
+| 3 | A thread-safe reporter: one lock and a snapshot for the writer, wrapped hooks, the writer stopped in a `finally` before both release paths, step numbers offset for lookup rounds | Server, the reporter; Tests, thread safety, failing hook, stop before release, ordering |
+| 4 | Firestore writes progress with a token-checked `update` in a transaction, never a `set` | `state.py`; Tests, update not set |
+| 5 | `/adventure` handles `abandoned` ("Ended early"), with the solution for completed or abandoned | The sign table; `/adventure`; Tests (pytest and Node) |
+| 6 | The Sonnet runs are required after Kyle's greenlight: acceptance, guiding, and replan, about $3–5 with Jan's go | Decisions; Tests; Risks; Effort |
+| 7 | OFL files with the fonts, Phosphor's MIT notice, and credits in `docs/TOOLS.md` | Server, licenses; Docs |
 
 ## Greenlight checklist
 
 - [ ] The design and the scope above.
 - [ ] Contract additions: `GET /progress`, `GET /adventure`, and progress on the claim record.
-- [ ] The `agent.py` edit, with Kyle told.
-- [ ] Optional: one Sonnet run of `scripts/guiding_checks.py` (about $1–2).
+- [ ] The `agent.py` edit (Kyle's greenlight).
+- [ ] Jan's go for the three required Sonnet runs (about $3–5).
 - [ ] Anything to change before work starts.
