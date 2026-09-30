@@ -46,7 +46,7 @@ def worked_example():
         "stops": [
             {"place_id": BEACON, "dwell_minutes": 5,
              "theme_link": {"claim_ids": [f"{BEACON}#08b3251e"],
-                            "why": "Roxy Rothafel's 1929 movie palace is a concert hall now, and our thief took his name."},
+                            "why": "A showman's 1929 movie palace is a concert hall now, and our thief took his name."},
              "activity": {"type": "chat_puzzle", "solution": "Roxy",
                           "prompt": "Mara: \"The thief signs as the nickname of the man who built this theatre. Who?\"",
                           "answer_rule": "Roxy, in any spelling.", "hints": ["He was Samuel Rothafel."],
@@ -271,6 +271,21 @@ def test_with_no_puzzle_at_all_the_message_quotes_the_text_to_change():
     assert codes(result) == ["OBJECT_UNEARNED"]
     assert "reveals mentions \"code\" (\"The code to secure the stolen reel.\")" in messages(result)
     assert "No stop in this plan is a chat_puzzle" in messages(result)
+
+
+@pytest.mark.parametrize("change, field", [
+    # Jan's live run (issue #32) asked for "Tom" after naming the diner's founder, Tom Glikas.
+    (lambda d: d["stops"][0]["activity"].update(prompt="Samuel 'Roxy' Rothafel built this theatre. His nickname?"),
+     "prompt"),
+    (lambda d: d["stops"][0]["activity"].update(hints=["It rhymes with foxy: Roxy."]), "hints"),
+    (lambda d: d["stops"][0]["theme_link"].update(why="Roxy Rothafel's movie palace, and our thief took his name."),
+     "theme_link's why"),
+])
+def test_a_puzzle_that_names_its_own_answer_fails(change, field):
+    result = evaluate(changed(change), 5, 6)
+
+    assert codes(result) == ["ANSWER_IN_PROMPT"]
+    assert f"in its {field}," in messages(result)
 
 
 def test_ordinary_senses_of_code_and_key_are_not_objects():
