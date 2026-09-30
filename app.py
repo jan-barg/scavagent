@@ -35,7 +35,7 @@ CONTEXT_MESSAGES = 40  # Recent conversation sent to the model (at least this mu
 # stays the same for several turns and the model provider can serve it from its cache.
 CONTEXT_STEP = 20
 HOUR_CACHE = {"type": "ephemeral", "ttl": "1h"}
-# Model choice is deferred; keep it configurable. Defaults to the starter's model.
+# Deployed: anthropic/claude-sonnet-5-5 (docs/MODEL_COMPARISON.md). Unset, it is the starter's Gemini model.
 MODEL = os.environ.get("SCAVAGENT_MODEL", "vertex_ai/gemini-3.5-flash-lite")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
 # Optional reasoning effort (low, medium, high) for models that take one. Claude uses medium unless this is set.
