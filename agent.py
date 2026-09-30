@@ -55,7 +55,8 @@ walking order by its standing position: first when it is at the start, last when
 "history"). Prefer places whose claims mention the theme.
 5. Write the story, then call evaluate_adventure_plan with kind "new": the start (plus destination, deadline, and \
 required_stops exactly where the user named them, if given), user_stated (with "stop_count" if they asked for a \
-number of stops), user_request (their words), the story, and the stops in visiting order.
+number of stops, and "camera_stop" if they asked for a camera stop), user_request (their words), the story, and the \
+stops in visiting order.
    - Story: a premise; a briefing of 3-6 sentences in second person (who the user is, who they work with and how \
 that person reaches them, what is at stake, how a stop works); a cast of invented characters with a handler \
 introduced in the briefing with a contact channel (radio, phone, telegram), and usually a suspect or rival; a turn by \
