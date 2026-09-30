@@ -55,13 +55,13 @@ Latest changes/checks (September 30):
 
 ## Kyle workstream
 
-Everything below is merged and deployed (#6, #13, #24, #26, #28).
+Everything below is merged and deployed (#6, #13, #24, #26, #28, #30), except the fix for issue #32, which is in review.
 
 | ID | Task | Status |
 |---|---|---|
 | K1 | Research, geocoding, routing | `geocode_place` looks places up in Overpass (the mirror is asked when the main server is slow), NYC GeoSearch, and Nominatim. `find_places` searches each key term separately and reports `matched_terms`. `research_place` returns claims pinned to Wikipedia revisions and LPC records. `get_route` and `get_walking_times` route on foot (Valhalla or OSRM) and by subway or bus (Google Routes), counting the wait for the train. |
 | K2 | Agent planner | `agent.py` covers planning, guiding, changes mid-adventure, and the ending. The model can save only a plan that passed the evaluator. `get_next_directions` gives each leg, with the spot's instructions at a camera stop. |
-| K3 | Original tool: `evaluate_adventure_plan` | `adventure/` has 48 violation codes covering time, the user's request (including a camera stop they asked for), route data, physical honesty, sources and real people, the story design, the number of stops, and revisions. [TOOLS.md](TOOLS.md) has its section for graders. |
+| K3 | Original tool: `evaluate_adventure_plan` | `adventure/` has 49 violation codes covering time, the user's request (including a camera stop they asked for), route data, physical honesty, sources and real people, the story design, the number of stops, and revisions. [TOOLS.md](TOOLS.md) has its section for graders. |
 | K4 | Story, activities, hints, replanning | Story design v2 (#13) adds a briefing, a cast, clues that add up, and theme links. Depth (#24) adds 4 stops for two hours and clues in words. A revision keeps completed stops and revealed clues. |
 | K5 | MTA arrivals, filming records | `get_transit_arrivals` reads live GTFS-realtime and alerts, and refuses stale feeds. `find_filming_records` reports the data's coverage dates and refuses dates after them. |
 | K6 | Tool docs, grader examples, checks | [TOOLS.md](TOOLS.md), [CONTRIBUTIONS.md](CONTRIBUTIONS.md), and [WALK_TEST.md](WALK_TEST.md). Three check scripts: `scripts/acceptance_checks.py` (28 checks), `scripts/guiding_checks.py` (18), and `scripts/camera_checks.py` (11). |
@@ -73,7 +73,14 @@ Checks:
   - The two-hour Strokes query got 4 stops, with clues that are names and places.
   - Planning turns took 43–72 s after lookups began running at once (45–95 s before).
 - **#26:** a camera the user turns down, or one asked for in an earlier adventure, no longer triggers the evaluator's camera search. A test shows the Nominatim lock keeps concurrent lookups a second apart; it fails without the lock.
-- **#28:** double negatives such as "Don't forget the camera stop!", "not to miss", and "never skip" count as asking for a camera. `uv run --frozen pytest -q` passes 424 with the network blocked.
+- **#28:** double negatives such as "Don't forget the camera stop!", "not to miss", and "never skip" count as asking for a camera.
+- **#30:** the three check scripts share one copy of their helpers, with a smoke test that runs each to its report.
+- **Issue #32, in review (`kyle/replan-before-start`):**
+  - Before the start, a change of stops is now a new plan, never a start followed by skips; Jan's #33 refuses those skips.
+  - Clues from skipped stops are told as a short scene, every character is introduced when they first speak, and the handler restates the mission at the first stop visited.
+  - A new check, `ANSWER_IN_PROMPT`, fails a puzzle that names its own answer.
+  - `scripts/guiding_checks.py --scenario replan` covers the case: on local Flash-Lite it passed 8/8 (the Sonnet run waits for Jan's go).
+  - `uv run --frozen pytest -q` passes 432 with the network blocked.
 
 Still open:
 

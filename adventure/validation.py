@@ -19,8 +19,8 @@ the user's request and the product rules in docs/PLAN.md:
 - story design (docs/STORY_DESIGN.md), for a new plan and for what a revision adds: a briefing with
   a handler who has a contact channel, characters introduced before they act and every cast member
   used, a clue at every stop that a later beat uses, a finale built on the clues, codes and keys
-  earned from solved puzzles, stops tied to a stated theme through their own claims, and enough
-  stops for the time;
+  earned from solved puzzles, no puzzle that names its own answer, stops tied to a stated theme
+  through their own claims, and enough stops for the time;
 - a camera stop the user asked for: when the plan has none, the evaluator searches the route
   for a verified position itself, and one that fits the free time must be added;
 - a revision: the plan it replaces, completed stops unchanged, revealed beats kept, unresolved
@@ -691,6 +691,22 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
         flag("OBJECT_UNEARNED", f"{label} {field} mentions \"{match.group(0)}\" (\"{_around(text, match)}\"), but it "
                                 f"builds on no puzzle the user solves. {fix}",
              beat.checkpoint_id if beat is not None and field != "solution" else None)
+
+    # --- A puzzle that tells its own answer ---
+    # Jan's live run (issue #32): "...the man who founded this diner in the 1940s, Tom Glikas... What first name does
+    # the drop use?", with solution "Tom". The theme_link's why is said on arrival, before the question.
+    for checkpoint in plan.checkpoints if whole else new_stops:
+        activity = checkpoint.activity
+        if activity.type != "chat_puzzle" or not (activity.solution or "").strip():
+            continue
+        said = [("prompt", activity.prompt), *(("hints", hint) for hint in activity.hints),
+                *((("theme_link's why", checkpoint.theme_link.why),) if checkpoint.theme_link else ())]
+        where = list(dict.fromkeys(field for field, text in said if _within(activity.solution, text)))
+        if where:
+            flag("ANSWER_IN_PROMPT", f"{checkpoint.checkpoint_id}'s puzzle names its own answer (\"{activity.solution}\") "
+                                     f"in its {' and '.join(where)}, so the user hears it before they are asked. Ask "
+                                     "for it without naming it (\"the nickname of the man who built this theatre\"), "
+                                     "and keep it out of the hints and the theme_link's why.", checkpoint.checkpoint_id)
 
     # --- The theme, through each stop's own sourced claims ---
     if request.theme and "theme" not in request.defaulted_fields:
