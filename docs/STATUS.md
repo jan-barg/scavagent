@@ -52,97 +52,36 @@ Latest changes/checks (September 30):
 
 ## Kyle workstream
 
-| ID | Task | Status | Depends on |
-|---|---|---|---|
-| K1 | Research/geocoding/routing API spikes and fixture outputs | Done on `kyle/workstream` (pushed, not merged): geocoding, places and research, walking and subway/bus routes, live-checked September 29 | Provider/configuration choice; independent of J1 implementation |
-| K2 | Agent progression and dynamic planner | Implemented on `kyle/workstream`: `agent.py` instructions; the model plans with the tools and can save only a plan that passed the evaluator; `get_next_directions` guides each leg. All three grader queries ran end to end locally | J1 and K1, both in the branch |
-| K3 | Original adventure evaluator | Implemented: `adventure/validation.py` behind `evaluate_adventure_plan`, about 30 violation codes, tests that break one rule at a time | — |
-| K4 | Grounded story, activities, hints, coherent replanning | Implemented through the instructions, the revision builder (`adventure/drafts.py`), and the evaluator: completed stops and revealed clues kept, stranded clues moved to chat, waivers only from the user, time limits re-checked. Story quality varies with the model | K2/K3 |
-| K5 | MTA arrivals and filming evidence with freshness handling | Implemented: `get_transit_arrivals` (live GTFS-realtime and alerts; refuses feeds over 10 minutes old) and `find_filming_records` (coverage dates; refuses dates after the data ends). Both live-checked | — |
-| K6 | Tool documentation, example queries, planning acceptance checks | Implemented: `docs/TOOLS.md`, README grader section, `scripts/acceptance_checks.py` | A deployed URL for the final run |
+Everything below is merged and deployed (#6, #13, #24, #26). The one change still in review is the double-negative fix described under "Checks".
 
-Latest changes/checks (September 29, overnight):
+| ID | Task | Status |
+|---|---|---|
+| K1 | Research, geocoding, routing | `geocode_place` looks places up in Overpass (the mirror is asked when the main server is slow), NYC GeoSearch, and Nominatim. `find_places` searches each key term separately and reports `matched_terms`. `research_place` returns claims pinned to Wikipedia revisions and LPC records. `get_route` and `get_walking_times` route on foot (Valhalla or OSRM) and by subway or bus (Google Routes), counting the wait for the train. |
+| K2 | Agent planner | `agent.py` covers planning, guiding, changes mid-adventure, and the ending. The model can save only a plan that passed the evaluator. `get_next_directions` gives each leg, with the spot's instructions at a camera stop. |
+| K3 | Original tool: `evaluate_adventure_plan` | `adventure/` has 48 violation codes covering time, the user's request (including a camera stop they asked for), route data, physical honesty, sources and real people, the story design, the number of stops, and revisions. [TOOLS.md](TOOLS.md) has its section for graders. |
+| K4 | Story, activities, hints, replanning | Story design v2 (#13) adds a briefing, a cast, clues that add up, and theme links. Depth (#24) adds 4 stops for two hours and clues in words. A revision keeps completed stops and revealed clues. |
+| K5 | MTA arrivals, filming records | `get_transit_arrivals` reads live GTFS-realtime and alerts, and refuses stale feeds. `find_filming_records` reports the data's coverage dates and refuses dates after them. |
+| K6 | Tool docs, grader examples, checks | [TOOLS.md](TOOLS.md), [CONTRIBUTIONS.md](CONTRIBUTIONS.md), and [WALK_TEST.md](WALK_TEST.md). Three check scripts: `scripts/acceptance_checks.py` (28 checks), `scripts/guiding_checks.py` (18), and `scripts/camera_checks.py` (11). |
 
-- Branch `kyle/workstream` holds everything: Kyle's K1 commit, a merge of `main` at `9b54995` (J1–J5), then Kyle's work. It is pushed to GitHub as `kyle/workstream` (a push earlier in the night was blocked by local Claude Code permissions; the final one went through). Nothing new was on `main` at the last fetch (about 2:20 AM).
-- Built:
-  - Adapters on the shared schemas: `geocode_place`, `find_places`, `research_place` (claims pinned to Wikipedia revisions and LPC records), `get_route`, `get_walking_times`.
-  - Transit: `integrations/transit.py` asks Google Routes for each leg, counts the wait for the train in door-to-door time, and caps and caches lookups. A leg rides only when that saves at least 4 minutes over a walk longer than 12. The Routes API is enabled on Kyle's project `kc3936-ieor4570-p1` (Kyle approved), and local runs bill it through `SCAVAGENT_ROUTES_PROJECT`.
-  - Planning: `adventure/validation.py` (the evaluator), `adventure/drafts.py` (draft to routed plan, revisions), and `adventure/agent_tools.py` (`evaluate_adventure_plan`, `save_adventure_plan`, `get_next_directions`); `agent.py` (instructions).
-  - Live data: `integrations/mta.py` (`get_transit_arrivals`) and `integrations/filming.py` (`find_filming_records`).
-  - Documentation and checks: `docs/TOOLS.md`, `scripts/acceptance_checks.py`, `scripts/capture_integration_fixtures.py`, `fixtures/integrations/` (labeled live captures).
-  - Edits to Jan's files, each with its original text and a revert command in `docs/SHARED_FILE_EDITS.md`: `tools.py` (registers Kyle's tool lists), `app.py` (agent prompt; tool rounds 8 → 16), `pyproject.toml`/`uv.lock` (`gtfs-realtime-bindings`), and the README grader section.
-- Checks: `uv run pytest -q` passes 252 tests (Jan's 112 plus Kyle's 140); deliberately breaking key guards made their tests fail. An independent review of the new modules found 12 bugs, each confirmed with a script (for example, a clue told in chat for a skipped stop blocked every revision, and a revision could reuse a dropped stop's id so the new stop was never visited). All 12 are fixed, each with a regression test that fails on the earlier code. Final local acceptance run after the fixes (`scripts/acceptance_checks.py`, Gemini 3.5 Flash-Lite, in-memory store): 18 of 18 checks passed. Earlier runs hit Vertex AI `429` rate limits on `agentic-ai-msds` for both Flash-Lite and Flash after repeated runs.
-- Found in live runs and now handled in code or instructions: invented props and hand-offs (`INVENTED_PROP`), a nearby landmark standing in for a required corner (`REQUIRED_MISMARKED`), real architects written into the plot (`REAL_PERSON_IN_FICTION`), broken invented links in plan text (`UNSOURCED_LINK`), completing a stop on arrival, finishing before the destination, "15 minutes left" read as a total budget, and a UTC time taken for New York time.
-- Model choice (still open): Flash-Lite answers in about 3–60 s per turn but follows the rules less reliably; it still sometimes writes invented Wikipedia links in replies, which the evaluator cannot see. Gemini 3.5 Flash followed the rules better (honest options at query 3, correct links) but took 15–130 s per turn and hit `429` rate limits. Gemini 3.5 Pro is not available on the project.
-- For Jan:
-  1. Review and merge `kyle/workstream`, using `docs/SHARED_FILE_EDITS.md`.
-  2. Transit on Cloud Run: enable `routes.googleapis.com` on `agentic-ai-msds`, so the runtime service account can call it with no key; or set `SCAVAGENT_ROUTES_PROJECT` or `GOOGLE_MAPS_API_KEY` on the service. Without either, legs fall back to walking with a warning.
-  3. Harness: retry Vertex `429`s with backoff inside `TURN_SECONDS` (for example LiteLLM `num_retries`), and retry once when the model returns neither text nor a tool call (seen once).
-  4. State guards to consider: refuse `complete_checkpoint` for a checkpoint other than the current one, and `finish_adventure` while a destination remains. The instructions ask for both, but the model slipped in earlier runs.
-  5. A public accessor for the camera catalogue: `adventure/agent_tools.camera_lookup` uses `cameras._checkpoints`.
-- Next: push and merge; deploy and run `scripts/acceptance_checks.py <deployed URL>`; field-calibrate a camera position so a camera stop can pass the evaluator; walk-test a generated hunt; decide the model.
+Checks:
 
-Latest changes/checks (September 29, afternoon: story design v2, branch `kyle/story-design-v2`, pull request open for review, not merged):
+- **#24**, on Sonnet 5.5 with a local server ($2.55 of Anthropic credit):
+  - Acceptance passed 28/28 twice, guiding 18/18, and camera 11/11.
+  - The two-hour Strokes query got 4 stops, with clues that are names and places.
+  - Planning turns took 43–72 s after lookups began running at once (45–95 s before).
+- **#26:** a camera the user turns down, or one asked for in an earlier adventure, no longer triggers the evaluator's camera search. A test shows the Nominatim lock keeps concurrent lookups a second apart; it fails without the lock.
+- **In review (`kyle/status-and-double-negatives`):** double negatives such as "Don't forget the camera stop!", "not to miss", and "never skip" count as asking for a camera. `uv run --frozen pytest -q` passes 424 with the network blocked.
 
-- Implemented `docs/STORY_DESIGN.md` following its plan:
-  - the optional `schemas.py` fields (approved by Jan);
-  - the draft fields and the `evaluate_adventure_plan` schema;
-  - the new evaluator codes (plus `CLUE_OUT_OF_ORDER`), with `REAL_PERSON_IN_FICTION` and `UNSOURCED_LINK` extended;
-  - the prompt changes;
-  - story checks in the acceptance script.
-- `get_adventure_state` also returns the cast, the clues still to tell in chat, and the finale. This is a small additive edit to Jan's `state.py`, logged in `docs/SHARED_FILE_EDITS.md` for Jan to accept or drop.
-- The design's implementation notes record the choices the spec left open.
-- `find_places`: Wikipedia's search requires every word of a query. Near 96th & 2nd, "music rock historic landmark" matched 2 unrelated articles where "music" alone matched 24, and landmark records ignored the query. Each key term is now searched separately, and each candidate lists its `matched_terms`. Live near the Bowery, 'Strokes rock "music venue"' now leads with Mercury Lounge, Bowery Ballroom, Arlene's Grocery, and CBGB.
-- Tests: `uv run --frozen pytest -q` passes 310 with the network blocked (272 before). Both regression drafts fail with the listed codes, and the worked example passes.
-- Acceptance, local (Gemini 3.5 Flash-Lite, in-memory store): 26 checks, 8 of them new story checks. There were six runs, each followed by a fix:
+Still open:
 
-  | Run | Result | What happened, and the fix |
-  |---|---|---|
-  | 1 | 25/26, story 8/8 | Q3 got an empty model reply. OBJECT_UNEARNED had looped five times, so the rule now follows the clue chain. |
-  | 2 | 25/26, story 8/8 | Q1 planned one stop inside a budget the model chose, so only a limit the user gives now excuses fewer stops. Q3 did not re-time. |
-  | 3 | 16/22 | Q1 hit a model timeout. Q2 took 9 drafts: an architect stated as fact was rejected (now allowed), and a museum 275 m away stood in for the required corner (the messages now name the fix). The model finally moved the corner itself, which the script caught. |
-  | 4 | 25/26, story 8/8 | Q3 did not re-time. The puzzles had no `solution`, so the OBJECT_UNEARNED message now names them. |
-  | 5 | 24/26, story 8/8 | Q2 bounced between DEADLINE_EXCEEDED and TOO_FEW_STOPS, then hit the 16-round limit after saving, so the user got no briefing. The messages now say where another stop fits. Q3 finished before the destination. |
-  | 6 | 24/26, story 8/8 | Q1 and Q2 passed on the second evaluation. Q3 completed the required corner the user had not reached, then finished early. |
-
-- Deployed (still `main`, before this change): 20/26. The 6 story checks that need a v2 story fail, as expected, and Q3 waived a required stop on the user's behalf.
-- For Jan:
-  1. Review the pull request. The `schemas.py` and `state.py` edits are logged in `docs/SHARED_FILE_EDITS.md`.
-  2. Harness: after `MAX_TOOL_ROUNDS`, ask the model once more without tools for its reply. In run 5 a plan was saved, but the reply was only "Sorry, I hit my tool-call limit".
-  3. State: track arrival at the destination so `finish_adventure` refuses while the user is still on the way. Runs 5 and 6 finished early at query 3.
-  4. Model: rerun `scripts/acceptance_checks.py` once Claude is configured. Flash-Lite's query-3 guiding varies from run to run.
-
-Latest changes/checks (September 29, night: cameras, story depth, guiding, speed; branch `kyle/cameras-and-depth`, pull request open for review, not merged). Jan's list for the night, item by item. The three follow-ups from the block above are closed by Jan's #14 and #15.
-
-- **Camera stops in planning (1):**
-  - The camera session's edits to Kyle's files in #17 are sound.
-  - A requested camera stop is now enforced. When the current request asks for a camera (a mention that "no", "skip", or "without" doesn't turn down; earlier adventures don't count), or `"camera_stop"` is in `user_stated`, and the plan has none, `evaluate_adventure_plan` runs `find_camera_checkpoints` along the route itself. A verified position whose detour and photo fit the free time becomes `CAMERA_STOP_MISSING`, naming the id to add; anything else becomes a note for the reply.
-  - `get_next_directions` to a camera stop carries the spot's instructions and verification status. The planning turn has scrolled away by then, and `get_adventure_state` shows only the id.
-  - Grader query 2 with a real camera: see `scripts/camera_checks.py` below.
-- **Deeper stories (2):**
-  - `TOO_FEW_STOPS` asks for 4 stops from 100 minutes.
-  - A new check, `CLUE_BARE_NUMBER`, fails clues that are only a number.
-  - The prompt asks for clues that carry the plot (an alias, an alibi, a place, a time) and a turn by the middle stop. Its example no longer names a handler: models kept reusing "Mara Quill".
-- **Guiding (3):**
-  - `scripts/guiding_checks.py` has 18 checks over arrival, a hint, a wrong answer, the right answer, a skip, and "only 15 minutes left".
-  - The prompt: a wrong answer gets the next hint and never the answer, giving up means the fallback and a skip, and an answer always belongs to the current stop.
-- **Planning speed (4):**
-  - A round made only of lookup tools now runs at once (Jan's `app.py`, logged in `docs/SHARED_FILE_EDITS.md`).
-  - The Overpass mirror is asked when the main server hasn't answered after 4 s.
-  - `OBJECT_UNEARNED` quotes the text to change.
-  - Measured on Sonnet before these changes: planning turns took 37–95 s, of which the model took 28–54 s. Tools took the rest: an intersection took 5–33 s on Overpass, and three research calls in one round took 16 s one after another. The evaluator itself takes under half a second.
-- **Walk test (5):** a plan to follow is in [WALK_TEST.md](WALK_TEST.md).
-- **Grading docs (6):** the evaluator section of [TOOLS.md](TOOLS.md) is rewritten for graders, and [CONTRIBUTIONS.md](CONTRIBUTIONS.md) says who built what (Jan: please check your half).
-- **Results on Sonnet 5.5** (local server with Kyle's key; $2.55 of the night's $6, over two batches):
-  - Acceptance: 28/28.
-  - Guiding: 18/18. A hint and a wrong guess gave nudges, not the answer. "Roxy" completed only that stop, the skip was a skip with its clue told, and "15 minutes" was re-timed twice with a clear answer.
-  - Camera: 11/11. The camera stop was at Amsterdam @ 72 St, the capture was real, "can't see myself" was recorded with a retake offered and the image-only verification explained, and the photo was in the finale.
-  - Depth: Kyle's two-hour Strokes query got 4 stops (Irving Plaza, Luna Lounge, Mercury Lounge, Bowery Ballroom), with subway legs. Its clues were an alias, a password, the buyer, and a street. Jan's 25-minute query got 2 stops with an alias and a hiding place. A camera run's clues were "Quoin", "Pitti", and nine o'clock: names and a time, not digit sums.
-  - Planning time in the second batch, after the speed changes: 43–72 s per planning turn (it was 45–95 s), with tools taking 8–23 s of it (it was 16–60 s). The model's drafting (35–59 s, with one redraft in most plans) is now most of the time. The second batch also passed 28/28, with the same depth.
-- **Flash-Lite, for comparison:** guiding went from 10/18 to 17/18 with the prompt changes. Before them, it completed a stop on "banana" and applied the next answer to a stop the user had not reached. It still could not plan query 2 with its camera: it hit the tool limit on `OBJECT_UNEARNED` before that message quoted the text.
-- **For Jan:**
-  1. Review the pull request. Besides a README link, the only change to your files is the concurrent lookup round in `app.py`.
-  2. The walk test.
+- The walk test with Jan, October 3–4, following [WALK_TEST.md](WALK_TEST.md). Fixes go in on October 5.
+- The release check, October 6, including the deployed acceptance run (with Jan's go, since it costs money).
+- Known limits:
+  - The evaluator can't see chat replies. Links and answers that would give a puzzle away rely on the instructions, which Sonnet followed in every run.
+  - The Gemini fallback plans thinner stories, and in local runs it couldn't plan query 2 with its camera.
+  - Overpass answers in 5–15 s under load.
+  - A redraft rewrites the whole plan. Sending only the changes waits until after submission, because it needs a change to `state.EvaluatedDraft`.
+- Cleanup of redundant or stale code and docs in Kyle's files waits for the read-only session's list.
 
 ## Joint release work
 
