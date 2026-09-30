@@ -1,6 +1,7 @@
 """The /chat trace contract, with the model replaced by scripted replies."""
 
 import json
+import threading
 
 import litellm
 import pytest
@@ -64,9 +65,12 @@ def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypa
         return reply(FakeMessage(content=None, tool_calls=[
             tool_call(f"a{n}", "get_weather", '{"location": "NYC"}'), tool_call(f"b{n}", "get_weather", '{"location": "NYC"}')]))
 
-    def slow_tool(location):  # Each tool takes 30 s
-        ran.append(clock[0])
-        clock[0] += 30
+    lock = threading.Lock()
+
+    def slow_tool(location):  # Each tool takes 30 s; a round's lookups run at once, so they take turns on the clock
+        with lock:
+            ran.append(clock[0])
+            clock[0] += 30
         return tools.tool_ok({"location": location})
 
     monkeypatch.setattr(app_module.litellm, "completion", slow_model)
@@ -77,6 +81,30 @@ def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypa
     assert timeouts == [240, 80] and ran == [100, 130]
     assert [c["result"]["ok"] for c in body["tool_calls"]] == [True, True, False, False]
     assert "too long" in body["response"]
+
+
+def test_lookups_started_before_the_deadline_keep_their_results(client, monkeypatch):
+    # A round of lookups starts together; one that finishes past the deadline still ran, so the trace says so.
+    clock = [0.0]
+    monkeypatch.setattr(app_module, "monotonic", lambda: clock[0])
+    lock = threading.Lock()
+
+    def model(**kwargs):  # Answers at 200 s with two lookups
+        clock[0] += 200
+        return reply(FakeMessage(content=None, tool_calls=[
+            tool_call("a", "get_weather", '{"location": "NYC"}'), tool_call("b", "get_weather", '{"location": "Queens"}')]))
+
+    def slow_tool(location):
+        with lock:
+            clock[0] += 30  # The round ends at 260 s
+        return tools.tool_ok({"location": location})
+
+    monkeypatch.setattr(app_module.litellm, "completion", model)
+    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", slow_tool)
+    body = client.post("/chat", json={"message": "walk?"}).json()
+
+    assert [c["result"].get("data") for c in body["tool_calls"]] == [{"location": "NYC"}, {"location": "Queens"}]
+    assert "too long" in body["response"]  # No model call starts after the deadline
 
 
 def test_model_context_never_starts_with_an_orphaned_tool_result():
