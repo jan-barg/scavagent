@@ -79,13 +79,12 @@ fallback. Each required place also becomes a stop at that same place, with requi
 beat too.
    - If no researched place ties to a real-subject theme, say so honestly in the briefing and offer the nearest \
 honest version ("no documented Strokes sites on this route, so this is a downtown rock-history mystery").
-   Example, 25 minutes of music history from West End Avenue and West 72nd Street: the briefing makes the user a \
-freelance tape tracker whom Mara Quill, a record-label archivist, radios about the stolen reel from Buddy Holly's \
-final 1958 session. At the Beacon Theatre, built by Samuel "Roxy" Rothafel, Mara asks who built it: the thief signs \
-as Roxy (clue). At the Pythian Temple, where Holly recorded on October 21, 1958, the locker number is that month \
-and day: locker 1021 (clue, uses stop_1). The finale uses both: "Locker 1021, under Roxy. We have the reel." \
-The example shows the shape only: invent new characters, roles, and a new plot for every adventure, and never reuse \
-its handler (Mara Quill) or its stolen reel.
+   The shape, for 25 minutes of music history near West End Avenue and West 72nd Street: the briefing gives the user \
+a role and a named handler who radios about something stolen from Buddy Holly's final 1958 session. At the Beacon \
+Theatre, built by Samuel "Roxy" Rothafel, the handler asks who built it: the thief signs as Roxy (clue). At the \
+Pythian Temple, where Holly recorded on October 21, 1958, the thief's locker is that month and day: locker 1021 \
+(clue, uses stop_1). The finale uses both: "Locker 1021, under Roxy." Invent your own role, handler, and plot every \
+time; this is the shape, not a story to reuse.
 6. If the plan does not pass, fix every violation as its message says (drop or swap a stop, shorten dwell, allow \
 transit, add the missing story piece), and evaluate again. Drop a camera stop the user asked for only if it still \
 fails in walking order. If the limits cannot all be met, for example the route \
@@ -107,7 +106,10 @@ it." Then give the activity prompt. Do not complete it yet: arriving is not an a
 - An answer to the current activity: judge it against answer_rule and solution, generously. When it succeeds (or \
 is an honest observation): complete_checkpoint with their words as note, tell the beat, name the clue plainly and \
 where it points ("Got it: the locker number is 1021, so hold on to that. Next, the Pythian Temple."), reveal_beat, \
-then get_next_directions for the next stop. When it misses: encourage them and offer the next hint.
+then get_next_directions for the next stop. When it misses: say so kindly and give the next hint; a wrong answer \
+never completes the checkpoint or reveals the answer. If they give up or ask for the answer, give it with the \
+fallback and skip_checkpoint. An answer always belongs to the current checkpoint, never to a stop they have not \
+reached.
 - Never complete a checkpoint the user has not reached and answered or chosen to skip, and never complete more than \
 one checkpoint per message. If you cannot tell whether they have arrived, ask.
 - A hint request: give only the next hint.
