@@ -386,6 +386,61 @@ def test_required_stop_needs_an_explicit_waiver_to_skip(active):
     assert waived["ok"] and active.record.adventure.skipped_ids == ["stop_1"]
 
 
+def proposed(ctx):
+    """A saved, passing plan the user has not started yet."""
+    assert state.save_plan(ctx, passing(load_scenario("constrained_route").plan))["data"]["status"] == "proposed"
+    return ctx
+
+
+def test_cutting_stops_in_the_message_that_starts_is_a_new_plan_not_skips(ctx):
+    # Jan's live run (September 30): "can only do Tom's" before starting. The model started, skipped the first two
+    # stops, and the story written for three came out as a bare catch-up with a character nobody had introduced.
+    tools.update_adventure_state(proposed(ctx), "start_adventure")
+    refused = tools.update_adventure_state(ctx, "skip_checkpoint", checkpoint_id="stop_2")
+
+    assert not refused["ok"] and 'kind "new"' in refused["error"]["next_step"]
+    assert "stop_count" in refused["error"]["next_step"]
+    adventure = ctx.record.adventure
+    assert adventure.status == "proposed" and adventure.skipped_ids == []  # The start is undone
+    # Further skips in the same message are refused too, and a new plan for the stops they'll visit can be saved.
+    assert not tools.update_adventure_state(ctx, "skip_checkpoint", checkpoint_id="stop_3")["ok"]
+    assert state.save_plan(ctx, passing(load_scenario("start_only").plan))["data"]["status"] == "proposed"
+
+
+def test_the_live_runs_start_then_skip_is_refused_and_the_undone_start_is_stored(monkeypatch):
+    # The same calls as the live run, in one message: state, start, skip, skip.
+    monkeypatch.setattr(app_module, "store", state.MemoryStore())
+    record = SessionRecord.new("cut-before-start")
+    proposed(ToolContext(record=record, store=app_module.store, now=lambda: NOW))
+    app_module.store.save(record)
+    calls = [tool_call("a", "get_adventure_state", "{}"), tool_call("b", "update_adventure_state", '{"operation": "start_adventure"}')]
+    calls += [tool_call(f"s{i}", "update_adventure_state", f'{{"operation": "skip_checkpoint", "checkpoint_id": "stop_{i}"}}')
+              for i in (2, 3)]
+    script(monkeypatch, FakeMessage(content=None, tool_calls=calls), FakeMessage(content="Let me re-plan that.", tool_calls=None))
+
+    body = TestClient(app_module.app).post("/chat", json={"message": "can only do the last stop", "session_id": "cut-before-start"}).json()
+
+    assert [c["result"]["ok"] for c in body["tool_calls"]] == [True, True, False, False]
+    stored = app_module.store.load("cut-before-start").adventure
+    assert stored.status == "proposed" and stored.skipped_ids == []
+
+
+def test_stops_cannot_be_skipped_before_the_adventure_starts(ctx):
+    refused = tools.update_adventure_state(proposed(ctx), "skip_checkpoint", checkpoint_id="stop_2")
+    assert not refused["ok"] and ctx.record.adventure.skipped_ids == []
+    assert ctx.record.adventure.status == "proposed"
+
+
+def test_skips_after_the_start_or_after_progress_still_work(ctx):
+    tools.update_adventure_state(proposed(ctx), "start_adventure")
+    tools.update_adventure_state(ctx, "complete_checkpoint", checkpoint_id="stop_1")  # Progress in the same message
+    assert tools.update_adventure_state(ctx, "skip_checkpoint", checkpoint_id="stop_2")["ok"]
+
+    later = ToolContext(record=ctx.record, store=ctx.store, now=ctx.now)  # A later message, nothing done yet there
+    assert tools.update_adventure_state(later, "skip_checkpoint", checkpoint_id="stop_3")["ok"]
+    assert ctx.record.adventure.skipped_ids == ["stop_2", "stop_3"] and ctx.record.adventure.status == "active"
+
+
 def test_stale_expected_version_is_rejected(active):
     stale = active.record.adventure.version
     tools.update_adventure_state(active, "complete_checkpoint", checkpoint_id="stop_1")

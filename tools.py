@@ -92,6 +92,8 @@ def update_adventure_state(
     if operation in CHECKPOINT_OPERATIONS:
         if not checkpoint_id:
             return missing("checkpoint_id")
+        if operation == "skip_checkpoint" and (refused := state.skip_before_start(ctx)):
+            return refused
         return state.resolve_checkpoint(
             ctx, checkpoint_id, CHECKPOINT_OPERATIONS[operation], note=note,
             user_waived_required=user_waived_required, expected_version=expected_version,
