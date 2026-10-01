@@ -15,7 +15,7 @@ import tools
 import turn_progress
 from fakes import FakeMessage, script, tool_call
 from fixtures import load_scenario
-from schemas import AdventureState, Character, PhotoAsset, tool_ok
+from schemas import AdventureState, Character, PhotoAsset, StoryBeat, ThemeLink, tool_ok
 from state import SessionRecord
 from test_state import fake_firestore_store, make_store
 
@@ -387,22 +387,32 @@ def test_chat_is_unchanged_with_and_without_a_client_message_id(client, store, m
 
 # --- GET /adventure ---
 
-SECRETS = ["SOLUTION-TEXT", "HINT-TEXT", "ANSWER-RULE", "PUZZLE-ANSWER", "PROMPT-TEXT", "Viktor Hale"]
+SECRETS = ["SOLUTION-TEXT", "HINT-TEXT", "ANSWER-RULE", "PUZZLE-ANSWER", "PROMPT-TEXT", "Viktor Hale", "THEME-WHY",
+           "FINALE-SUMMARY", "FINALE-CLUE", "FINALE-REVEALS", '"uses"']
+FINALE = StoryBeat(beat_id="finale", summary="FINALE-SUMMARY", reveals="FINALE-REVEALS", clue="FINALE-CLUE",
+                   uses=["beat_1", "beat_2", "beat_3"])
+CAST = [Character(name="Mara Quill", role="handler", contact="radio"),
+        Character(name="Viktor Hale", role="rival", contact="phone", introduced_in="stop_2")]
+BRIEFING = "You're a tape tracker. Mara Quill radios you at each stop."
 
 
-def board_session(store, status, current, done=(), revealed=()):
+def board_session(store, status, current, done=(), revealed=(), cast=CAST, briefing=BRIEFING,
+                  clue=lambda beat_id: f"CLUE-{beat_id}"):
     fixture = load_scenario("constrained_route")
     plan = fixture.plan
     story = plan.story.model_copy(update={
-        "briefing": "You're a tape tracker. Mara Quill radios you at each stop.",
-        "cast": [Character(name="Mara Quill", role="handler", contact="radio"),
-                 Character(name="Viktor Hale", role="rival", contact="phone", introduced_in="stop_2")],
-        "beats": [b.model_copy(update={"clue": f"CLUE-{b.beat_id}"}) for b in plan.story.beats],
+        "briefing": briefing,
+        "cast": cast,
+        "beats": [b.model_copy(update={"clue": clue(b.beat_id), "uses": ["beat_1"]}) for b in plan.story.beats]
+                 + [FINALE],
         "solution": "SOLUTION-TEXT",
     })
     secret = {"hints": ["HINT-TEXT"], "answer_rule": "ANSWER-RULE", "solution": "PUZZLE-ANSWER", "prompt": "PROMPT-TEXT"}
-    checkpoints = [c.model_copy(update={"activity": c.activity.model_copy(update=secret)}) for c in plan.checkpoints]
+    checkpoints = [c.model_copy(update={"activity": c.activity.model_copy(update=secret),
+                                        "theme_link": ThemeLink(claim_ids=[], why="THEME-WHY")})
+                   for c in plan.checkpoints]
     plan = plan.model_copy(update={"story": story, "checkpoints": checkpoints})
+    store.delete("board")  # Seeding again starts a new session
     record = SessionRecord.new("board")
     record.plans[plan.plan_id] = plan
     record.adventure = AdventureState(status=status, active_plan_id=plan.plan_id, current_checkpoint_id=current,
@@ -414,7 +424,8 @@ def board_session(store, status, current, done=(), revealed=()):
 
 
 def test_the_board_names_only_reached_stops_and_revealed_clues(client, store):
-    board_session(store, "active", "stop_2", done=["stop_1"], revealed=["beat_1"])
+    # The finale beat is marked revealed on purpose: it still stays off the board while the adventure runs.
+    board_session(store, "active", "stop_2", done=["stop_1"], revealed=["beat_1", "finale"])
     response = client.get("/adventure", params={"session_id": "board"})
     body = response.json()
 
@@ -451,6 +462,28 @@ def test_an_adventure_that_is_over_shows_its_solution(client, store, status, cur
         assert body["stops"][2]["name"] is None
     for secret in SECRETS[1:]:
         assert secret not in str(body)
+
+
+def test_the_handler_is_the_briefed_contact_preferring_a_handler_role(client, store):
+    cast = [Character(name="Rita Vance", role="handler", contact="phone", introduced_in="stop_2"),  # Not briefed
+            Character(name="Ozzie Hart", role="informant", contact="telegram"),
+            Character(name="Mara Quill", role="Lead handler", contact="radio"),
+            Character(name="Sid Lowe", role="handler", contact="  ")]  # No contact channel
+    board_session(store, "active", "stop_1", cast=cast)
+    assert client.get("/adventure", params={"session_id": "board"}).json()["handler"] == \
+        {"name": "Mara Quill", "contact": "radio"}
+
+    board_session(store, "active", "stop_1", cast=[c for c in cast if c.name != "Mara Quill"])
+    assert client.get("/adventure", params={"session_id": "board"}).json()["handler"] == \
+        {"name": "Ozzie Hart", "contact": "telegram"}  # No briefed handler role: the first briefed contact
+
+
+def test_a_plan_from_before_story_design_v2_has_no_handler_briefing_or_clues(client, store):
+    board_session(store, "active", "stop_2", done=["stop_1"], revealed=["beat_1"],
+                  cast=["The Architect (fictional)", "The Rival (fictional)"], briefing=None, clue=lambda beat_id: None)
+    body = client.get("/adventure", params={"session_id": "board"}).json()
+    assert body["handler"] is None and body["briefing"] is None and body["clues"] == []
+    assert [s["status"] for s in body["stops"]] == ["done", "current", "locked"]
 
 
 def test_the_board_is_idle_without_a_plan_and_404_without_a_session(client, store):

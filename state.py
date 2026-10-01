@@ -925,9 +925,12 @@ def board_summary(record: SessionRecord) -> dict:
     """The page's current-stop sign and case board (GET /adventure). Safe to show by construction.
 
     A stop's name and address are sent only once it is resolved or current (the first stop is current from the
-    briefing on, and the briefing names it), so a later stop's name cannot give away where a clue points. Clues
-    come only from revealed beats. The solution is sent only once the adventure is over (completed or abandoned).
-    Answer rules, hints, activity prompts, unrevealed beats, and every cast member but the handler never are.
+    briefing on, and the briefing names it), so a later stop's name cannot give away where a clue points. Clues come
+    only from revealed beats, and the finale's only once the adventure is over (completed or abandoned), as is the
+    solution. Never sent: answer rules, hints, activity prompts, theme links (the arrival scene's line), beats'
+    uses, unrevealed beats, and every cast member but the handler. The handler is the cast member introduced in the
+    briefing with a contact channel (the evaluator's HANDLER_MISSING test), preferring a role that says "handler";
+    a plan from before story design v2 (a cast of plain names) has none.
     """
     state, plan = record.adventure, active_plan(record)
     if plan is None:
@@ -942,9 +945,11 @@ def board_summary(record: SessionRecord) -> dict:
         place = places.get(c.place_id) if status != "locked" else None
         stops.append({"n": n, "name": place.name if place else None, "address": place.address if place else None,
                       "status": status, "camera": c.camera_checkpoint_id is not None})
-    handler = next((c for c in plan.story.cast if isinstance(c, Character) and (c.role or "").lower() == "handler"),
-                   None) or next((c for c in plan.story.cast if isinstance(c, Character) and c.contact
-                                  and c.introduced_in == "briefing"), None)
+    briefed = [c for c in plan.story.cast
+               if isinstance(c, Character) and c.introduced_in == "briefing" and (c.contact or "").strip()]
+    handler = next((c for c in briefed if "handler" in (c.role or "").lower()), briefed[0] if briefed else None)
+    over = state.status in ("completed", "abandoned")
+    finale = next((b for b in reversed(plan.story.beats) if b.checkpoint_id is None), None)
     camera_stop = {c.camera_checkpoint_id: number[c.checkpoint_id] for c in plan.checkpoints if c.camera_checkpoint_id}
     return {
         "status": state.status,
@@ -952,11 +957,11 @@ def board_summary(record: SessionRecord) -> dict:
         "handler": {"name": handler.name, "contact": handler.contact} if handler else None,
         "stops": stops,
         "clues": [{"text": b.clue, "stop": number.get(b.checkpoint_id)} for b in plan.story.beats
-                  if b.clue and b.beat_id in state.revealed_beat_ids],
+                  if b.clue and b.beat_id in state.revealed_beat_ids and (over or b is not finale)],
         "photos": [{"media_url": p.media_url, "visibility": p.visibility, "stop": camera_stop.get(p.checkpoint_id)}
                    for p in record.photos.values()],
         "destination": plan.request.destination.place_text if plan.request.destination else None,
         "destination_reached": state.destination_reached_at is not None,
-        "solution": plan.story.solution if state.status in ("completed", "abandoned") else None,
+        "solution": plan.story.solution if over else None,
         "estimated_minutes": round(plan.estimated_total_minutes),
     }
