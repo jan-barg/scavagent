@@ -4,7 +4,7 @@ import pytest
 
 from fake_http import FakeHTTP, google_transit_response
 from integrations import transit
-from integrations.routes import get_route, get_walking_times
+from integrations.routes import get_route
 from schemas import RouteLeg, ToolResult
 
 VALHALLA = "valhalla1.openstreetmap.de"
@@ -188,18 +188,3 @@ def test_walk_only_request_never_calls_google_even_for_long_legs():
 
 
 # --- Walking times ---
-
-
-def test_unreachable_destination_gets_no_guessed_time():
-    matrix = {"sources_to_targets": [[
-        {"to_index": 1, "time": None, "distance": None},
-        {"to_index": 0, "time": 269, "distance": 0.38},
-    ]]}
-    with FakeHTTP({VALHALLA: [(200, matrix)]}):
-        result = get_walking_times(START, [EL_DORADO, BERESFORD])
-
-    assert result["data"]["times"] == [
-        {"to_id": "wiki:9238071", "duration_minutes": 4.5, "distance_m": 380},
-        {"to_id": "wiki:5667636", "duration_minutes": None, "distance_m": None},
-    ]
-    assert "unreachable" in result["warnings"][0]

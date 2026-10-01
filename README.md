@@ -38,11 +38,9 @@ Full descriptions, sources, and configuration are in [docs/TOOLS.md](docs/TOOLS.
 | `evaluate_adventure_plan` | **Kyle's original tool.** Builds the agent's draft into a routed plan and checks it before the user sees it: timing against the user's limits, required stops and their order, travel modes, sourced facts and links, and the story rules (briefing, introduced characters, clues that add up, theme links, no real people as characters). A plan that fails can't be saved. |
 | `find_camera_checkpoints`, `capture_camera_checkpoint` | **Jan's original tool.** Finds NYC DOT traffic cameras at pedestrian standing positions a person verified on the camera image and map, or in the field (never the camera's mounting point). When the user says they're in position, it saves the live still as a souvenir, at most once per message, and shows it again in the finale. |
 | `geocode_place`, `find_places`, `research_place` | Resolve typed places, find candidate stops, and gather sourced facts (Wikipedia revisions, NYC LPC records). |
-| `get_route`, `get_walking_times`, `get_next_directions` | Walking routes (OpenStreetMap Valhalla) and subway/bus legs (Google Routes), directions to the next stop. |
+| `get_route`, `get_next_directions` | Walking routes (OpenStreetMap Valhalla) and subway/bus legs (Google Routes), directions to the next stop. |
 | `get_transit_arrivals` | Live subway arrivals and service alerts (MTA GTFS-realtime). |
-| `find_filming_records` | NYC film-permit history for a street, with its coverage dates (NYC Open Data). |
 | `save_adventure_plan`, `get_adventure_state`, `update_adventure_state` | Save a passing plan and keep progress server-side: stops completed or skipped, clues revealed, photos, arrival. |
-| `get_weather` | Current weather (Open-Meteo), from the course starter. |
 
 ## Run locally
 
@@ -64,7 +62,6 @@ Checks: `uv run pytest` (runs without network access) and `node --test tests/fro
 
 ## Project docs
 
-- Status and who owns what: [docs/STATUS.md](docs/STATUS.md), [docs/WORK_SPLIT.md](docs/WORK_SPLIT.md), and who built what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
-- Design: [docs/PLAN.md](docs/PLAN.md), [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md), [docs/CONTRACTS.md](docs/CONTRACTS.md).
-- Deployment: [docs/DEPLOY.md](docs/DEPLOY.md). Course requirements: [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md).
-- Coding-agent instructions: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md). The [original starter README](docs/STARTER_README.md) is kept for provenance.
+- Tools: [docs/TOOLS.md](docs/TOOLS.md). Who built what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
+- Story design: [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md). Model choice: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
+- Deployment: [docs/DEPLOY.md](docs/DEPLOY.md). Walk test: [docs/WALK_TEST.md](docs/WALK_TEST.md).

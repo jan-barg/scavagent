@@ -15,8 +15,7 @@ logger = logging.getLogger("scavagent")
 SUBJECT_CHARS = 60
 # The one argument that names what a lookup is about. Every other tool shows no subject: the plan check, the plan
 # save, and the state tools carry solutions, answer rules, and hints.
-SUBJECT_ARGS = {"geocode_place": "text", "find_places": "query", "find_filming_records": "street",
-                "get_weather": "location"}
+SUBJECT_ARGS = {"geocode_place": "text", "find_places": "query"}
 
 
 def subject(name: str, args: dict, result: dict | None = None) -> str | None:

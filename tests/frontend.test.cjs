@@ -526,21 +526,21 @@ test("tool activity reports unsuccessful plan checks as failed even when the too
   const calls = [
     ...Array.from({ length: 8 }, () => ({ name: "evaluate_adventure_plan", result: { ok: true, data: { passes: false } } })),
     { name: "evaluate_adventure_plan", result: { ok: true, data: { passes: true } } },
-    { name: "get_weather", result: { ok: false } },
+    { name: "get_transit_arrivals", result: { ok: false } },
     { name: "find_camera_checkpoints" },
   ];
   const list = h.run(`toolActivity(${JSON.stringify(calls)})`);
   assert.deepEqual(list.children.map(node => node.textContent), [
-    ...Array(8).fill("Route check failed"), "Route check passed", "Weather check unavailable", "Camera spot search ran",
+    ...Array(8).fill("Route check failed"), "Route check passed", "Train arrivals unavailable", "Camera spot search ran",
   ]);
 });
 
 test("tool activity discloses valid calls beyond its twelve-row limit", () => {
   const h = harness();
-  const calls = Array.from({ length: 15 }, () => ({ name: "get_weather", result: { ok: true } }));
+  const calls = Array.from({ length: 15 }, () => ({ name: "get_route", result: { ok: true } }));
   const list = h.run(`toolActivity(${JSON.stringify([null, { name: 1 }, ...calls])})`);
   assert.equal(list.children.length, 13);
-  assert(list.children.slice(0, 12).every(node => node.textContent === "Weather check done"));
+  assert(list.children.slice(0, 12).every(node => node.textContent === "Route timing done"));
   assert.equal(list.children[12].textContent, "+3 more");
   const full = h.run(`toolActivity(${JSON.stringify(calls.slice(0, 12))})`);
   assert.equal(full.children.length, 12);

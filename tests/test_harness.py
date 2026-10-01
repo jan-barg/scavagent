@@ -15,8 +15,8 @@ from fakes import FakeMessage, reply, script, tool_call
 
 @pytest.fixture
 def client(monkeypatch):
-    fake_weather = lambda location: tools.tool_ok({"location": location, "temp_f": 70})
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", fake_weather)
+    fake_lookup = lambda location: tools.tool_ok({"location": location, "temp_f": 70})
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", fake_lookup)
     monkeypatch.setattr(app_module, "store", state.MemoryStore())
     return TestClient(app_module.app)
 
@@ -24,7 +24,7 @@ def client(monkeypatch):
 def test_trace_keeps_result_objects_and_model_gets_json(client, monkeypatch):
     seen = script(
         monkeypatch,
-        FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "New York"}')]),
+        FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "New York"}')]),
         FakeMessage(content="Nice out.", tool_calls=None),
     )
     body = client.post("/chat", json={"message": "walk?"}).json()
@@ -32,7 +32,7 @@ def test_trace_keeps_result_objects_and_model_gets_json(client, monkeypatch):
     assert set(body) == {"response", "session_id", "tool_calls"}
     assert body["response"] == "Nice out."
     [call] = body["tool_calls"]
-    assert call["name"] == "get_weather" and call["args"] == {"location": "New York"}
+    assert call["name"] == "fake_lookup" and call["args"] == {"location": "New York"}
     assert call["result"]["ok"] is True and call["result"]["data"]["temp_f"] == 70
     tool_message = seen[1][-1]
     assert tool_message["role"] == "tool" and json.loads(tool_message["content"]) == call["result"]
@@ -41,13 +41,13 @@ def test_trace_keeps_result_objects_and_model_gets_json(client, monkeypatch):
 def test_later_model_failure_keeps_earlier_tool_trace(client, monkeypatch):
     script(
         monkeypatch,
-        FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+        FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
         RuntimeError("quota exceeded for key AIza-not-a-real-key"),
     )
     body = client.post("/chat", json={"message": "walk?"}).json()
 
     assert body["response"].startswith("Model call failed (RuntimeError)")
-    assert [c["name"] for c in body["tool_calls"]] == ["get_weather"]
+    assert [c["name"] for c in body["tool_calls"]] == ["fake_lookup"]
     # Provider error text can carry request details; it stays out of the reply and the saved chat.
     history = client.get("/history", params={"session_id": body["session_id"]}).text
     assert "AIza" not in body["response"] and "AIza" not in history
@@ -63,7 +63,7 @@ def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypa
         clock[0] += 100
         n = len(timeouts)
         return reply(FakeMessage(content=None, tool_calls=[
-            tool_call(f"a{n}", "get_weather", '{"location": "NYC"}'), tool_call(f"b{n}", "get_weather", '{"location": "NYC"}')]))
+            tool_call(f"a{n}", "fake_lookup", '{"location": "NYC"}'), tool_call(f"b{n}", "fake_lookup", '{"location": "NYC"}')]))
 
     lock = threading.Lock()
 
@@ -74,7 +74,7 @@ def test_a_turn_starts_no_model_call_or_tool_after_its_deadline(client, monkeypa
         return tools.tool_ok({"location": location})
 
     monkeypatch.setattr(app_module.litellm, "completion", slow_model)
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", slow_tool)
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", slow_tool)
     body = client.post("/chat", json={"message": "walk?"}).json()
 
     # Calls at 0 s and 160 s; the second returns at 260 s, past the 240 s deadline, so its tools never run.
@@ -92,7 +92,7 @@ def test_lookups_started_before_the_deadline_keep_their_results(client, monkeypa
     def model(**kwargs):  # Answers at 200 s with two lookups
         clock[0] += 200
         return reply(FakeMessage(content=None, tool_calls=[
-            tool_call("a", "get_weather", '{"location": "NYC"}'), tool_call("b", "get_weather", '{"location": "Queens"}')]))
+            tool_call("a", "fake_lookup", '{"location": "NYC"}'), tool_call("b", "fake_lookup", '{"location": "Queens"}')]))
 
     def slow_tool(location):
         with lock:
@@ -100,7 +100,7 @@ def test_lookups_started_before_the_deadline_keep_their_results(client, monkeypa
         return tools.tool_ok({"location": location})
 
     monkeypatch.setattr(app_module.litellm, "completion", model)
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", slow_tool)
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", slow_tool)
     body = client.post("/chat", json={"message": "walk?"}).json()
 
     assert [c["result"].get("data") for c in body["tool_calls"]] == [{"location": "NYC"}, {"location": "Queens"}]
@@ -183,7 +183,7 @@ def test_a_turn_that_runs_out_of_tool_rounds_still_answers(client, monkeypatch):
         calls.append(kwargs.get("tool_choice"))
         if kwargs.get("tool_choice") == "none":
             return reply(FakeMessage(content="Your briefing: the case of the missing tape.", tool_calls=None))
-        return reply(FakeMessage(content=None, tool_calls=[tool_call(f"c{len(calls)}", "get_weather", '{"location": "NYC"}')]))
+        return reply(FakeMessage(content=None, tool_calls=[tool_call(f"c{len(calls)}", "fake_lookup", '{"location": "NYC"}')]))
 
     monkeypatch.setattr(app_module.litellm, "completion", busy_model)
     body = client.post("/chat", json={"message": "plan something"}).json()
@@ -199,9 +199,9 @@ def test_bad_tool_calls_become_actionable_failures(client, monkeypatch):
         FakeMessage(
             content=None,
             tool_calls=[
-                tool_call("c1", "get_weather", "{not json"),
+                tool_call("c1", "fake_lookup", "{not json"),
                 tool_call("c2", "teleport", "{}"),
-                tool_call("c3", "get_weather", '{"city": "NYC"}'),
+                tool_call("c3", "fake_lookup", '{"city": "NYC"}'),
             ],
         ),
         FakeMessage(content="Sorry.", tool_calls=None),

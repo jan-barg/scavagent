@@ -83,7 +83,7 @@ def find_places(lat, lng=None, radius_m=800, query=None, limit=15, lon=None):
     lists the terms its article matched, and candidates matching more terms come first. When nothing
     nearby matches, the nearest places are returned with a warning.
 
-    Distances are straight-line; use get_walking_times for travel time. A candidate is a lead for
+    Distances are straight-line; evaluate_adventure_plan routes the chosen stops. A candidate is a lead for
     research_place, not evidence that it suits an activity or is open.
     """
     point = read_point({"lat": lat, "lng": lng if lng is not None else lon})

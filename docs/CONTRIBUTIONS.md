@@ -1,6 +1,6 @@
 # Who built what
 
-Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`). Each directed coding agents: Kyle worked with Claude Code, and Jan with Claude and Codex. Each owns one original tool, reviewed the other's pull requests before they merged, and can explain the other's design. The planned split is in [WORK_SPLIT.md](WORK_SPLIT.md), and edits either person made to the other's files are logged in [SHARED_FILE_EDITS.md](SHARED_FILE_EDITS.md).
+Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`). Each directed coding agents: Kyle worked with Claude Code, and Jan with Claude and Codex. Each owns one original tool, reviewed the other's pull requests before they merged, and can explain the other's design.
 
 ## Kyle: planning, research, and the plan evaluator
 
@@ -11,9 +11,8 @@ Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`). 
 - **Research and travel tools** (`integrations/`):
   - `geocode_place`: OpenStreetMap and NYC GeoSearch.
   - `find_places` and `research_place`: claims pinned to Wikipedia revisions and NYC Landmarks Preservation Commission records.
-  - `get_route` and `get_walking_times`: walking routes from Valhalla and OSRM, and subway or bus legs from Google Routes, including the wait for the train.
+  - `get_route`: walking routes from Valhalla and OSRM, and subway or bus legs from Google Routes, including the wait for the train.
   - `get_transit_arrivals`: live MTA GTFS-realtime.
-  - `find_filming_records`: NYC Open Data, with its coverage dates.
 - **Planning tools:** `save_adventure_plan` and `get_next_directions`.
 - **Checks and documentation:** the grader-query acceptance script (`scripts/acceptance_checks.py`), the mid-adventure guiding checks (`scripts/guiding_checks.py`), the story regression tests, and [TOOLS.md](TOOLS.md).
 

@@ -23,7 +23,7 @@ def no_model_skipped(monkeypatch):
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tools.tool_ok({"temp_f": 70}))
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", lambda location: tools.tool_ok({"temp_f": 70}))
     monkeypatch.setattr(app_module, "store", state.MemoryStore())
     return TestClient(app_module.app)
 
@@ -62,7 +62,7 @@ def test_everything_before_the_newest_message_is_unchanged_since_the_last_turn(c
     # What lets the provider serve the conversation so far from its cache.
     seen = script(
         monkeypatch,
-        FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+        FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
         FakeMessage(content="Sunny.", tool_calls=None),
         FakeMessage(content="Still sunny.", tool_calls=None),
         FakeMessage(content="Yes.", tool_calls=None),
@@ -82,7 +82,7 @@ def test_every_model_call_carries_the_model_options(client, monkeypatch):
     def completion(**kwargs):
         calls.append(kwargs)
         if len(calls) == 1:
-            return reply(FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]))
+            return reply(FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]))
         return reply(FakeMessage(content="Sunny.", tool_calls=None))
 
     monkeypatch.setattr(app_module.litellm, "completion", completion)
@@ -96,7 +96,7 @@ def test_reasoning_is_replayed_within_its_turn_and_never_stored(client, monkeypa
     seen = script(
         monkeypatch,
         FakeMessage(content=None, thinking_blocks=THINKING, reasoning_content="checking weather",
-                    tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+                    tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
         FakeMessage(content="Sunny.", thinking_blocks=THINKING, tool_calls=None),
         FakeMessage(content="Still sunny.", tool_calls=None),
     )
@@ -125,7 +125,7 @@ def test_a_turn_cut_short_is_stored_with_the_reply_the_user_saw(client, monkeypa
     monkeypatch.setattr(app_module, "MAX_TOOL_ROUNDS", 1)
     seen = script(
         monkeypatch,
-        FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+        FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
         FakeMessage(content=None, tool_calls=None), FakeMessage(content=None, tool_calls=None),  # Last call, tools off
         FakeMessage(content="Here you go.", tool_calls=None),
     )
@@ -213,7 +213,7 @@ def test_claude_requests_adaptive_thinking_and_replays_it_only_within_the_turn(c
     replies, sent = vertex_claude
     thinking = {"type": "thinking", "thinking": "Weather first.", "signature": "SIG-TURN-1"}
     replies += [
-        (200, anthropic_reply(thinking, {"type": "tool_use", "id": "toolu_1", "name": "get_weather",
+        (200, anthropic_reply(thinking, {"type": "tool_use", "id": "toolu_1", "name": "fake_lookup",
                                          "input": {"location": "NYC"}}, stop_reason="tool_use")),
         (200, anthropic_reply({"type": "thinking", "thinking": "", "signature": "SIG-TURN-1B"},
                               {"type": "text", "text": "Sunny."})),
@@ -270,8 +270,8 @@ def test_malformed_tool_arguments_do_not_break_the_rest_of_the_conversation(clie
     # Kimi once dropped a closing brace; Vertex then refused every later request that carried it.
     seen = script(
         monkeypatch,
-        FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"'),
-                                              tool_call("c2", "get_weather", '["NYC"]')]),
+        FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"'),
+                                              tool_call("c2", "fake_lookup", '["NYC"]')]),
         FakeMessage(content="Let me retry.", tool_calls=None),
         FakeMessage(content="Fine now.", tool_calls=None),
     )
@@ -289,7 +289,7 @@ def test_claude_answers_after_the_last_tool_round_with_tools_off(client, vertex_
     monkeypatch.setattr(app_module, "MAX_TOOL_ROUNDS", 1)
     replies += [
         (200, anthropic_reply({"type": "thinking", "thinking": "", "signature": "SIG"},
-                              {"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {"location": "NYC"}},
+                              {"type": "tool_use", "id": "toolu_1", "name": "fake_lookup", "input": {"location": "NYC"}},
                               stop_reason="tool_use")),
         (200, anthropic_reply({"type": "text", "text": "Your briefing."})),
     ]
@@ -387,12 +387,12 @@ def test_gemini_takes_the_next_turns_until_claude_has_had_a_rest(client, claude_
 
 def test_a_mid_turn_failure_restarts_the_turn_on_gemini_and_keeps_the_trace(client, claude_with_fallback, monkeypatch):
     outcomes, calls = claude_with_fallback
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tools.tool_ok({"temp_f": 70}))
-    outcomes += [FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", lambda location: tools.tool_ok({"temp_f": 70}))
+    outcomes += [FakeMessage(content=None, thinking_blocks=THINKING, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
                  litellm.APIConnectionError(message="Connection reset", model="claude", llm_provider="anthropic")]
     body = client.post("/chat", json={"message": "weather?"}).json()
 
-    assert body["response"] == "Gemini here." and [c["name"] for c in body["tool_calls"]] == ["get_weather"]
+    assert body["response"] == "Gemini here." and [c["name"] for c in body["tool_calls"]] == ["fake_lookup"]
     gemini_view = calls[-1]["messages"]
     assert gemini_view[-1]["role"] == "user" and "SIG" not in json.dumps(gemini_view)  # From the user's message, no Claude reasoning
 

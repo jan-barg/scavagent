@@ -131,7 +131,7 @@ def build_revision(draft: dict, old: AdventurePlan, state: AdventureState, now: 
                              "record the skip (update_adventure_state skip_checkpoint, no waiver), then evaluate kind "
                              "\"check\" with the new time limit, or a revision that leaves it out.")
     # Skipping a required stop took the user's explicit waiver (state.resolve_checkpoint enforces it).
-    # A blocked one stays required until the user waives it or picks a substitute (PLAN.md section 7).
+    # A blocked one stays required until the user waives it or picks a substitute.
     given_up = set(waived) | (required_ids & set(state.skipped_ids))
 
     request = _revised_request(draft, old, given_up, now)

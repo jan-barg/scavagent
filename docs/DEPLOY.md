@@ -1,7 +1,5 @@
 # Deploying Scavagent to Cloud Run
 
-Status: this is the prepared procedure; see [STATUS.md](STATUS.md) for which steps have actually run. Nothing here asserts a live deployment.
-
 One Google Cloud project serves the team: `agentic-ai-msds` (Columbia organization, billing enabled). Region `us-east1`.
 
 ## What runs where

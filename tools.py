@@ -1,64 +1,12 @@
 """The tools the harness can run, and the JSON that describes them to the model."""
 
 import os
-from datetime import datetime, timezone
-
-import requests
 
 import state
 from adventure import agent_tools
 from integrations import cameras, tool_specs
 from schemas import Freshness, tool_error, tool_ok
 from state import ToolContext
-
-# Open-Meteo is free and needs no API key.
-GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
-FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-
-
-def get_weather(location: str) -> dict:
-    """Get the current weather for a location."""
-    try:
-        places = requests.get(GEOCODE_URL, params={"name": location, "count": 1}, timeout=10).json()
-        if not places.get("results"):
-            return tool_error(
-                "NO_MATCH",
-                f"City '{location}' was not found.",
-                retryable=False,
-                next_step="Retry with a plain city name such as 'New York'.",
-            )
-        place = places["results"][0]
-
-        current = requests.get(
-            FORECAST_URL,
-            params={
-                "latitude": place["latitude"],
-                "longitude": place["longitude"],
-                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m",
-                "temperature_unit": "fahrenheit",
-                "wind_speed_unit": "mph",
-            },
-            timeout=10,
-        ).json()["current"]
-    except (requests.RequestException, KeyError, ValueError) as e:
-        # The model cannot see an exception. Return something it can reason about.
-        return tool_error(
-            "UPSTREAM_UNAVAILABLE",
-            f"Weather service failed: {type(e).__name__}",
-            retryable=True,
-            next_step="Answer without the weather, or try once more.",
-        )
-
-    return tool_ok(
-        {
-            "location": place["name"],
-            "temp_f": current["temperature_2m"],
-            "humidity": current["relative_humidity_2m"],
-            "wind_mph": current["wind_speed_10m"],
-        },
-        freshness=Freshness(kind="live", retrieved_at=datetime.now(timezone.utc)),
-    )
-
 
 # --- Adventure state tools ---
 # These receive the server's ToolContext for the current session as their first
@@ -175,20 +123,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_weather",
-            "description": "Get the current weather (temperature, humidity, wind) for a city.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string", "description": "City name, e.g. 'New York'"},
-                },
-                "required": ["location"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "get_adventure_state",
             "description": (
                 "Get this user's saved adventure: status, state_version, every checkpoint's outcome, the current "
@@ -232,13 +166,12 @@ TOOLS = [
         },
     },
     *cameras.CAMERA_TOOLS,
-    *tool_specs.PLACE_TOOLS,  # Kyle: places, research, walking and transit routes
+    *tool_specs.PLACE_TOOLS,  # Kyle: places, research, routes, transit arrivals
     *agent_tools.PLANNING_TOOLS,  # Kyle: evaluate_adventure_plan, save_adventure_plan
 ]
 
 # What the harness runs: tool name -> Python function.
 TOOL_MAP = {
-    "get_weather": get_weather,
     "get_adventure_state": get_adventure_state,
     "update_adventure_state": update_adventure_state,
     "find_camera_checkpoints": find_camera_checkpoints,
