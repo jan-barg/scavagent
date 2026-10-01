@@ -20,7 +20,7 @@ Planning takes a minute or two, and the page shows each tool as it runs. In quer
 
 You say where you are. Lou finds real places nearby and gathers sourced facts about them from Wikipedia and NYC landmark records, routes the walk (or a subway ride, if you allow it), and writes a story with a briefing, a handler who radios in, and a clue at each stop. Before you see the plan, the plan evaluator checks it: the times add up, every fact has a source, no real person is cast in the fiction, and the clues lead to the solution. A plan that fails goes back to Lou to fix.
 
-On the walk, a green street sign at the top of the page shows the current stop. Tap it for the case board: your briefing, the route, the clues you've earned, and your photos. Every reply lists the tools it used, and the `/chat` response returns them as `tool_calls`, each with its `name`, `args`, and `result`.
+On the walk, a green street sign at the top of the page shows the current stop. Tap it for the case board: your briefing, the route, the clues you've earned, and your photos. To start over, press Abandon trip under the message box. After you confirm, it clears this conversation and opens a fresh page. Every reply lists the tools it used, and the `/chat` response returns them as `tool_calls`, each with its `name`, `args`, and `result`.
 
 <img src="docs/screenshots/redesign/desktop-1-at-a-stop.png" width="720" alt="Lou on a computer, with the case board as a column">
 
