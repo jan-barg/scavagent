@@ -30,6 +30,7 @@ class Element extends EventTarget {
   replaceChildren(...nodes) { this.children = []; this._text = ""; this.append(...nodes); }
   setAttribute(key, value) { this[key] = value; }
   getAttribute(key) { return this[key] ?? null; }
+  focus() { this.focused = (this.focused || 0) + 1; }
   addEventListener(key, value) { this.listeners[key] = value; super.addEventListener(key, value); }
   remove() { this.parent.children = this.parent.children.filter(node => node !== this); }
   querySelector(selector) { return this.children.find(node => node.className.split(" ").includes(selector.slice(1))) || null; }
@@ -86,21 +87,24 @@ function harness(initial = {}, replies = [], options = {}) {
       if (options.storageUnavailable) throw Error("Storage unavailable");
       writes.push(key); storage.set(key, value);
     },
-    removeItem(key) { if (options.storageUnavailable) throw Error("Storage unavailable"); storage.delete(key); },
+    removeItem(key) {
+      if (options.storageUnavailable) throw Error("Storage unavailable");
+      writes.push("remove " + key); storage.delete(key);
+    },
   };
   const context = {
     document, localStorage,
     navigator: { geolocation: { getCurrentPosition: (...args) => geo.push(args) } },
-    window: { location: { origin: "http://localhost:8876" } },
+    window: { location: { origin: "http://localhost:8876" }, ...("desktop" in options ? { matchMedia: () => ({ matches: options.desktop }) } : {}) },
     URL, crypto, Uint8Array, AbortController, Date: clock.Date,
     setInterval: () => 0, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
     fetch: async (url, request) => {
-      // The live log (/progress) and the board (/adventure) have their own handlers and logs, so the
-      // chat and history requests below keep their exact order and timing. Unhandled, they answer 404.
+      // The live log (/progress) and the board (/adventure) answer from their own handlers (404 when none), so
+      // the scripted replies stay for chat and history. Every request is still logged in `requests`.
       for (const [path, log, handler] of [["/progress", polls, options.progress], ["/adventure", boards, options.adventure]]) {
         if (url.startsWith(path)) {
-          const call = { url, request, at: clock.now() };
-          log.push(call);
+          const call = { url, request, storage: Object.fromEntries(storage), at: clock.now() };
+          log.push(call); requests.push(call);
           return handler ? handler(call) : response({}, 404);
         }
       }
@@ -134,7 +138,8 @@ const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, s
 const answer = call => response({ response: "Saved reply", session_id: JSON.parse(call.request.body).session_id, tool_calls: [] });
 const restored = (session_id, messages = []) => response({ session_id, messages });
 const settled = () => new Promise(resolve => setImmediate(resolve));
-const posted = h => h.requests.filter(call => call.url === "/chat").map(call => JSON.parse(call.request.body));
+const chats = h => h.requests.filter(call => call.url === "/chat");
+const posted = h => chats(h).map(call => JSON.parse(call.request.body));
 
 test("first send persists a UUID session before its pending turn and uses it for later messages", async () => {
   const h = harness({}, [answer, answer]);
@@ -145,8 +150,8 @@ test("first send persists a UUID session before its pending turn and uses it for
   assert.match(first.client_message_id, UUID);
   assert.notEqual(first.session_id, first.client_message_id);
   assert.deepEqual(h.writes.slice(0, 2), [SESSION, PENDING]);
-  assert.equal(h.requests[0].storage[SESSION], first.session_id);
-  assert.equal(JSON.parse(h.requests[0].storage[PENDING]).session_id, first.session_id);
+  assert.equal(chats(h)[0].storage[SESSION], first.session_id);
+  assert.equal(JSON.parse(chats(h)[0].storage[PENDING]).session_id, first.session_id);
   h.elements.message.value = "next";
   await h.run("send()");
   const second = posted(h)[1];
@@ -164,8 +169,8 @@ test("an invalid stored session is replaced before any request uses it", async (
   const [sent] = posted(h);
   assert.match(sent.session_id, UUID);
   assert.equal(h.storage.get(SESSION), sent.session_id);
-  assert.equal(h.requests[0].storage[SESSION], sent.session_id);
-  assert.equal(JSON.parse(h.requests[0].storage[PENDING]).session_id, sent.session_id);
+  assert.equal(chats(h)[0].storage[SESSION], sent.session_id);
+  assert.equal(JSON.parse(chats(h)[0].storage[PENDING]).session_id, sent.session_id);
   const reload = harness(Object.fromEntries(h.storage), [restored(sent.session_id), answer]);
   await settled();
   reload.elements.message.value = "next";
@@ -309,7 +314,7 @@ test("browser abort then two 409s automatically recovers one reply without showi
   assert.equal(new Set(sends.map(body => body.client_message_id)).size, 1);
   assert.equal(new Set(sends.map(body => body.session_id)).size, 1);
   assert(sends.every(body => body.message === "plan a walk"));
-  assert.deepEqual(h.requests.map(call => call.at - started), [0, 65000, 70000, 75000]);
+  assert.deepEqual(chats(h).map(call => call.at - started), [0, 65000, 70000, 75000]);
   assert.equal(h.maxActiveRequests(), 1);
   assert.equal(h.elements.messages.children.length, 2);
   assert.equal(h.elements.messages.children.filter(node => node.className === "message assistant").length, 1);
@@ -353,8 +358,8 @@ test("request timeouts are bounded by the total window and never overlap", async
   const sending = h.run("send()");
   await h.clock.advance(270000);
   await sending;
-  assert.deepEqual(h.requests.map(call => call.at - started), [0, 95000, 190000]);
-  assert(h.requests.every(call => call.request.signal.aborted));
+  assert.deepEqual(chats(h).map(call => call.at - started), [0, 95000, 190000]);
+  assert(chats(h).every(call => call.request.signal.aborted));
   assert.equal(h.maxActiveRequests(), 1);
   assert(h.storage.has(PENDING));
   assert.equal(h.elements.send.disabled, false);
@@ -698,6 +703,7 @@ test("the live log polls while a reply is pending, shows each step, and stops wi
   assert.equal(reply.querySelector(".log"), null);
   assert.equal(reply.querySelector(".content").textContent, "Saved reply");
   assert.equal(h.elements.working.hidden, true);
+  assert.deepEqual(h.writes, [SESSION, PENDING, "remove " + PENDING]); // Only the reply clears the pending turn
 });
 
 test("a page reloaded mid-turn polls the same ids and shows the steps done so far", async () => {
@@ -744,7 +750,7 @@ test("a stored reply reported by /progress ends the retry wait early", async () 
   await settled();
   state = "done";
   await h.clock.advance(1500);
-  assert.deepEqual(h.requests.filter(call => call.url === "/chat").map(call => call.at - started), [0, 1500]);
+  assert.deepEqual(chats(h).map(call => call.at - started), [0, 1500]);
   await sending;
   assert.equal(new Set(posted(h).map(body => body.client_message_id)).size, 1);
   assert(!h.storage.has(PENDING));
@@ -871,4 +877,164 @@ test("no adventure, or no /adventure, hides the sign and leaves a note on the bo
   h.run('renderBoard({ status: "idle" })');
   assert.equal(h.elements.sign.hidden, true);
   assert(h.elements.board.textContent.includes("Your case board fills in"));
+});
+
+// --- Review follow-ups (after #36) ---
+
+test("the live log is hidden from screen readers, which hear only the start and the reply", async () => {
+  let finish;
+  const chat = new Promise(resolve => { finish = resolve; });
+  const h = harness({}, [call => chat.then(() => answer(call))], { progress: progressReply("running", STEPS) });
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await h.clock.advance(3000);
+  const reply = h.elements.messages.children[1];
+  const log = reply.querySelector(".log");
+  assert.equal(log["aria-hidden"], "true");
+  assert(log.textContent.includes("Reading up on 3 places")); // Still drawn on screen
+  assert(reply.textContent.includes("Lou is working on a reply."));
+  finish();
+  await sending;
+  assert.equal(reply.querySelector(".content").textContent, "Saved reply");
+});
+
+test("a stored reply ends at most one retry wait early, so failing retries keep their spacing", async () => {
+  const h = harness({}, [response({}, 409), response({}, 503), response({}, 503), answer], { progress: progressReply("done") });
+  const started = h.clock.now();
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await h.clock.advance(15000);
+  await sending;
+  const times = chats(h).map(call => call.at - started);
+  assert.equal(times.length, 4);
+  const gaps = times.slice(1).map((at, k) => at - times[k]);
+  assert(gaps.filter(gap => gap < 5000).length <= 1, String(times));
+  assert(!h.storage.has(PENDING));
+});
+
+test("a reply stored while its POST is still in flight is fetched once", async () => {
+  let finish;
+  const chat = new Promise(resolve => { finish = resolve; });
+  const h = harness({}, [call => chat.then(() => answer(call))], { progress: progressReply("done") });
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await h.clock.advance(4500);
+  assert(h.polls.length >= 3);
+  finish();
+  await sending;
+  assert.equal(posted(h).length, 1);
+  assert.equal(h.elements.messages.children[1].querySelector(".content").textContent, "Saved reply");
+});
+
+test("polls for another turn, or answered after the reply, change nothing", async () => {
+  for (const other of [{ client_message_id: "someone-else" }, { session_id: "other-session" }]) {
+    let finish;
+    const chat = new Promise(resolve => { finish = resolve; });
+    const h = harness({}, [call => chat.then(() => answer(call))],
+      { progress: call => response({ ...params(call), ...other, state: "running", started_at: null, phase: "tools", steps: STEPS }) });
+    h.elements.message.value = "plan a walk";
+    const sending = h.run("send()");
+    await h.clock.advance(3000);
+    assert(!h.elements.messages.children[1].querySelector(".log").textContent.includes("Place lookup"), JSON.stringify(other));
+    finish();
+    await sending;
+  }
+  let release;
+  const late = new Promise(resolve => { release = resolve; });
+  const h = harness({}, [answer], { progress: call => late.then(() => progressReply("running", STEPS)(call)) });
+  h.elements.message.value = "plan a walk";
+  await h.run("send()"); // The reply lands while the first poll is still out
+  release();
+  await h.clock.advance(5000);
+  const reply = h.elements.messages.children[1];
+  assert.equal(reply.querySelector(".log"), null);
+  assert.equal(reply.querySelector(".content").textContent, "Saved reply");
+  assert.equal(h.polls.length, 1);
+});
+
+test("one poll loop runs across retries and stops with the reply", async () => {
+  const h = harness({}, [response({}, 409), response({}, 409), answer], { progress: progressReply("running", STEPS) });
+  const started = h.clock.now();
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await h.clock.advance(10000);
+  await sending;
+  assert.deepEqual(chats(h).map(call => call.at - started), [0, 5000, 10000]);
+  assert.deepEqual(h.polls.map(call => call.at - started), [0, 1500, 3000, 4500, 6000, 7500, 9000]);
+  await h.clock.advance(20000);
+  assert.equal(h.polls.length, 7);
+});
+
+for (const [label, adventure] of [["a 500", () => response({}, 500)], ["a network error", () => { throw new Error("Offline"); }]]) {
+  test("an /adventure with " + label + " leaves the sign hidden and the chat working", async () => {
+    const h = harness({ [SESSION]: "s" }, [restored("s", [{ role: "user", text: "hi" }, { role: "assistant", text: "Hello.", tool_calls: [] }]), answer], { adventure });
+    await h.clock.advance(0);
+    assert.notEqual(h.elements.sign.hidden, false);
+    h.elements.message.value = "ready";
+    await h.run("send()");
+    assert.equal(h.elements.messages.children[3].querySelector(".content").textContent, "Saved reply");
+    assert.equal(h.boards.length, 2); // Tried again after the reply, and still harmless
+    assert.notEqual(h.elements.sign.hidden, false);
+  });
+}
+
+test("the board shows markup in the briefing as text", () => {
+  const h = harness();
+  const briefing = '<img src=x onerror="alert(1)"> **Mara** [link](https://evil.invalid)';
+  h.run(`renderBoard(${JSON.stringify(boardData("active", { briefing, photos: [] }))})`);
+  assert(h.elements.board.textContent.includes(briefing));
+  assert(!all(h.elements.board).some(node => ["img", "a", "strong"].includes(node.tagName)));
+});
+
+test("a locked stop's name and address, and a solution before the end, stay hidden even if sent", () => {
+  const h = harness();
+  h.run(`renderBoard(${JSON.stringify(boardData("active", { solution: "SECRET-SOLUTION", stops: [
+    { n: 1, name: "Beacon Theatre", address: "2124 Broadway", status: "current" },
+    { n: 2, name: "SECRET-PLACE", address: "SECRET-ADDRESS", status: "locked" },
+    { n: 3, name: "ODD-PLACE", address: "ODD-ADDRESS", status: "constructor" }] }))})`);
+  const shown = h.elements.board.textContent + h.elements.sign.textContent + h.elements.sign["aria-label"];
+  for (const secret of ["SECRET", "ODD", "native code"]) assert(!shown.includes(secret), secret);
+  assert(h.elements.board.textContent.includes("Stop 2") && h.elements.board.textContent.includes("Beacon Theatre"));
+});
+
+test("names a model wrote never reach a lookup table's prototype", () => {
+  const h = harness();
+  const names = ["constructor", "toString", "__proto__", "hasOwnProperty"];
+  const list = h.run(`toolActivity(${JSON.stringify(names.map(name => ({ name, result: { ok: true } })))})`);
+  h.run(`renderText(input, ${JSON.stringify(names.map(name => `> **Ozzie Hart (${name}):** hi`).join("\n"))}, true)`);
+  for (const text of [list.textContent, h.elements.message.textContent]) {
+    assert(!/native code|function|\[object/.test(text), text);
+  }
+  assert.equal(list.children[0].textContent, "constructor done");
+  assert(h.elements.message.textContent.includes("Ozzie Hartconstructorhi"));
+});
+
+test("the case file ends at the next heading, a character's line, or Lou talking again", () => {
+  const h = harness();
+  const file = "### Case file\n- **Solved:** locker 1021.\n\n**Clues:**\n- Roxy\n\n![frame](/media/abc)";
+  h.run(`renderText(input, ${JSON.stringify(file + "\n\nThanks for walking with me. Say “new case” for another.")}, true)`);
+  let blocks = h.elements.message.children;
+  assert.deepEqual(blocks.map(node => node.className || node.tagName), ["casefile", "p"]);
+  assert(all(blocks[0]).some(node => node.tagName === "img") && blocks[0].textContent.includes("Clues:"));
+  assert(blocks[1].textContent.startsWith("Thanks for walking"));
+
+  h.run(`renderText(input, ${JSON.stringify("### Case file\n- Roxy\n\n#### Sources\n- Wikipedia\n\n### Next case\nWhenever you're ready.")}, true)`);
+  blocks = h.elements.message.children;
+  assert.deepEqual(blocks.map(node => node.className || node.tagName), ["casefile", "h3", "p"]);
+  assert(blocks[0].textContent.includes("Sources")); // A deeper heading stays inside
+
+  h.run(`renderText(input, ${JSON.stringify("### Case file\n- Roxy\n\n> **Mara Quill (radio):** Good work.")}, true)`);
+  assert.deepEqual(h.elements.message.children.map(node => node.className || node.tagName), ["casefile", "tx"]);
+});
+
+test("on desktop the sign opens no sheet and Escape leaves focus alone; on a phone Escape closes it", () => {
+  for (const desktop of [true, false]) {
+    const h = harness({}, [], { desktop });
+    h.run(`renderBoard(${JSON.stringify(boardData("active"))})`);
+    h.elements.sign.dispatchEvent(new Event("click"));
+    assert.equal(h.elements.app.classList.contains("open"), !desktop);
+    h.document.listeners.keydown({ key: "Escape" });
+    assert.equal(h.elements.app.classList.contains("open"), false);
+    assert.equal(h.elements.sign.focused, desktop ? undefined : 1);
+  }
 });

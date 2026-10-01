@@ -339,6 +339,18 @@ Where the build differs from, or adds to, the plan above:
   A mutation check planted 22 single removals of the new behavior (12 on the server, 10 in the page), and the tests caught all 22. The thread-safety test is a stress test, so it isn't part of that count.
 - **Screenshots** are in `docs/screenshots/redesign/`. They came from a local server with a seeded in-memory store and a scripted stand-in for the model and slow tools, so no model calls were made. Each state was checked in the in-app browser. The PNG files were captured with headless Chrome over the DevTools protocol against the same server, because the in-app browser can't save files.
 
+## Follow-ups after the merge
+
+Review fixes on `jan/redesign-review-fixes`, after #36 went live:
+
+- **Screen readers.** The live log is `aria-hidden`. Inside the messages' live region, redrawing it every 1.5 s was read out for the whole turn. Screen readers now hear the pending reply's "working" line at the start and the reply at the end.
+- **Retry spacing.** `/progress` can end one retry wait early per send. Before, when the stored reply kept failing to come back (a 503, an invalid reply), every poll cut the 5 s wait short.
+- **Lookups keyed by model text** (channels, tool labels, stop labels) use tables without a prototype. A channel named "constructor" no longer prints native code.
+- **Client-side spoiler guard.** Whatever `/adventure` sends, the page never shows a locked stop's name or address, or the solution before the adventure is completed or abandoned. An unknown stop status counts as locked.
+- **The case file ends** at the next heading of its level or higher, at a character's line, or at a paragraph of Lou's own text. Label paragraphs (`**Clues:**`) and photos stay inside it.
+- **The sheet is phone-only.** On desktop the sign opens nothing, and Escape doesn't move focus.
+- **Font type.** `.woff2` is registered as `font/woff2` before `/static` is mounted. The slim image had no type for it.
+
 ## Greenlight checklist
 
 - [ ] The design and the scope above.
