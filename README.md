@@ -6,7 +6,7 @@ Try it: https://scavagent-b57mvtutma-ue.a.run.app
 
 <p><img src="docs/screenshots/redesign/phone-3-briefing.png" width="220" alt="The briefing on a phone"> <img src="docs/screenshots/redesign/phone-2-planning-live-log.png" width="220" alt="The live tool log while Lou plans"> <img src="docs/screenshots/redesign/phone-5-clue-and-directions.png" width="220" alt="A clue earned, and directions to the next stop"></p>
 
-Built by Jan Barganowski and Kyle Coletta for a Columbia agents course, October 2026.
+Built by Jan Barganowski and Kyle Coletta for Agentic AI for Data Science (IEOR4570) at Columbia University, October 2026.
 
 ## Try these
 
