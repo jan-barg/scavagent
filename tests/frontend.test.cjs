@@ -35,6 +35,8 @@ class Element extends EventTarget {
   remove() { this.parent.children = this.parent.children.filter(node => node !== this); }
   querySelector(selector) { return this.children.find(node => node.className.split(" ").includes(selector.slice(1))) || null; }
   insertBefore(node, before) { node.parent = this; this.children.splice(this.children.indexOf(before), 0, node); }
+  showModal() { this.open = true; }
+  close() { this.open = false; }
 }
 
 function fakeClock() {
@@ -68,11 +70,12 @@ function fakeClock() {
 
 function harness(initial = {}, replies = [], options = {}) {
   const elements = Object.fromEntries(["trail", "messages", "message", "send", "status", "composer", "welcome",
-    "app", "working", "sign", "board", "board-close", "scrim"].map(id => [id, new Element()]));
+    "app", "working", "sign", "board", "board-close", "scrim", "abandon", "abandon-dialog", "abandon-no", "abandon-yes"]
+    .map(id => [id, new Element()]));
   const storage = new Map(Object.entries(initial));
   const requests = [], writes = [], geo = [], polls = [], boards = [];
   const clock = fakeClock();
-  let activeRequests = 0, maxActiveRequests = 0;
+  let activeRequests = 0, maxActiveRequests = 0, reloads = 0;
   const document = {
     visibilityState: "visible", listeners: {},
     getElementById: id => elements[id],
@@ -95,7 +98,7 @@ function harness(initial = {}, replies = [], options = {}) {
   const context = {
     document, localStorage,
     navigator: { geolocation: { getCurrentPosition: (...args) => geo.push(args) } },
-    window: { location: { origin: "http://localhost:8876" }, ...("desktop" in options ? { matchMedia: () => ({ matches: options.desktop }) } : {}) },
+    window: { location: { origin: "http://localhost:8876", reload: () => { reloads += 1; } }, ...("desktop" in options ? { matchMedia: () => ({ matches: options.desktop }) } : {}) },
     URL, crypto, Uint8Array, AbortController, Date: clock.Date,
     setInterval: () => 0, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
     fetch: async (url, request) => {
@@ -132,7 +135,8 @@ function harness(initial = {}, replies = [], options = {}) {
   };
   vm.createContext(context);
   vm.runInContext(source, context);
-  return { elements, storage, requests, writes, geo, polls, boards, document, clock, maxActiveRequests: () => maxActiveRequests, run: (code, options) => vm.runInContext(code, context, options) };
+  return { elements, storage, requests, writes, geo, polls, boards, document, clock, maxActiveRequests: () => maxActiveRequests,
+    reloads: () => reloads, run: (code, options) => vm.runInContext(code, context, options) };
 }
 const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 const answer = call => response({ response: "Saved reply", session_id: JSON.parse(call.request.body).session_id, tool_calls: [] });
@@ -1037,4 +1041,72 @@ test("on desktop the sign opens no sheet and Escape leaves focus alone; on a pho
     assert.equal(h.elements.app.classList.contains("open"), false);
     assert.equal(h.elements.sign.focused, desktop ? undefined : 1);
   }
+});
+
+// ---------- Abandon trip ----------
+
+const TRIP = "123e4567-e89b-42d3-a456-426614174999";
+const tripSoFar = () => restored(TRIP, [{ role: "user", text: "start" }, { role: "assistant", text: "Briefing" }]);
+const click = (h, id) => h.elements[id].dispatchEvent(new Event("click"));
+const clears = h => h.requests.filter(call => call.url.startsWith("/clear"));
+
+test("abandon trip is offered once there is a trip, and never while a reply is pending", async () => {
+  const fresh = harness();
+  await settled();
+  assert.equal(fresh.elements.abandon.hidden, true);
+
+  let release;
+  const slow = call => new Promise(resolve => { release = () => resolve(answer(call)); });
+  const h = harness({ [SESSION]: TRIP }, [tripSoFar(), slow]);
+  await settled();
+  assert.equal(h.elements.abandon.hidden, false);
+  assert.equal(h.elements.abandon.disabled, false);
+  h.elements.message.value = "ready";
+  void h.run("send()");
+  await settled();
+  assert.equal(h.elements.abandon.disabled, true);
+  click(h, "abandon");
+  assert.notEqual(h.elements["abandon-dialog"].open, true);
+  release();
+  await settled();
+  assert.equal(h.elements.abandon.disabled, false);
+});
+
+test("No keeps the trip; Yes clears it on the server, forgets it here, and reloads to a first visit", async () => {
+  const h = harness({ [SESSION]: TRIP }, [tripSoFar(), response({ status: "ok" })]);
+  await settled();
+  click(h, "abandon");
+  assert.equal(h.elements["abandon-dialog"].open, true);
+  click(h, "abandon-no");
+  assert.equal(h.elements["abandon-dialog"].open, false);
+  assert.equal(h.storage.get(SESSION), TRIP);
+  assert.deepEqual(clears(h), []);
+  assert.equal(h.reloads(), 0);
+
+  click(h, "abandon");
+  click(h, "abandon-yes");
+  await settled();
+  assert.equal(h.elements["abandon-dialog"].open, false);
+  const [clear] = clears(h);
+  assert.equal(clear.url, `/clear?session_id=${TRIP}`);
+  assert.equal(clear.request.method, "POST");
+  assert(!h.storage.has(SESSION) && !h.storage.has(PENDING));
+  assert.equal(h.reloads(), 1);
+
+  const reopened = harness(Object.fromEntries(h.storage));
+  await settled();
+  assert.deepEqual(reopened.requests, []); // No session: nothing to restore, as on a first visit
+  assert.ok(!reopened.elements.welcome.hidden);
+  assert.equal(reopened.elements.abandon.hidden, true);
+});
+
+test("Yes still starts fresh when the server can't be reached", async () => {
+  const h = harness({ [SESSION]: TRIP }, [tripSoFar(), new Error("Offline")]);
+  await settled();
+  click(h, "abandon");
+  click(h, "abandon-yes");
+  await settled();
+  assert.equal(clears(h).length, 1);
+  assert(!h.storage.has(SESSION));
+  assert.equal(h.reloads(), 1);
 });
