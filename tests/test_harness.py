@@ -224,3 +224,9 @@ def test_sessions_are_separate(client, monkeypatch):
 
     assert a != b
     assert "I am A" not in json.dumps(seen[1])
+
+
+def test_the_agent_introduces_itself_as_lou():
+    # The agent is Lou on the page and in the instructions; identifiers keep "scavagent" (env vars, URL, storage keys).
+    assert app_module.SYSTEM_PROMPT.startswith("You are Lou,")
+    assert "Scavagent" not in app_module.SYSTEM_PROMPT

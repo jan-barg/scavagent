@@ -301,3 +301,11 @@ Kyle asked for two frontend changes: the header says the guide's name, and one c
   - the button appears only with a trip and is disabled during a reply;
   - No keeps the trip; Yes posts `/clear`, removes both keys and reloads, and a fresh page then makes no requests and shows the welcome;
   - Yes still starts fresh when `/clear` fails.
+
+## The guide's name on the page and in the instructions (branch `claude/lou-name`, from `main` at `2457b93`)
+
+Jan asked for the user-facing "Scavagent" mentions to say Lou, after #38 changed the header. "Scavagent" stays the project's name: the repository, the service, environment variables, storage keys, the HTTP User-Agent, and the docs.
+
+- `agent.py` (Kyle's), the opening line only. Original: "You are Lou, the dispatcher at Scavagent, a guide for playful, real-world NYC adventures run entirely in chat." Now: "You are Lou, a New York dispatcher who guides playful, real-world NYC adventures run entirely in chat." Every rule, including the Voice section, is unchanged. Revert: `git checkout 2457b93 -- agent.py`.
+- Kyle's files, first-line docstrings only: `agent.py` ("Scavagent's agent instructions" → "Lou's agent instructions"), `adventure/validation.py` ("Scavagent's original planning tool" → "Lou's original planning tool"), and `scripts/acceptance_checks.py` ("against a running Scavagent" → "against a running Lou"). No code changed.
+- Jan's files: `index.html` (the `<title>` and the meta description); `README.md` (the title is now "# Lou", the intro starts "Lou is a chat agent", and three sentences where the agent acts say Lou); and the first-line docstrings of `schemas.py` and `integrations/cameras.py`. Jan asked to rebrand the README and these docstrings as Lou. The repository, the URL, the other docs, and the identifiers above keep "scavagent".

@@ -1110,3 +1110,14 @@ test("Yes still starts fresh when the server can't be reached", async () => {
   assert(!h.storage.has(SESSION));
   assert.equal(h.reloads(), 1);
 });
+
+// ---------- The name users see ----------
+
+test("the page calls the guide Lou and never shows the project name", () => {
+  // The storage keys keep their old lowercase "scavagent." prefix, so a returning phone keeps its trip.
+  const page = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
+  assert.doesNotMatch(page, /Scavagent/);
+  assert.match(page, /<title>Lou: /);
+  assert.match(page, /<span class="wordmark">Lou<\/span>/);
+  assert.equal(SESSION, "scavagent.session_id");
+});

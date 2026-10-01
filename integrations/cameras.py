@@ -1,4 +1,4 @@
-"""NYC DOT stills and Scavagent's pedestrian checkpoint selector.
+"""NYC DOT stills and Lou's pedestrian checkpoint selector.
 
 tools.py registers CAMERA_TOOLS and wraps the capture with the session's save_asset.
 Never let the model supply save_asset, checkpoint records, URLs, or a session ID.

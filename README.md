@@ -1,6 +1,6 @@
-# Scavagent
+# Lou
 
-A chat agent that turns a walk through New York City into a short mystery adventure. Tell it where you are, and optionally how much time you have, where you need to end up, a stop you must pass, how you want to travel, and a theme. It then:
+Lou is a chat agent that turns a walk through New York City into a short mystery adventure. Tell it where you are, and optionally how much time you have, where you need to end up, a stop you must pass, how you want to travel, and a theme. It then:
 
 - researches real places near your route (Wikipedia and NYC Landmarks Preservation Commission records);
 - times the route on foot and by subway;
@@ -13,7 +13,7 @@ At verified viewpoints it can save an NYC DOT traffic-camera still of you as a s
 
 ## How to use it
 
-- **Start:** type where you are. Everything else is optional. Lou, Scavagent's guide, answers with a briefing (your role, your handler, the mission), the stops, the time it takes, and the first stop.
+- **Start:** type where you are. Everything else is optional. Lou, the guide, answers with a briefing (your role, your handler, the mission), the stops, the time it takes, and the first stop.
 - **Play:** type "ready" to get directions, and tell it when you arrive. It gives you a task at each stop, a puzzle or something to look at, and your answer earns a clue for the case. You can ask for a "hint", "skip" a stop, or change plans ("I only have 15 minutes left").
 - **Chat only:** everything happens in the chat box. Sharing your browser location is optional and only helps with directions.
 - **The sign and the case board:** once you have a briefing, a green street sign at the top shows the current stop. Tap it for the case board: the briefing, the route (later stops stay locked until you reach them), the clues you've earned, and your photos. On a computer the board is a column on the right.
@@ -27,7 +27,7 @@ At verified viewpoints it can save an NYC DOT traffic-camera still of you as a s
 2. "I'm at Central Park West and West 86th Street. I have 45 minutes, need to finish at West 72nd Street and Broadway, and must pass West 81st Street and Columbus Avenue. Walking only, architecture theme, and include a camera stop if one fits."
 3. A follow-up once an adventure is under way (for example after query 2, "ready", and reaching the first stop): "Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination."
 
-Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at standing spots a person has approved: 151 in Manhattan (Upper East/West Side and Midtown), each matched on the live camera image and map imagery rather than tested in person, which Scavagent tells the user while offering a retake. In query 2 the camera stop is the viewpoint at Broadway and West 72nd Street, next to the finish; where no spot fits, Scavagent says so. `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
+Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at standing spots a person has approved: 151 in Manhattan (Upper East/West Side and Midtown), each matched on the live camera image and map imagery rather than tested in person, which Lou tells the user while offering a retake. In query 2 the camera stop is the viewpoint at Broadway and West 72nd Street, next to the finish; where no spot fits, Lou says so. `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
 
 ## Tools
 
