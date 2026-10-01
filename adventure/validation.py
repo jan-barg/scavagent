@@ -18,7 +18,7 @@ the user's request and the product rules in docs/PLAN.md:
   sources, anyone the sources or the user name, or a voice "sounding like" someone);
 - story design (docs/STORY_DESIGN.md), for a new plan and for what a revision adds: a briefing with
   a handler who has a contact channel, characters introduced before they act and every cast member
-  used, a clue at every stop that a later beat uses, a finale built on the clues, codes and keys
+  used, no character named like the guide, a clue at every stop that a later beat uses, a finale built on the clues, codes and keys
   earned from solved puzzles, no puzzle that names its own answer, stops tied to a stated theme
   through their own claims, and enough stops for the time;
 - a camera stop the user asked for: when the plan has none, the evaluator searches the route
@@ -57,6 +57,7 @@ ESTIMATE_TOLERANCE_MINUTES = 2
 MIN_CONTINGENCY_MINUTES = 2
 CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of travel and dwell in reserve
 MIN_BRIEFING_CHARS = 200  # about three sentences
+GUIDE_NAME = "Lou"  # the dispatcher the agent speaks as, outside the story (docs/FRONTEND_REDESIGN.md)
 ROOM_FOR_A_STOP_MINUTES = 10  # unused minutes that would fit one more short stop
 STOPS_FOR_MINUTES = ((100, 4), (60, 3), (20, 2))  # a limit the user gives of at least this long: at least this many
 # A clue that is only a number ("22", "1897-1929") is arithmetic, not something the story needs.
@@ -592,6 +593,11 @@ def _check_story_design(plan, previous, flag, *, available, slack, stop_count_st
                 flag("CAST_UNINTRODUCED", f"{member.name} is introduced_in {member.introduced_in}, but that stop's beat "
                                           "does not list them. Add them to its characters, or introduce them in the "
                                           "briefing.", member.introduced_in)
+        for member in cast:
+            if re.search(rf"\b{GUIDE_NAME}\b", member.name, re.I):
+                flag("CAST_NAMED_LIKE_GUIDE", f"The cast member {member.name} has the guide's name, {GUIDE_NAME}: the "
+                                              "user would take the dispatcher outside the story for a character in "
+                                              "it. Give the character another name.")
         appearing = {id(m) for b in story.beats for name in b.characters if (m := _member(name, cast))}
         for member in cast:
             if id(member) not in appearing:

@@ -333,6 +333,23 @@ def a_sound_alike(d):
     d["story"]["premise"] = "A tipster who sounds just like Julian Casablancas wants the reel back."
 
 
+def renamed_handler(name):
+    def rename(d):
+        d["story"]["cast"][0]["name"] = name
+        d["story"]["briefing"] = BRIEFING.replace("Mara Quill", name)
+        for beat in (d["stops"][0]["beat"], d["stops"][1]["beat"], d["chat_beats"][0]):
+            beat["characters"] = [name]
+    return rename
+
+
+def test_no_character_has_the_guides_name():
+    # The agent speaks as Lou, the dispatcher outside the story; a character named Lou would blur the two.
+    for name in ("Lou Quill", "lou", "Big Lou"):
+        result = evaluate(changed(renamed_handler(name)), 5, 6)
+        assert codes(result) == ["CAST_NAMED_LIKE_GUIDE"], name
+    assert evaluate(changed(renamed_handler("Louise Quill")), 5, 6)["data"]["passes"]  # a whole word only
+
+
 @pytest.mark.parametrize("change, detail", [
     (roxy_as_the_thief, "named in the sources"),
     (the_users_idol_as_handler, "named in the user's request"),
