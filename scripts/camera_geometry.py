@@ -113,6 +113,11 @@ def locate(center: LatLng, on: Street, cross: Street, side: str, direction: str,
 # --- OpenStreetMap ---
 
 
+def _ordinal(n):
+    """The English ordinal suffix for a number: 1st, 2nd, 3rd, 11th, 23rd."""
+    return "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+
+
 def camera_streets(name):
     """The two normalized street names in a DOT camera name such as "Park Ave @ E 116 Street"."""
     name = re.sub(r"\s*\(.*?\)|\s+-\s.*$|-\s*quad\b.*$|\bupper level\b", "", name, flags=re.IGNORECASE)
@@ -121,6 +126,9 @@ def camera_streets(name):
         return None  # three-way names ("Broadway @ 6 Ave / 33 St") must not become one invented street
     out = []
     for part in parts:
+        # DOT sometimes runs a number into "St" ("7 Ave @ 23st"); a correct ordinal ("1st Ave", "21st") stays.
+        part = re.sub(r"\b(\d+)st\b", lambda m: m.group(0) if _ordinal(int(m.group(1))) == "st" else f"{m.group(1)} St",
+                      part, flags=re.IGNORECASE)
         for guess in (part, part + " avenue", part + " street"):
             normalized = geocoding.normalize_street(guess)
             if normalized:

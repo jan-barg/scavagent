@@ -2,15 +2,21 @@
 
 Initial handoff recorded September 28, 2026. This file records observed implementation, not scheduled completion. Each owner updates their own section after a meaningful change; inspect the checkout before relying on old notes.
 
-## Current state (September 30, 2026)
+## Current state (October 1, 2026)
 
 - **Team:** Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`).
 - **Repository:** https://github.com/jan-barg/scavagent (public). The course starter was imported unchanged at `8811dcc37142bfa8e61e5422a9b959a7616316d0`. Stack: Python/FastAPI, LiteLLM, plain HTML/JavaScript.
-- **Deployed:** https://scavagent-b57mvtutma-ue.a.run.app, Cloud Run `scavagent` in `agentic-ai-msds`, us-east1. Continuous deployment from `main`: every merge builds and deploys a new revision, so the live site is always the latest `main`. Checked September 30: `scavagent-00027-mrj` from `922321f` (#29).
+- **Deployed:** https://scavagent-b57mvtutma-ue.a.run.app, Cloud Run `scavagent` in `agentic-ai-msds`, us-east1. Continuous deployment from `main`: every merge builds and deploys a new revision, so the live site is always the latest `main`. Checked October 1: the deploy of `main` after #40 succeeded, and the live page shows the Lou redesign.
 - **Model:** `SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5`, with `ANTHROPIC_API_KEY` from Secret Manager (`anthropic-api-key`). If Claude can't answer, Gemini 3.5 Flash-Lite on Vertex AI answers (the fallback added in #20). Why Sonnet: [MODEL_COMPARISON.md](MODEL_COMPARISON.md).
 - **Storage:** Firestore for sessions, Cloud Storage `agentic-ai-msds-scavagent-photos` for photos, SQLite locally. The Routes API is enabled on `agentic-ai-msds` for transit legs.
 - **Cameras:** 151 `image_verified` standing spots on 102 Manhattan cameras. None is `field_verified` yet.
-- **Checks on `main` after the cleanup (#29), network blocked:** `uv run --frozen pytest -q` passes 419, and `node --test tests/frontend.test.cjs` passes 36. The cleanup removed tests only together with the code they covered.
+- **Page:** the "Street Blade" redesign (#36, #37), with the guide named Lou:
+  - Lou on the header, the tab title, the README, and the instructions' opening line (#38, #39);
+  - the current stop as a street sign, and a case board (`GET /adventure`);
+  - a live tool log (`GET /progress`);
+  - an "Abandon trip" button that clears the session after a confirmation (#38).
+  - `POST /chat` is unchanged.
+- **Checks on `main`, network blocked:** `uv run --frozen pytest -q` passes 466, and `node --test tests/frontend.test.cjs` passes 65.
 - **Required files** are at the repository root: `app.py`, `pyproject.toml`, `uv.lock`, `README.md`, and `submission.json` (authors `jgb2170` and `kc3936`).
 - **Plan to submission:**
   - feature freeze October 2 (bug fixes only after it);
@@ -54,6 +60,20 @@ Latest changes/checks (September 30):
 - Jan's decision (September 30): no AI-disclosure line on the page. This is an internal class project, and the course staff know it is an AI.
 - Frontend redesign (Claude, `jan/frontend-redesign`; design and decisions in [FRONTEND_REDESIGN.md](FRONTEND_REDESIGN.md)): Jan approved the "Street Blade" look, the guide's name (Lou), and the live tool log, and set the October 2 freeze aside for it. The page now shows the current stop as a street sign with a case board (a sheet on a phone, a column on desktop), the briefing and characters' lines as panels, and each tool as it runs (`GET /progress`, stored on the message's claim, so a reload or another instance sees it); new replies open at their first line. New `GET /adventure` (spoiler-safe board) and self-hosted fonts under `/static`; `/chat` is unchanged. With the network blocked, `uv run --frozen pytest -q` passes 461 (29 new) and `node --test tests/frontend.test.cjs` passes 49 (13 new); 22 planted removals of the new behavior were all caught. Screens in `docs/screenshots/redesign/` (local server, scripted model, no model calls). The Lou voice edit to Kyle's `agent.py` is in, greenlit by Kyle's Claude with one wording change (logged in [SHARED_FILE_EDITS.md](SHARED_FILE_EDITS.md)). With the edit, on Claude Sonnet 5.5 against a local server (September 30): `scripts/acceptance_checks.py` 28/28, `scripts/guiding_checks.py` 18/18, and `--scenario replan` 8/8; all 19 turns answered by Sonnet (no fallback), and the replies used the briefing blockquote, the characters' panels, and numbered directions. Open: a look on a real phone in Safari at the walk test.
 - Redesign review follow-ups (Claude, `jan/redesign-review-fixes`, after #35 and #36 went live as `scavagent-00033-7ld`): the live log is hidden from screen readers (they hear the start and the reply, not every redraw); a stored reply ends at most one retry wait early, so failing retries keep their 5 s spacing; lookups keyed by model text (channels, tool labels, stop labels) use tables without a prototype, so "constructor" renders as plain text; the page itself never shows a locked stop's name or address, or the solution before the end, whatever the server sends; the case file ends at the next heading of its level, a character's line, or Lou's own text; on desktop the sign opens no sheet and Escape leaves focus alone; and `.woff2` is served as `font/woff2` (the slim image served `application/octet-stream`). The Node harness again logs every request, records removals from storage, and adds tests for a reply stored during the POST, stale and mismatched polls, poll cadence across retries, a failing `/adventure`, and markup in the briefing. With the network blocked, pytest passes 463 and Node 61; each of the 10 fixes was removed in turn and its test failed. `/chat` is unchanged.
+
+Latest changes/checks (October 1):
+- Reviewed and merged:
+  - #33 (Claude): skip-before-start backstop;
+  - #34 (Kyle): re-plan before the start, `ANSWER_IN_PROMPT`;
+  - #35 (Kyle): `CAST_NAMED_LIKE_GUIDE`;
+  - #36 and #37: the redesign and its review follow-ups;
+  - #38 (Kyle): Lou wordmark, Abandon trip;
+  - #39 (Claude): rebrand as Lou;
+  - #40 (Kyle): Abandon trip test.
+- Each review planted bugs to check the tests caught them. Every survivor was either fixed or a known, harmless test gap.
+- Issue #32 (story breaks when stops are cut before the start) is covered by #33 and #34. `guiding_checks.py --scenario replan` passed 8/8 on Sonnet in #36.
+- Camera tool documentation: [TOOLS.md](TOOLS.md) now has a section for the camera tools, like the evaluator's. It covers the spots, how they were made, finding, capturing, planning, messages, originality, tests, and limits.
+- Two camera spots on 7th Avenue at 23rd Street said "23st Street" in their address and side of street. Fixed in the catalogue, with Jan's go; the spot ids keep "23st". The cause was DOT's camera name "7 Ave @ 23st", now parsed correctly by `scripts/camera_geometry.camera_streets`. Tests: the parser, and every spot's street ordinals.
 
 ## Kyle workstream
 
@@ -102,7 +122,7 @@ Still open:
 - [x] Integrate and test a complete deployed adventure. Deployed acceptance run: 26/26 (September 29, revision `00016`). Deployed query 2 run through the camera capture, "can't see myself", and the finale's photo (revision `00018`). Kyle's local Sonnet runs of #24 (acceptance 28/28, guiding 18/18, camera 11/11). The final deployed run is due at the October 6 release check, with Jan's go (it costs money).
 - [ ] Test start-only requests, deadlines, required stops, skips, unavailable data, and story fallbacks. Covered so far by the acceptance script (Q1 start-only, Q2 deadline, required stop and camera, Q3 skip and re-time), `scripts/guiding_checks.py` (hint, wrong answer, give up, skip), and offline tests for unavailable data. Remaining: a deliberate pass on the deployed site on October 6.
 - [ ] Test reload/lock/resume, two independent sessions, retries, and persistent images. Covered by server tests and Node checks; a photo survived a reload on the deployed site (September 29). Remaining: a deliberate pass on the deployed site on October 6.
-- [ ] Document the two original tools and the contribution split. The evaluator has its own section in [TOOLS.md](TOOLS.md), and [CONTRIBUTIONS.md](CONTRIBUTIONS.md) gives the split. Remaining: the camera tools have only a table row in TOOLS.md, with no section like the evaluator's (Jan).
+- [x] Document the two original tools and the contribution split. The evaluator has its own section in [TOOLS.md](TOOLS.md), and [CONTRIBUTIONS.md](CONTRIBUTIONS.md) gives the split. The camera tools got their own section on October 1.
 - [ ] Optional Spotify addition only after core testing passes. Not started. With the October 2 feature freeze, it would have to be decided now.
 - [ ] Verify README examples, required files, actual authors, deployment URL, and continuous deployment. All were checked September 30 (the README model and camera-count lines were corrected). Re-check October 6.
 - [ ] Submit October 7 (one person submits the repository URL on Courseworks), and keep the service reachable through grading.

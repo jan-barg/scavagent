@@ -323,3 +323,8 @@ Jan's review of #38 found a gap: "No keeps the trip; Yes clears it…" checked t
   ```
 
   and, after `assert.equal(h.storage.get(SESSION), TRIP);`, there was no check of `PENDING`.
+
+## The camera tools' section in TOOLS.md (branch `claude/camera-docs`, from `main` at `d043860`)
+
+- `docs/TOOLS.md` (Kyle's): one new section after the evaluator's, "`find_camera_checkpoints` and `capture_camera_checkpoint`: camera souvenirs (Jan's original tool)". It is written in the evaluator section's layout. Nothing else in the file changed. Revert: `git checkout d043860 -- docs/TOOLS.md`.
+- `data/camera_catalogue.json` (Codex's, with entries only from Jan's approved spots): a text correction Jan approved in chat. The `address` and `side_of_street` of `img_7_ave_at_23st_a` and `img_7_ave_at_23st_b` said "23st Street" and now say "23rd Street". The positions, ids, and field log are unchanged.
