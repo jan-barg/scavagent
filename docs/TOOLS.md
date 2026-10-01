@@ -109,7 +109,7 @@ Traffic-camera feeds are public, but nothing maps them to where a person should 
 
 ### Tests and limits
 
-54 tests cover the finder, the capture, malformed DOT responses, photo reuse, importing spots, and street geometry (`tests/test_cameras.py`, `test_camera_tools.py`, `test_calibrate_camera.py`, `test_camera_geometry.py`). No spot is `field_verified` yet; that takes someone standing there ([WALK_TEST.md](WALK_TEST.md)). DOT stills have no exposure time, so the user's answer is the only proof they're in frame.
+54 tests cover the finder, the capture, malformed DOT responses, photo reuse, importing spots, and street geometry (`tests/test_cameras.py`, `test_camera_tools.py`, `test_calibrate_camera.py`, `test_camera_geometry.py`). No spot is `field_verified` yet; that takes someone standing there. DOT stills have no exposure time, so the user's answer is the only proof they're in frame.
 
 ## Places and research
 

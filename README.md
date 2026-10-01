@@ -64,4 +64,3 @@ Checks: `uv run pytest` (runs without network access) and `node --test tests/fro
 
 - Tools: [docs/TOOLS.md](docs/TOOLS.md). Who built what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
 - Story design: [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md). Model choice: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
-- Walk test: [docs/WALK_TEST.md](docs/WALK_TEST.md).
