@@ -1073,13 +1073,18 @@ test("abandon trip is offered once there is a trip, and never while a reply is p
 });
 
 test("No keeps the trip; Yes clears it on the server, forgets it here, and reloads to a first visit", async () => {
-  const h = harness({ [SESSION]: TRIP }, [tripSoFar(), response({ status: "ok" })]);
+  const h = harness({ [SESSION]: TRIP }, [tripSoFar(), response({}, 400), response({ status: "ok" })]);
   await settled();
+  h.elements.message.value = "ready";
+  await h.run("send()"); // Rejected: the unsent message stays stored for a retry
+  const unsent = h.storage.get(PENDING);
+  assert.equal(JSON.parse(unsent).message, "ready");
   click(h, "abandon");
   assert.equal(h.elements["abandon-dialog"].open, true);
   click(h, "abandon-no");
   assert.equal(h.elements["abandon-dialog"].open, false);
   assert.equal(h.storage.get(SESSION), TRIP);
+  assert.equal(h.storage.get(PENDING), unsent);
   assert.deepEqual(clears(h), []);
   assert.equal(h.reloads(), 0);
 
