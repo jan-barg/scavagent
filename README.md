@@ -1,52 +1,48 @@
 # Lou
 
-Lou is a chat agent that turns a walk through New York City into a short mystery adventure. Tell it where you are, and optionally how much time you have, where you need to end up, a stop you must pass, how you want to travel, and a theme. It then:
+Lou turns a walk through New York City into a short mystery. Tell it where you're starting, and if you like, how long you have, where you need to end up, a stop you must pass, and a theme. Lou researches real places on your way, times the route, writes a story whose clues you earn at each stop, and guides you there one stop at a time. At some corners, a city traffic camera takes your souvenir photo.
 
-- researches real places near your route (Wikipedia and NYC Landmarks Preservation Commission records);
-- times the route on foot and by subway;
-- writes a story whose clues you earn at each stop;
-- guides you stop by stop in chat.
+Try it: https://scavagent-b57mvtutma-ue.a.run.app
 
-At verified viewpoints it can save an NYC DOT traffic-camera still of you as a souvenir. Built by Jan Barganowski and Kyle Coletta for a Columbia agents course (October 2026).
+<p><img src="docs/screenshots/redesign/phone-3-briefing.png" width="220" alt="The briefing on a phone"> <img src="docs/screenshots/redesign/phone-2-planning-live-log.png" width="220" alt="The live tool log while Lou plans"> <img src="docs/screenshots/redesign/phone-5-clue-and-directions.png" width="220" alt="A clue earned, and directions to the next stop"></p>
 
-**Try it:** https://scavagent-b57mvtutma-ue.a.run.app. It runs Claude Sonnet 5.5, and the site deploys from `main` through Cloud Run continuous deployment.
+Built by Jan Barganowski and Kyle Coletta for a Columbia agents course, October 2026.
 
-## How to use it
-
-- **Start:** type where you are. Everything else is optional. Lou, the guide, answers with a briefing (your role, your handler, the mission), the stops, the time it takes, and the first stop.
-- **Play:** type "ready" to get directions, and tell it when you arrive. It gives you a task at each stop, a puzzle or something to look at, and your answer earns a clue for the case. You can ask for a "hint", "skip" a stop, or change plans ("I only have 15 minutes left").
-- **Chat only:** everything happens in the chat box. Sharing your browser location is optional and only helps with directions.
-- **The sign and the case board:** once you have a briefing, a green street sign at the top shows the current stop. Tap it for the case board: the briefing, the route (later stops stay locked until you reach them), the clues you've earned, and your photos. On a computer the board is a column on the right.
-- **Tool calls:** while Lou works, each tool appears as it starts and ticks off as it finishes (`GET /progress`). Each reply then lists the tools it used behind a "Used N tools" line. The `/chat` API returns `response`, `session_id`, and `tool_calls` (each with `name`, `args`, and `result`).
-
-<p><img src="docs/screenshots/redesign/phone-3-briefing.png" width="240" alt="The briefing on a phone"> <img src="docs/screenshots/redesign/phone-2-planning-live-log.png" width="240" alt="The live tool log while Lou plans"> <img src="docs/screenshots/redesign/phone-6-case-board.png" width="240" alt="The case board"></p>
-
-## Sample queries for graders
+## Try these
 
 1. "I'm at Central Park West and West 86th Street. Give me a 1960s spy adventure."
 2. "I'm at Central Park West and West 86th Street. I have 45 minutes, need to finish at West 72nd Street and Broadway, and must pass West 81st Street and Columbus Avenue. Walking only, architecture theme, and include a camera stop if one fits."
-3. A follow-up once an adventure is under way (for example after query 2, "ready", and reaching the first stop): "Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination."
+3. Once an adventure is under way (after query 2, say "ready", then that you've reached the first stop): "Skip the next optional stop. I have only 15 minutes left, and I still need to reach my destination."
 
-Planning a researched adventure takes up to a minute or two while the agent searches, routes, and checks its plan. The page keeps waiting on its own. Camera stops appear only at standing spots a person has approved: 151 in Manhattan (Upper East/West Side and Midtown), each matched on the live camera image and map imagery rather than tested in person, which Lou tells the user while offering a retake. In query 2 the camera stop is the viewpoint at Broadway and West 72nd Street, next to the finish; where no spot fits, Lou says so. `scripts/acceptance_checks.py <URL>` replays all three queries against a running app and checks what must hold.
+Planning takes a minute or two, and the page shows each tool as it runs. In query 2 the camera stop is at Broadway and West 72nd Street. The camera spots were matched on the camera image rather than tested in person, so Lou says so and offers a retake if you can't find yourself in the photo.
+
+## How it works
+
+You say where you are. Lou finds real places nearby and gathers sourced facts about them from Wikipedia and NYC landmark records, routes the walk (or a subway ride, if you allow it), and writes a story with a briefing, a handler who radios in, and a clue at each stop. Before you see the plan, the plan evaluator checks it: the times add up, every fact has a source, no real person is cast in the fiction, and the clues lead to the solution. A plan that fails goes back to Lou to fix.
+
+On the walk, a green street sign at the top of the page shows the current stop. Tap it for the case board: your briefing, the route, the clues you've earned, and your photos. Every reply lists the tools it used, and the `/chat` response returns them as `tool_calls`, each with its `name`, `args`, and `result`.
+
+<img src="docs/screenshots/redesign/desktop-1-at-a-stop.png" width="720" alt="Lou on a computer, with the case board as a column">
 
 ## Tools
 
-Full descriptions, sources, and configuration are in [docs/TOOLS.md](docs/TOOLS.md).
-
-| Tool | What it does |
+| Group | Tools |
 |---|---|
-| `evaluate_adventure_plan` | **Kyle's original tool.** Builds the agent's draft into a routed plan and checks it before the user sees it: timing against the user's limits, required stops and their order, travel modes, sourced facts and links, and the story rules (briefing, introduced characters, clues that add up, theme links, no real people as characters). A plan that fails can't be saved. |
-| `find_camera_checkpoints`, `capture_camera_checkpoint` | **Jan's original tool.** Finds NYC DOT traffic cameras at pedestrian standing positions a person verified on the camera image and map, or in the field (never the camera's mounting point). When the user says they're in position, it saves the live still as a souvenir, at most once per message, and shows it again in the finale. |
-| `geocode_place`, `find_places`, `research_place` | Resolve typed places, find candidate stops, and gather sourced facts (Wikipedia revisions, NYC LPC records). |
-| `get_route`, `get_next_directions` | Walking routes (OpenStreetMap Valhalla) and subway/bus legs (Google Routes), directions to the next stop. |
-| `get_transit_arrivals` | Live subway arrivals and service alerts (MTA GTFS-realtime). |
-| `save_adventure_plan`, `get_adventure_state`, `update_adventure_state` | Save a passing plan and keep progress server-side: stops completed or skipped, clues revealed, photos, arrival. |
+| Plan evaluator (Kyle's original tool) | `evaluate_adventure_plan` |
+| Camera souvenirs (Jan's original tool) | `find_camera_checkpoints`, `capture_camera_checkpoint` |
+| Places and research | `geocode_place`, `find_places`, `research_place` |
+| Routes and transit | `get_route`, `get_transit_arrivals`, `get_next_directions` |
+| Progress | `save_adventure_plan`, `get_adventure_state`, `update_adventure_state` |
+
+What each tool does, where its data comes from, and how errors reach the model: [docs/TOOLS.md](docs/TOOLS.md).
+
+## How it runs
+
+The server is FastAPI with a LiteLLM tool-calling loop (`app.py`), and the page is a single HTML file (`index.html`). It runs on Google Cloud Run, which rebuilds and redeploys on every push to `main`. Sessions are stored in Firestore and camera photos in Cloud Storage. The model is Claude Sonnet 5.5 through Anthropic's API, with the key kept in Secret Manager; if Claude can't answer, Gemini 3.5 Flash-Lite takes the turn. Why Sonnet: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
 
 ## Run locally
 
-Use Python 3.10 or later and `uv`. The model is set by `SCAVAGENT_MODEL`.
-- **The deployed site** runs Claude Sonnet 5.5 through Anthropic's API (`anthropic/claude-sonnet-5-5`). If Claude can't answer, Gemini 3.5 Flash-Lite on Vertex AI answers instead. Why Sonnet: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
-- **Locally**, the default is Gemini 3.5 Flash-Lite on Vertex AI. It uses Google Application Default Credentials and the project `agentic-ai-msds`.
+With Python 3.10 or later and `uv`:
 
 ```sh
 uv sync
@@ -54,13 +50,13 @@ gcloud auth application-default login
 uv run app.py
 ```
 
-To run the deployed model locally, export `SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5` and your `ANTHROPIC_API_KEY` before `uv run app.py`.
+Then open http://localhost:8000. Locally the model defaults to Gemini 3.5 Flash-Lite on Vertex AI, which is what the `gcloud` login is for. To use Claude as the live site does, export `SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5` and `ANTHROPIC_API_KEY` first. Other settings are in [.env.example](.env.example).
 
-Open http://localhost:8000. Sessions persist in `.data/scavagent.db`, so a conversation and its progress survive a restart. Other settings are in [.env.example](.env.example). For a synthetic test adventure, start with `SCAVAGENT_DEV_FIXTURES=1 uv run app.py` and ask for "the constrained_route test adventure"; its places and clues are invented and labeled as such.
+The tests run without network access: `uv run pytest` and `node --test tests/frontend.test.cjs`.
 
-Checks: `uv run pytest` (runs without network access) and `node --test tests/frontend.test.cjs`.
+## More
 
-## Project docs
-
-- Tools: [docs/TOOLS.md](docs/TOOLS.md). Who built what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
-- Story design: [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md). Model choice: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
+- [docs/TOOLS.md](docs/TOOLS.md): every tool in detail, including both original tools.
+- [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md): what makes a good adventure, and how one plays.
+- [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md): the seven models we compared.
+- [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md): who built what.
