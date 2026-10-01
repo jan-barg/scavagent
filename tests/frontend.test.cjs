@@ -29,6 +29,7 @@ class Element extends EventTarget {
   append(...nodes) { nodes.forEach(node => this.appendChild(node)); }
   replaceChildren(...nodes) { this.children = []; this._text = ""; this.append(...nodes); }
   setAttribute(key, value) { this[key] = value; }
+  getAttribute(key) { return this[key] ?? null; }
   addEventListener(key, value) { this.listeners[key] = value; super.addEventListener(key, value); }
   remove() { this.parent.children = this.parent.children.filter(node => node !== this); }
   querySelector(selector) { return this.children.find(node => node.className.split(" ").includes(selector.slice(1))) || null; }
@@ -65,15 +66,17 @@ function fakeClock() {
 }
 
 function harness(initial = {}, replies = [], options = {}) {
-  const elements = Object.fromEntries(["trail", "messages", "message", "send", "status", "composer", "welcome"].map(id => [id, new Element()]));
+  const elements = Object.fromEntries(["trail", "messages", "message", "send", "status", "composer", "welcome",
+    "app", "working", "sign", "board", "board-close", "scrim"].map(id => [id, new Element()]));
   const storage = new Map(Object.entries(initial));
-  const requests = [], writes = [], geo = [];
+  const requests = [], writes = [], geo = [], polls = [], boards = [];
   const clock = fakeClock();
   let activeRequests = 0, maxActiveRequests = 0;
   const document = {
     visibilityState: "visible", listeners: {},
     getElementById: id => elements[id],
     createElement: tag => new Element(tag),
+    createElementNS: (namespace, tag) => new Element(tag),
     createTextNode: text => { const node = new Element("#text"); node.textContent = text; return node; },
     addEventListener(key, value) { this.listeners[key] = value; },
   };
@@ -92,6 +95,15 @@ function harness(initial = {}, replies = [], options = {}) {
     URL, crypto, Uint8Array, AbortController, Date: clock.Date,
     setInterval: () => 0, setTimeout: clock.setTimeout, clearTimeout: clock.clearTimeout,
     fetch: async (url, request) => {
+      // The live log (/progress) and the board (/adventure) have their own handlers and logs, so the
+      // chat and history requests below keep their exact order and timing. Unhandled, they answer 404.
+      for (const [path, log, handler] of [["/progress", polls, options.progress], ["/adventure", boards, options.adventure]]) {
+        if (url.startsWith(path)) {
+          const call = { url, request, at: clock.now() };
+          log.push(call);
+          return handler ? handler(call) : response({}, 404);
+        }
+      }
       const call = { url, request, storage: Object.fromEntries(storage), at: clock.now() };
       requests.push(call);
       activeRequests += 1; maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
@@ -116,7 +128,7 @@ function harness(initial = {}, replies = [], options = {}) {
   };
   vm.createContext(context);
   vm.runInContext(source, context);
-  return { elements, storage, requests, writes, geo, document, clock, maxActiveRequests: () => maxActiveRequests, run: (code, options) => vm.runInContext(code, context, options) };
+  return { elements, storage, requests, writes, geo, polls, boards, document, clock, maxActiveRequests: () => maxActiveRequests, run: (code, options) => vm.runInContext(code, context, options) };
 }
 const response = (body, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 const answer = call => response({ response: "Saved reply", session_id: JSON.parse(call.request.body).session_id, tool_calls: [] });
@@ -510,7 +522,7 @@ test("tool activity reports unsuccessful plan checks as failed even when the too
   ];
   const list = h.run(`toolActivity(${JSON.stringify(calls)})`);
   assert.deepEqual(list.children.map(node => node.textContent), [
-    ...Array(8).fill("Route check · failed"), "Route check · complete", "Local weather · unavailable", "Camera positions · checked",
+    ...Array(8).fill("Route check failed"), "Route check passed", "Weather check unavailable", "Camera spot search ran",
   ]);
 });
 
@@ -519,7 +531,7 @@ test("tool activity discloses valid calls beyond its twelve-row limit", () => {
   const calls = Array.from({ length: 15 }, () => ({ name: "get_weather", result: { ok: true } }));
   const list = h.run(`toolActivity(${JSON.stringify([null, { name: 1 }, ...calls])})`);
   assert.equal(list.children.length, 13);
-  assert(list.children.slice(0, 12).every(node => node.textContent === "Local weather · complete"));
+  assert(list.children.slice(0, 12).every(node => node.textContent === "Weather check done"));
   assert.equal(list.children[12].textContent, "+3 more");
   const full = h.run(`toolActivity(${JSON.stringify(calls.slice(0, 12))})`);
   assert.equal(full.children.length, 12);
@@ -564,7 +576,7 @@ test("many unclosed Markdown links render promptly as literal text", () => {
 test("a route check whose verdict was trimmed from history is not reported as passing", () => {
   const h = harness();
   const list = h.run('toolActivity([{name:"evaluate_adventure_plan",result:{ok:true,note:"trimmed"}}])');
-  assert.equal(list.children[0].textContent, "Route check · checked");
+  assert.equal(list.children[0].textContent, "Route check ran");
 });
 
 test("a stalled history body times out before automatically recovering the pending turn", async () => {
@@ -643,3 +655,220 @@ for (const phase of ["request", "retry wait"]) {
     assert(!h.storage.has(PENDING));
   });
 }
+
+// --- The redesign: live log, reply layout, sign and case board ---
+
+const all = node => [node, ...node.children.flatMap(all)];
+const params = call => Object.fromEntries(new URLSearchParams(call.url.split("?")[1]));
+const STEPS = [
+  { i: 0, round: 1, parallel: false, name: "geocode_place", subject: "72nd and West End", status: "ok" },
+  { i: 1, round: 2, parallel: true, name: "research_place", subject: "Beacon Theatre", status: "ok" },
+  { i: 2, round: 2, parallel: true, name: "research_place", subject: null, status: "running" },
+  { i: 3, round: 2, parallel: true, name: "research_place", subject: null, status: "running" },
+];
+const progressReply = (state, steps = []) => call => response({
+  ...params(call), state, started_at: state === "running" ? new Date(Date.now() - 37000).toISOString() : null,
+  phase: state === "running" ? "tools" : null, steps,
+});
+
+test("the live log polls while a reply is pending, shows each step, and stops with the reply", async () => {
+  let finish;
+  const chat = new Promise(resolve => { finish = resolve; });
+  const h = harness({}, [call => chat.then(() => answer(call))], { progress: progressReply("running", STEPS) });
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await h.clock.advance(1500);
+  const sent = posted(h)[0];
+  assert(h.polls.length >= 2 && h.polls.every(call => params(call).session_id === sent.session_id && params(call).client_message_id === sent.client_message_id));
+  const log = h.elements.messages.children[1].querySelector(".log").textContent;
+  for (const part of ["Place lookup", "72nd and West End", "Reading up on 3 places", "Place research", "Beacon Theatre"]) assert(log.includes(part), part);
+  assert.equal(h.elements.working.hidden, false);
+  // Polling never posts a message, never runs alongside another send, and never touches the pending turn.
+  assert.equal(posted(h).length, 1);
+  assert.equal(h.maxActiveRequests(), 1);
+  assert.deepEqual(h.writes, [SESSION, PENDING]);
+
+  finish();
+  await sending;
+  const polled = h.polls.length;
+  await h.clock.advance(20000);
+  assert.equal(h.polls.length, polled);
+  const reply = h.elements.messages.children[1];
+  assert.equal(reply.className, "message assistant");
+  assert.equal(reply.querySelector(".log"), null);
+  assert.equal(reply.querySelector(".content").textContent, "Saved reply");
+  assert.equal(h.elements.working.hidden, true);
+});
+
+test("a page reloaded mid-turn polls the same ids and shows the steps done so far", async () => {
+  const pending = { message: "ready", session_id: "saved-session", client_message_id: MESSAGE_ID };
+  const h = harness({ [SESSION]: pending.session_id, [PENDING]: JSON.stringify(pending) },
+    [restored(pending.session_id), response({}, 409), answer], { progress: progressReply("running", STEPS) });
+  await h.clock.advance(1500);
+  assert.deepEqual(posted(h), [pending]);
+  assert(h.polls.length >= 1 && h.polls.every(call => params(call).session_id === pending.session_id && params(call).client_message_id === MESSAGE_ID));
+  assert(h.elements.messages.children[1].querySelector(".log").textContent.includes("Reading up on 3 places"));
+  await h.clock.advance(3500);
+  assert.deepEqual(posted(h), [pending, pending]);
+  assert(!h.storage.has(PENDING));
+});
+
+test("an older server without /progress is polled only every 5 seconds and the chat flow is unchanged", async () => {
+  const h = harness({}, [() => new Promise(() => {})]);
+  const started = h.clock.now();
+  h.elements.message.value = "plan a walk";
+  void h.run("send()");
+  await h.clock.advance(12000);
+  assert.deepEqual(h.polls.map(call => call.at - started), [0, 5000, 10000]);
+  assert.equal(posted(h).length, 1);
+  assert(h.elements.messages.children[1].querySelector(".log").textContent.includes("Lou is on it"));
+});
+
+test("polling slows down after 10 seconds without a running turn", async () => {
+  const h = harness({}, [() => new Promise(() => {})], { progress: progressReply("unknown") });
+  const started = h.clock.now();
+  h.elements.message.value = "plan a walk";
+  void h.run("send()");
+  await h.clock.advance(20000);
+  const times = h.polls.map(call => call.at - started);
+  assert.deepEqual(times.slice(0, 8), [0, 1500, 3000, 4500, 6000, 7500, 9000, 10500]);
+  assert.equal(times[8], 15500);
+});
+
+test("a stored reply reported by /progress ends the retry wait early", async () => {
+  let state = "running";
+  const h = harness({}, [response({}, 409), answer], { progress: call => progressReply(state)(call) });
+  const started = h.clock.now();
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await settled();
+  state = "done";
+  await h.clock.advance(1500);
+  assert.deepEqual(h.requests.filter(call => call.url === "/chat").map(call => call.at - started), [0, 1500]);
+  await sending;
+  assert.equal(new Set(posted(h).map(body => body.client_message_id)).size, 1);
+  assert(!h.storage.has(PENDING));
+});
+
+test("a new reply opens at its first line, not its last", async () => {
+  let finish;
+  const chat = new Promise(resolve => { finish = resolve; });
+  const h = harness({}, [call => chat.then(() => answer(call))]);
+  h.elements.message.value = "plan a walk";
+  const sending = h.run("send()");
+  await settled();
+  h.elements.messages.children[1].offsetTop = 640;
+  finish();
+  await sending;
+  assert.equal(h.elements.trail.scrollTop, 628);
+});
+
+test("replies render the briefing, characters' lines, directions, and the case file as their own blocks", () => {
+  const h = harness();
+  const text = [
+    "> **Briefing:** You're a tape tracker. Mara radios you.",
+    ">",
+    "> Solve what she sends.",
+    "",
+    "Three stops, about 38 minutes.",
+    "",
+    "> **Mara Quill (radio):** \"The thief signs as [Roxy](https://en.wikipedia.org/wiki/Roxy_(name)).\"",
+    "> **Viktor Hale · phone:** \"<script>alert(1)</script> [bad](javascript:alert(1))\"",
+    "",
+    "1. Head south on Broadway.",
+    "",
+    "2. Turn left onto W 70th St.",
+    "3. No. 135 is on your left.",
+    "",
+    "### Case file",
+    "- The thief signs as Roxy.",
+    "",
+    "![frame](/media/abc)",
+  ].join("\n");
+  h.run(`renderText(input, ${JSON.stringify(text)}, true)`);
+  const blocks = h.elements.message.children;
+  assert.deepEqual(blocks.map(node => node.className || node.tagName), ["brief", "p", "tx", "tx", "ol", "casefile"]);
+  const [brief, , mara, viktor, steps, casefile] = blocks;
+  assert.deepEqual(brief.children.map(node => node.textContent), ["Your briefing", "You're a tape tracker. Mara radios you.", "Solve what she sends."]);
+  const who = node => node.children[0].children.slice(1).map(child => child.textContent);
+  assert.deepEqual(who(mara), ["Mara Quill", "on the radio"]);
+  assert.deepEqual(who(viktor), ["Viktor Hale", "on the phone"]);
+  assert.equal(all(mara).find(node => node.tagName === "a").href, "https://en.wikipedia.org/wiki/Roxy_(name)");
+  assert(viktor.textContent.includes("<script>alert(1)</script>"));
+  assert(!all(viktor).some(node => ["a", "script"].includes(node.tagName)));
+  assert.deepEqual(steps.children.map(node => node.textContent), ["Head south on Broadway.", "Turn left onto W 70th St.", "No. 135 is on your left."]);
+  assert.equal(casefile.children[0].textContent, "Case file");
+  assert(casefile.textContent.includes("The thief signs as Roxy."));
+  assert.equal(all(casefile).find(node => node.tagName === "img").src, "http://localhost:8876/media/abc");
+});
+
+test("each reply's tools sit behind one line that opens the full list", () => {
+  const h = harness();
+  const calls = [{ name: "research_place", args: { place_id: "wiki:1" }, result: { ok: true, data: { evidence: { name: "Beacon Theatre" } } } },
+    { name: "evaluate_adventure_plan", args: { draft: { story: { solution: "SECRET" } } }, result: { ok: true, data: { passes: false } } }];
+  const article = h.run(`addMessage("assistant", "Done.", ${JSON.stringify(calls)})`);
+  const toggle = article.querySelector(".toolbar"), list = article.querySelector(".tools");
+  assert.equal(toggle.textContent, "Used 2 tools");
+  assert.equal(list.hidden, true);
+  assert.deepEqual(list.children.map(node => node.textContent), ["Place research done Beacon Theatre", "Route check failed"]);
+  assert(!article.textContent.includes("SECRET"));
+  toggle.dispatchEvent(new Event("click"));
+  assert.equal(list.hidden, false);
+  assert.equal(toggle["aria-expanded"], "true");
+});
+
+const boardData = (status, extra = {}) => ({
+  status, briefing: "You're a tape tracker.", handler: { name: "Mara Quill", contact: "radio" },
+  stops: [{ n: 1, name: "Beacon Theatre", address: "2124 Broadway", status: "done", camera: false },
+    { n: 2, name: "Pythian Temple", address: "135 W 70th St", status: "current", camera: false },
+    { n: 3, name: null, address: null, status: "locked", camera: true }],
+  clues: [{ text: "The thief signs as Roxy.", stop: 1 }], photos: [{ media_url: "/media/a1", visibility: "unconfirmed", stop: 3 }],
+  destination: "Amsterdam Ave and W 72 St", destination_reached: false, solution: null, estimated_minutes: 38, ...extra,
+});
+
+test("the sign shows the current stop and the case board shows only what the server sent", async () => {
+  const h = harness({ [SESSION]: "s" }, [restored("s", [{ role: "user", text: "ready" }, { role: "assistant", text: "Go.", tool_calls: [] }])],
+    { adventure: () => response(boardData("active")) });
+  await h.clock.advance(0);
+  assert.equal(h.boards.length, 1);
+  assert.equal(params(h.boards[0]).session_id, "s");
+  const sign = h.elements.sign;
+  assert.equal(sign.hidden, false);
+  assert.deepEqual(sign.children.slice(0, 3).map(node => node.textContent), ["Stop 2 of 3", "Pythian Temple", "135 W 70th St"]);
+  const board = h.elements.board.textContent;
+  for (const part of ["Mara Quill, your handler, reaches you by radio.", "Beacon Theatre", "Solved", "Pythian Temple", "You’re here",
+    "Stop 3", "Revealed when you get there", "The thief signs as Roxy."]) assert(board.includes(part), part);
+  assert.equal(all(h.elements.board).find(node => node.tagName === "img").src, "http://localhost:8876/media/a1");
+
+  sign.dispatchEvent(new Event("click"));
+  assert(h.elements.app.classList.contains("open"));
+  h.document.listeners.keydown({ key: "Escape" });
+  assert(!h.elements.app.classList.contains("open"));
+});
+
+for (const [status, extra, expected] of [
+  ["proposed", { stops: [{ n: 1, name: "Beacon Theatre", address: "2124 Broadway", status: "current" }, { n: 2, name: null, address: null, status: "locked" }] },
+    ["Briefing ready", "First stop: Beacon Theatre", "2 stops, about 38 minutes"]],
+  ["completed", { solution: "Locker 1021, under Roxy", stops: [1, 2, 3].map(n => ({ n, name: "Stop " + n, address: null, status: "done" })) },
+    ["Case closed", "Locker 1021, under Roxy", "All 3 stops done"]],
+  ["abandoned", { solution: "Locker 1021, under Roxy" }, ["Ended early", "Locker 1021, under Roxy", "1 of 3 stops done"]],
+]) {
+  test("the sign for a " + status + " adventure", () => {
+    const h = harness();
+    h.run(`renderBoard(${JSON.stringify(boardData(status, extra))})`);
+    assert.deepEqual(h.elements.sign.children.slice(0, 3).map(node => node.textContent), expected);
+    if (extra.solution) assert(h.elements.board.textContent.includes(extra.solution));
+  });
+}
+
+test("no adventure, or no /adventure, hides the sign and leaves a note on the board", async () => {
+  const h = harness({ [SESSION]: "s" }, [restored("s", [{ role: "user", text: "hi" }, { role: "assistant", text: "Hello.", tool_calls: [] }])]);
+  await h.clock.advance(0);
+  assert.equal(h.boards.length, 1);
+  assert.equal(h.elements.sign.hidden, true);
+  h.run(`renderBoard(${JSON.stringify(boardData("active"))})`);
+  assert.equal(h.elements.sign.hidden, false);
+  h.run('renderBoard({ status: "idle" })');
+  assert.equal(h.elements.sign.hidden, true);
+  assert(h.elements.board.textContent.includes("Your case board fills in"));
+});
