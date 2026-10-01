@@ -18,8 +18,3 @@ Lou was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`), each w
 - Research. Finds places and gathers sourced facts from Wikipedia and NYC Landmarks Preservation Commission records.
 - Routes and transit. Walking, subway, and bus routes, live train arrivals, and directions to each stop.
 - Check scripts. Replay the grader queries, a guided walk, and a camera stop against a running server.
-
-## Together
-
-- The product idea and the story design, agreed after two disappointing live runs.
-- Testing on the deployed site, and the walk test planned for October 3 and 4.
