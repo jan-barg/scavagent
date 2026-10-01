@@ -309,3 +309,17 @@ Jan asked for the user-facing "Scavagent" mentions to say Lou, after #38 changed
 - `agent.py` (Kyle's), the opening line only. Original: "You are Lou, the dispatcher at Scavagent, a guide for playful, real-world NYC adventures run entirely in chat." Now: "You are Lou, a New York dispatcher who guides playful, real-world NYC adventures run entirely in chat." Every rule, including the Voice section, is unchanged. Revert: `git checkout 2457b93 -- agent.py`.
 - Kyle's files, first-line docstrings only: `agent.py` ("Scavagent's agent instructions" → "Lou's agent instructions"), `adventure/validation.py` ("Scavagent's original planning tool" → "Lou's original planning tool"), and `scripts/acceptance_checks.py` ("against a running Scavagent" → "against a running Lou"). No code changed.
 - Jan's files: `index.html` (the `<title>` and the meta description); `README.md` (the title is now "# Lou", the intro starts "Lou is a chat agent", and three sentences where the agent acts say Lou); and the first-line docstrings of `schemas.py` and `integrations/cameras.py`. Jan asked to rebrand the README and these docstrings as Lou. The repository, the URL, the other docs, and the identifiers above keep "scavagent".
+
+## The Abandon trip test stores an unsent message (branch `kyle/abandon-test-pending`, from `main` at `b08d26b`)
+
+Jan's review of #38 found a gap: "No keeps the trip; Yes clears it…" checked that the unsent message was removed, but its setup never stored one, so that half passed without testing anything. The test now sends "ready" first and gets a 400, so the message stays stored for a retry. It checks that No leaves the message stored and that Yes removes it. If `abandonTrip()` stops removing `scavagent.pending_message.v1`, this test now fails (checked by removing that line). No other test and no page code changed.
+
+- `tests/frontend.test.cjs`, that test's first lines. Revert: `git checkout b08d26b -- tests/frontend.test.cjs`. Original:
+
+  ```js
+    const h = harness({ [SESSION]: TRIP }, [tripSoFar(), response({ status: "ok" })]);
+    await settled();
+    click(h, "abandon");
+  ```
+
+  and, after `assert.equal(h.storage.get(SESSION), TRIP);`, there was no check of `PENDING`.
