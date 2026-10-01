@@ -1,4 +1,4 @@
-# Cloud Run image. Cloud Build builds this on every push to main (see docs/DEPLOY.md).
+# Cloud Run image. Cloud Build builds this on every push to main.
 FROM python:3.13-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /bin/uv

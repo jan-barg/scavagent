@@ -4,7 +4,7 @@ Which model should run Scavagent? Measured by Claude (Jan's agent) on September 
 
 ## Access on Vertex AI (September 29, 2026)
 
-Every model runs through `SCAVAGENT_MODEL` (LiteLLM string) and `VERTEX_LOCATION`. The Cloud Run service account's `roles/aiplatform.user` covers the Vertex models; Claude runs through Anthropic's API with a key (docs/DEPLOY.md, "Claude through Anthropic's API").
+Every model runs through `SCAVAGENT_MODEL` (LiteLLM string) and `VERTEX_LOCATION`. The Cloud Run service account's `roles/aiplatform.user` covers the Vertex models; Claude runs through Anthropic's API with a key.
 
 | Model | `SCAVAGENT_MODEL` | `VERTEX_LOCATION` | Status |
 |---|---|---|---|

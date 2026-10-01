@@ -46,7 +46,7 @@ Full descriptions, sources, and configuration are in [docs/TOOLS.md](docs/TOOLS.
 
 Use Python 3.10 or later and `uv`. The model is set by `SCAVAGENT_MODEL`.
 - **The deployed site** runs Claude Sonnet 5.5 through Anthropic's API (`anthropic/claude-sonnet-5-5`). If Claude can't answer, Gemini 3.5 Flash-Lite on Vertex AI answers instead. Why Sonnet: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
-- **Locally**, the default is Gemini 3.5 Flash-Lite on Vertex AI. It uses Google Application Default Credentials and the project `agentic-ai-msds` (see [docs/DEPLOY.md](docs/DEPLOY.md)).
+- **Locally**, the default is Gemini 3.5 Flash-Lite on Vertex AI. It uses Google Application Default Credentials and the project `agentic-ai-msds`.
 
 ```sh
 uv sync
@@ -64,4 +64,4 @@ Checks: `uv run pytest` (runs without network access) and `node --test tests/fro
 
 - Tools: [docs/TOOLS.md](docs/TOOLS.md). Who built what: [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md).
 - Story design: [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md). Model choice: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
-- Deployment: [docs/DEPLOY.md](docs/DEPLOY.md). Walk test: [docs/WALK_TEST.md](docs/WALK_TEST.md).
+- Walk test: [docs/WALK_TEST.md](docs/WALK_TEST.md).
