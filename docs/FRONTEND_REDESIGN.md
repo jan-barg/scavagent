@@ -1,6 +1,6 @@
 # Frontend redesign: Street Blade, Lou, and the live log
 
-Status: implemented on `jan/frontend-redesign` (September 30, 2026), except the `agent.py` voice edit, which waits for Kyle's greenlight; see [Implementation notes](#implementation-notes). The main agent's seven review changes are adopted ([Review changes](#review-changes)). Written by Claude, in the frontend session.
+Status: implemented on `jan/frontend-redesign` (September 30, 2026), including the `agent.py` voice edit that Kyle's Claude greenlit with one wording change (see [Implementation notes](#implementation-notes)). The three required Sonnet runs come last. The main agent's seven review changes are adopted ([Review changes](#review-changes)). Written by Claude, in the frontend session.
 
 - Clickable mockup (the approved design): https://claude.ai/artifact/CNi2h9BNEpM9Ux9eTcbcq4
 - Phase 1 proposal (the alternatives, and why polling rather than streaming): https://claude.ai/artifact/EZdaiJ6mic6ju26FUa1TWi
@@ -208,9 +208,10 @@ Three edits. Every existing rule stays word for word. The edit is logged in `doc
 2. New section before `## Ground rules`:
    ```text
    ## Voice
-   - You work the desk and are never a character in the story. You handle what is real: directions, times, sourced \
-   facts, hints, photos, and how the game works. Each adventure's invented handler and cast speak only inside scenes, and \
-   you patch them through ("Patching your handler through."). Never give a character your name.
+   - You work the desk and are never a character in the story. You handle what is real: directions, times, hints, \
+   photos, how the game works, and sourced facts, except the stop's theme-link fact, which the character carries into the \
+   scene in the story's voice, with its source link. Each adventure's invented handler and cast speak only inside \
+   scenes, and you patch them through ("Patching your handler through."). Never give a character your name.
    - Sound like a seasoned New York night dispatcher: dry, quick, and kind. Short sentences; street names, cross \
    streets, clock times, and minutes from the tools. At most one wry line per reply. No emoji, no gushing, no \
    "Great question".
@@ -324,12 +325,18 @@ Where the build differs from, or adds to, the plan above:
 - **The status line** is quiet when there is nothing to say. While a reply is pending it reads "Replies can take a minute or two. It keeps going if you lock your phone." These strings are kept word for word: "Still working on your plan…", "The reply didn’t arrive. Press Send to retry the same message.", "That message wasn’t accepted. Edit it and send again.", "Picking up your trail…", "Your trail is here. Pick up wherever you left off.", and "History couldn’t load. You can still send a message to reconnect."
 - **A reloaded page** opens the last reply at its top. It does that again once the web fonts load, because they reflow the history.
 - **One-paragraph replies** render inline, as before. Block layout (panels, lists, the case file) starts only when a reply has more than one block. Any reply without the new formatting still renders as plain paragraphs.
-- **Not in this branch yet:** the `agent.py` voice edit. It waits for Kyle's greenlight, then the three required Sonnet runs (Jan gave the go). Until then, replies keep today's voice, and the briefing is a plain first paragraph. It still opens at the top of the reply and is pinned on the case board.
+- **The `agent.py` voice edit** is in (`0ad1c66`, logged in `docs/SHARED_FILE_EDITS.md`). Kyle's Claude greenlit it with one change, adopted above: the stop's theme-link fact stays with the character in the arrival scene, as Guiding and `STORY_DESIGN.md` have it. The three required Sonnet runs follow (Jan gave the go).
+- **`/adventure` after Kyle's review:**
+  - The handler is the cast member introduced in the briefing with a non-empty contact (the `HANDLER_MISSING` test), preferring a role containing "handler". A pre-v2 cast of plain names has none.
+  - The finale beat's clue waits until the adventure is over.
+  - Theme links and beats' `uses` are never sent.
+
+  Tests cover two briefed contacts, a pre-v2 plan, and the added spoilers.
 - **Checks.** With the network blocked:
-  - `uv run --frozen pytest -q` passes 459, 27 of them new;
+  - `uv run --frozen pytest -q` passes 461, 29 of them new;
   - `node --test tests/frontend.test.cjs` passes 49, 13 of them new.
 
-  A mutation check planted 20 single removals of the new behavior (10 on the server, 10 in the page), and the tests caught all 20. The thread-safety test is a stress test, so it isn't part of that count.
+  A mutation check planted 22 single removals of the new behavior (12 on the server, 10 in the page), and the tests caught all 22. The thread-safety test is a stress test, so it isn't part of that count.
 - **Screenshots** are in `docs/screenshots/redesign/`. They came from a local server with a seeded in-memory store and a scripted stand-in for the model and slow tools, so no model calls were made. Each state was checked in the in-app browser. The PNG files were captured with headless Chrome over the DevTools protocol against the same server, because the in-app browser can't save files.
 
 ## Greenlight checklist

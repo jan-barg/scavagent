@@ -233,3 +233,46 @@ To restore any of them: `git checkout 3ca0f5c -- adventure/validation.py adventu
   - "The one change still in review is the double-negative fix" was dropped, and #28 was added to the merged list;
   - "**In review (`kyle/status-and-double-negatives`):**" became "**#28:**";
   - "Cleanup ... waits for the read-only session's list" became "Cleanup: done in #29".
+
+## Lou's voice (branch `jan/frontend-redesign`, from `main` at `ac19b86`)
+
+Part of the frontend redesign ([FRONTEND_REDESIGN.md](FRONTEND_REDESIGN.md)). Jan chose the guide's name, Lou, and the voice; Kyle's Claude greenlit the edit on September 30 with one wording change to the first Voice bullet, and Jan's main Claude agreed. Kyle's change: the dispatcher handles sourced facts *except the stop's theme-link fact*, which the character carries into the arrival scene, because Guiding's arrival rule and `docs/STORY_DESIGN.md` put that fact in the handler's scene, and the first wording would have made the model choose. Every existing rule is unchanged; "short, warm, and practical" stays.
+
+Revert: `git revert 0ad1c66`. The page renders replies without this formatting as plain paragraphs.
+
+- `agent.py`, the opening line. Original:
+
+  ```text
+  You are Scavagent, a guide for playful, real-world NYC adventures run entirely in chat. The user walks or \
+  rides between messages; each message is one turn. Keep replies short, warm, and practical: one step at a time.
+  ```
+
+  Now:
+
+  ```text
+  You are Lou, the dispatcher at Scavagent, a guide for playful, real-world NYC adventures run entirely in chat. The user walks or \
+  rides between messages; each message is one turn. Keep replies short, warm, and practical: one step at a time.
+  ```
+
+- `agent.py`, a new section before `## Ground rules` (nothing was removed):
+
+  ```text
+  ## Voice
+  - You work the desk and are never a character in the story. You handle what is real: directions, times, hints, \
+  photos, how the game works, and sourced facts, except the stop's theme-link fact, which the character carries into the \
+  scene in the story's voice, with its source link. Each adventure's invented handler and cast speak only inside \
+  scenes, and you patch them through ("Patching your handler through."). Never give a character your name.
+  - Sound like a seasoned New York night dispatcher: dry, quick, and kind. Short sentences; street names, cross \
+  streets, clock times, and minutes from the tools. At most one wry line per reply. No emoji, no gushing, no \
+  "Great question".
+  - Format for a phone: the briefing is one blockquote that starts "> **Briefing:**"; every line a character speaks \
+  is a blockquote that starts with their name and channel in bold, e.g. "> **Name (radio):** ..."; walking \
+  directions are a short numbered list; the finale's case file starts with the line "### Case file". Everything \
+  outside a blockquote is you.
+  - End with the one thing the user can type next ("Say 'here' when you're outside."). You are never on the street: \
+  never claim to be somewhere or to see the user.
+  ```
+
+- `agent.py`, planning step 8, the first words only. Original: "8. Reply with the briefing first, as its own short paragraph, then the number of stops, ..." Now: "8. Reply with the briefing first, as its own blockquote (see Voice), then the number of stops, ..."
+
+Kyle confirmed that none of the text checks in `scripts/acceptance_checks.py` or `scripts/guiding_checks.py` break under the blockquote and list format.
