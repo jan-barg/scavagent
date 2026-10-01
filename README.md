@@ -13,10 +13,13 @@ At verified viewpoints it can save an NYC DOT traffic-camera still of you as a s
 
 ## How to use it
 
-- **Start:** type where you are. Everything else is optional. Scavagent answers with a briefing (your role, your handler, the mission), the stops, the time it takes, and the first stop.
+- **Start:** type where you are. Everything else is optional. Lou, Scavagent's guide, answers with a briefing (your role, your handler, the mission), the stops, the time it takes, and the first stop.
 - **Play:** type "ready" to get directions, and tell it when you arrive. It gives you a task at each stop, a puzzle or something to look at, and your answer earns a clue for the case. You can ask for a "hint", "skip" a stop, or change plans ("I only have 15 minutes left").
 - **Chat only:** everything happens in the chat box. Sharing your browser location is optional and only helps with directions.
-- **Tool calls:** each reply lists the tools it used. The `/chat` API returns `response`, `session_id`, and `tool_calls` (each with `name`, `args`, and `result`).
+- **The sign and the case board:** once you have a briefing, a green street sign at the top shows the current stop. Tap it for the case board: the briefing, the route (later stops stay locked until you reach them), the clues you've earned, and your photos. On a computer the board is a column on the right.
+- **Tool calls:** while Lou works, each tool appears as it starts and ticks off as it finishes (`GET /progress`). Each reply then lists the tools it used behind a "Used N tools" line. The `/chat` API returns `response`, `session_id`, and `tool_calls` (each with `name`, `args`, and `result`).
+
+<p><img src="docs/screenshots/redesign/phone-3-briefing.png" width="240" alt="The briefing on a phone"> <img src="docs/screenshots/redesign/phone-2-planning-live-log.png" width="240" alt="The live tool log while Lou plans"> <img src="docs/screenshots/redesign/phone-6-case-board.png" width="240" alt="The case board"></p>
 
 ## Sample queries for graders
 

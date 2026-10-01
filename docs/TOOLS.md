@@ -98,4 +98,4 @@ Walking, places, research, arrivals, and film permits need no keys. Public serve
 
 ## Sources and attribution
 
-Wikipedia (CC BY-SA 4.0); map and route data © OpenStreetMap contributors (ODbL) via Overpass, Nominatim, Valhalla, and OSRM; Google Routes API; NYC Landmarks Preservation Commission and NYC Film Permits via NYC Open Data; MTA Subway Stations via NY Open Data; MTA GTFS-realtime and service alert feeds; NYC Planning Labs GeoSearch.
+Wikipedia (CC BY-SA 4.0); map and route data © OpenStreetMap contributors (ODbL) via Overpass, Nominatim, Valhalla, and OSRM; Google Routes API; NYC Landmarks Preservation Commission and NYC Film Permits via NYC Open Data; MTA Subway Stations via NY Open Data; MTA GTFS-realtime and service alert feeds; NYC Planning Labs GeoSearch. The page uses the Overpass and Atkinson Hyperlegible (Braille Institute) fonts under the SIL Open Font License (`static/fonts/OFL-*.txt`) and Phosphor Icons under the MIT License (`static/licenses/phosphor-MIT.txt`).

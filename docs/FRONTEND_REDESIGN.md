@@ -1,6 +1,6 @@
 # Frontend redesign: Street Blade, Lou, and the live log
 
-Status: revised after the main agent's review (September 30, 2026). All seven requested changes are adopted; [Review changes](#review-changes) lists where each one landed. Waiting for greenlight. Written by Claude, in the frontend session on `jan/frontend-redesign`. Nothing is implemented yet.
+Status: implemented on `jan/frontend-redesign` (September 30, 2026), except the `agent.py` voice edit, which waits for Kyle's greenlight; see [Implementation notes](#implementation-notes). The main agent's seven review changes are adopted ([Review changes](#review-changes)). Written by Claude, in the frontend session.
 
 - Clickable mockup (the approved design): https://claude.ai/artifact/CNi2h9BNEpM9Ux9eTcbcq4
 - Phase 1 proposal (the alternatives, and why polling rather than streaming): https://claude.ai/artifact/EZdaiJ6mic6ju26FUa1TWi
@@ -313,6 +313,24 @@ The main agent's review asked for seven changes. All are adopted:
 | 5 | `/adventure` handles `abandoned` ("Ended early"), with the solution for completed or abandoned | The sign table; `/adventure`; Tests (pytest and Node) |
 | 6 | The Sonnet runs are required after Kyle's greenlight: acceptance, guiding, and replan, about $3–5 with Jan's go | Decisions; Tests; Risks; Effort |
 | 7 | OFL files with the fonts, Phosphor's MIT notice, and credits in `docs/TOOLS.md` | Server, licenses; Docs |
+
+## Implementation notes
+
+Where the build differs from, or adds to, the plan above:
+
+- **Steps carry `parallel`** as well as `round`, so the page groups only lookups that really ran at once ("Reading up on 3 places", "2 lookups at once").
+- **Tool rows** read as a label and an outcome, with the subject below: "Place research done / Beacon Theatre", "Route check failed", "Route check passed", "Weather check unavailable", and "ran" when a verdict was trimmed from history. The middle dots are gone. "+N more" beyond 12 is unchanged.
+- **The sign has one more state:** every stop resolved but the destination not yet reached: "Every stop done", "Finish: <destination>", "Tell me when you arrive".
+- **The status line** is quiet when there is nothing to say. While a reply is pending it reads "Replies can take a minute or two. It keeps going if you lock your phone." These strings are kept word for word: "Still working on your plan…", "The reply didn’t arrive. Press Send to retry the same message.", "That message wasn’t accepted. Edit it and send again.", "Picking up your trail…", "Your trail is here. Pick up wherever you left off.", and "History couldn’t load. You can still send a message to reconnect."
+- **A reloaded page** opens the last reply at its top. It does that again once the web fonts load, because they reflow the history.
+- **One-paragraph replies** render inline, as before. Block layout (panels, lists, the case file) starts only when a reply has more than one block. Any reply without the new formatting still renders as plain paragraphs.
+- **Not in this branch yet:** the `agent.py` voice edit. It waits for Kyle's greenlight, then the three required Sonnet runs (Jan gave the go). Until then, replies keep today's voice, and the briefing is a plain first paragraph. It still opens at the top of the reply and is pinned on the case board.
+- **Checks.** With the network blocked:
+  - `uv run --frozen pytest -q` passes 459, 27 of them new;
+  - `node --test tests/frontend.test.cjs` passes 49, 13 of them new.
+
+  A mutation check planted 20 single removals of the new behavior (10 on the server, 10 in the page), and the tests caught all 20. The thread-safety test is a stress test, so it isn't part of that count.
+- **Screenshots** are in `docs/screenshots/redesign/`. They came from a local server with a seeded in-memory store and a scripted stand-in for the model and slow tools, so no model calls were made. Each state was checked in the in-app browser. The PNG files were captured with headless Chrome over the DevTools protocol against the same server, because the in-app browser can't save files.
 
 ## Greenlight checklist
 
