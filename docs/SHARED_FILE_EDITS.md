@@ -276,3 +276,28 @@ Revert: `git revert 0ad1c66`. The page renders replies without this formatting a
 - `agent.py`, planning step 8, the first words only. Original: "8. Reply with the briefing first, as its own short paragraph, then the number of stops, ..." Now: "8. Reply with the briefing first, as its own blockquote (see Voice), then the number of stops, ..."
 
 Kyle confirmed that none of the text checks in `scripts/acceptance_checks.py` or `scripts/guiding_checks.py` break under the blockquote and list format. Checked on Claude Sonnet 5.5 against a local server (September 30): acceptance 28/28, guiding 18/18, and `--scenario replan` 8/8, every turn answered by Sonnet.
+
+## Lou wordmark and Abandon trip (branch `kyle/lou-wordmark-abandon-trip`, from `main` at `61851c6`)
+
+Kyle asked for two frontend changes: the header says the guide's name, and one click (plus a confirmation) ends a trip and opens the page as on a first visit. Both files are Jan's. Revert: `git checkout 61851c6 -- index.html tests/frontend.test.cjs`.
+
+- `index.html`, the header wordmark. The page `<title>` and every other mention of Scavagent are unchanged. Original:
+
+  ```html
+        <span class="wordmark">Scavagent</span>
+  ```
+
+- `index.html`, the composer footer. The hint line now shares a row with a small **Abandon trip** button. The button is hidden until there is a trip to end (a session and at least one message) and disabled while a reply is pending. Original:
+
+  ```html
+        <p class="help" id="composer-help">Type “ready”, “here”, “hint”, or “skip”, or change your plans.</p>
+  ```
+
+- `index.html`, added code; nothing existing was removed:
+  - CSS: `.composer-foot`, `.abandon`, `dialog.confirm` and `.confirm-actions`, using the existing color tokens (`--fail` for Yes).
+  - A `<dialog id="abandon-dialog">` that asks "Are you sure you want to end this trip?", with No and Yes buttons. No has focus when it opens, and Escape or No closes it without changing anything.
+  - Script: two lines in `refreshControls()`, and an "Abandoning the trip" section. `abandonTrip()` removes `scavagent.session_id` and `scavagent.pending_message.v1` from localStorage, calls the existing `POST /clear?session_id=` (with a 10 s timeout, and errors ignored), then reloads the page. With no stored session, the page loads the way it does on a first visit: the welcome screen and an empty chat. The device forgets the session before the server call, so even if the server can't be reached, the trip is still gone from this phone.
+- `tests/frontend.test.cjs`: the fake `Element` has `showModal()` and `close()`, the harness knows the four new ids, and `window.location.reload` is counted. Three tests were added:
+  - the button appears only with a trip and is disabled during a reply;
+  - No keeps the trip; Yes posts `/clear`, removes both keys and reloads, and a fresh page then makes no requests and shows the welcome;
+  - Yes still starts fresh when `/clear` fails.

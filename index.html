@@ -150,6 +150,16 @@
     #send:active { transform:scale(.95); }
     #send:disabled { opacity:.4; cursor:default; transform:none; }
     .help { font-size:13.5px; color:var(--muted); padding:0 2px; }
+    .composer-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .abandon { flex-shrink:0; border:1px solid var(--line); background:transparent; color:var(--muted); border-radius:6px; font-size:13.5px; padding:3px 10px; }
+    .abandon:hover:not(:disabled) { color:var(--fail); border-color:var(--fail); }
+    .abandon:disabled { opacity:.5; cursor:default; }
+    dialog.confirm { border:1px solid var(--line); border-radius:8px; background:var(--raised); color:var(--ink); padding:20px; width:min(340px, calc(100vw - 32px)); }
+    dialog.confirm::backdrop { background:var(--scrim); }
+    dialog.confirm p { font-family:var(--f-sign); font-weight:800; font-size:18px; line-height:1.25; }
+    .confirm-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+    .confirm-actions button { border-radius:6px; padding:7px 18px; border:1px solid var(--line); background:var(--surface); }
+    .confirm-actions .end { background:var(--fail); border-color:var(--fail); color:var(--surface); font-weight:700; }
 
     /* Case board: a bottom sheet on a phone, a column on desktop */
     .scrim { position:fixed; inset:0; z-index:10; background:var(--scrim); opacity:0; pointer-events:none; transition:opacity .3s; }
@@ -229,7 +239,7 @@
   </svg>
   <div class="app" id="app">
     <header class="bar">
-      <span class="wordmark">Scavagent</span>
+      <span class="wordmark">Lou</span>
       <span id="working" aria-hidden="true" hidden></span>
     </header>
     <main id="trail" aria-label="Your adventure conversation">
@@ -253,7 +263,10 @@
         <textarea id="message" rows="1" maxlength="8000" placeholder="Where are you starting?" enterkeyhint="send" aria-describedby="status composer-help" disabled></textarea>
         <button id="send" type="submit" disabled><svg class="i" aria-hidden="true"><use href="#i-arrow-up"/></svg><span class="sr-only">Send</span></button>
       </form>
-      <p class="help" id="composer-help">Type “ready”, “here”, “hint”, or “skip”, or change your plans.</p>
+      <div class="composer-foot">
+        <p class="help" id="composer-help">Type “ready”, “here”, “hint”, or “skip”, or change your plans.</p>
+        <button type="button" class="abandon" id="abandon" hidden>Abandon trip</button>
+      </div>
     </footer>
     <div class="side">
       <button type="button" class="sign" id="sign" aria-controls="sheet" aria-expanded="false" hidden></button>
@@ -265,6 +278,13 @@
       </section>
     </div>
   </div>
+  <dialog class="confirm" id="abandon-dialog" aria-labelledby="abandon-question">
+    <p id="abandon-question">Are you sure you want to end this trip?</p>
+    <div class="confirm-actions">
+      <button type="button" id="abandon-no">No</button>
+      <button type="button" class="end" id="abandon-yes">Yes</button>
+    </div>
+  </dialog>
 <script>
 "use strict";
 const GUIDE = "Lou";
@@ -277,6 +297,8 @@ const statusLine = document.getElementById("status");
 const working = document.getElementById("working");
 const signButton = document.getElementById("sign");
 const board = document.getElementById("board");
+const abandonButton = document.getElementById("abandon");
+const abandonDialog = document.getElementById("abandon-dialog");
 const SESSION_KEY = "scavagent.session_id";
 const PENDING_KEY = "scavagent.pending_message.v1";
 const LOCATION_MAX_AGE = 90_000;
@@ -332,6 +354,8 @@ function scrollToTop(article) { trail.scrollTop = Math.max(0, article.offsetTop 
 function refreshControls() {
   input.disabled = busy;
   sendButton.disabled = busy || !input.value.trim();
+  abandonButton.hidden = !sessionId || !messages.children.length; // Once there is a trip to end
+  abandonButton.disabled = busy; // Never in the middle of a reply
   input.style.height = "44px";
   input.style.height = Math.min(input.scrollHeight, 150) + "px";
 }
@@ -927,6 +951,25 @@ async function send(event) {
     refreshControls();
   }
 }
+/* ---------- Abandoning the trip ---------- */
+
+async function abandonTrip() {
+  abandonDialog.close();
+  if (busy) return;
+  busy = true; refreshControls();
+  const ended = sessionId;
+  // Forget the trip on this device first, so the reload starts fresh even if the server can't be reached.
+  sessionId = null; pending = null; store(SESSION_KEY, null); store(PENDING_KEY, null);
+  if (ended) {
+    try { await fetchWithTimeout(`/clear?session_id=${encodeURIComponent(ended)}`, { method:"POST" }, 10_000, response => response); }
+    catch { /* The server keeps the old session, but this device never asks for it again. */ }
+  }
+  window.location.reload(); // With no session stored, the page opens as on a first visit.
+}
+abandonButton.addEventListener("click", () => { if (!busy) abandonDialog.showModal(); });
+document.getElementById("abandon-no").addEventListener("click", () => abandonDialog.close());
+document.getElementById("abandon-yes").addEventListener("click", abandonTrip);
+
 document.getElementById("composer").addEventListener("submit", send);
 input.addEventListener("input", refreshControls);
 input.addEventListener("keydown", event => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) send(event); });
