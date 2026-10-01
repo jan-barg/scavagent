@@ -1,6 +1,6 @@
 # Frontend redesign: Street Blade, Lou, and the live log
 
-Status: implemented on `jan/frontend-redesign` (September 30, 2026), including the `agent.py` voice edit that Kyle's Claude greenlit with one wording change (see [Implementation notes](#implementation-notes)). The three required Sonnet runs come last. The main agent's seven review changes are adopted ([Review changes](#review-changes)). Written by Claude, in the frontend session.
+Status: implemented on `jan/frontend-redesign` (September 30, 2026), including the `agent.py` voice edit that Kyle's Claude greenlit with one wording change, checked with the three required Sonnet runs (see [Implementation notes](#implementation-notes)). The main agent's seven review changes are adopted ([Review changes](#review-changes)). Written by Claude, in the frontend session.
 
 - Clickable mockup (the approved design): https://claude.ai/artifact/CNi2h9BNEpM9Ux9eTcbcq4
 - Phase 1 proposal (the alternatives, and why polling rather than streaming): https://claude.ai/artifact/EZdaiJ6mic6ju26FUa1TWi
@@ -325,7 +325,7 @@ Where the build differs from, or adds to, the plan above:
 - **The status line** is quiet when there is nothing to say. While a reply is pending it reads "Replies can take a minute or two. It keeps going if you lock your phone." These strings are kept word for word: "Still working on your plan…", "The reply didn’t arrive. Press Send to retry the same message.", "That message wasn’t accepted. Edit it and send again.", "Picking up your trail…", "Your trail is here. Pick up wherever you left off.", and "History couldn’t load. You can still send a message to reconnect."
 - **A reloaded page** opens the last reply at its top. It does that again once the web fonts load, because they reflow the history.
 - **One-paragraph replies** render inline, as before. Block layout (panels, lists, the case file) starts only when a reply has more than one block. Any reply without the new formatting still renders as plain paragraphs.
-- **The `agent.py` voice edit** is in (`0ad1c66`, logged in `docs/SHARED_FILE_EDITS.md`). Kyle's Claude greenlit it with one change, adopted above: the stop's theme-link fact stays with the character in the arrival scene, as Guiding and `STORY_DESIGN.md` have it. The three required Sonnet runs follow (Jan gave the go).
+- **The `agent.py` voice edit** is in (`0ad1c66`, logged in `docs/SHARED_FILE_EDITS.md`). Kyle's Claude greenlit it with one change, adopted above: the stop's theme-link fact stays with the character in the arrival scene, as Guiding and `STORY_DESIGN.md` have it. The three required Sonnet runs passed on September 30 against a local server: acceptance 28/28, guiding 18/18, and replan 8/8. All 19 turns were answered by Sonnet 5.5, with no fallback. The replies used the briefing blockquote, characters' lines such as `> **Odalys Finch (radio):**`, and numbered directions, and the handler carried the sourced arrival fact with its link. The real sessions rendered as designed in the in-app browser.
 - **`/adventure` after Kyle's review:**
   - The handler is the cast member introduced in the briefing with a non-empty contact (the `HANDLER_MISSING` test), preferring a role containing "handler". A pre-v2 cast of plain names has none.
   - The finale beat's clue waits until the adventure is over.

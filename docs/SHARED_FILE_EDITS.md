@@ -275,4 +275,4 @@ Revert: `git revert 0ad1c66`. The page renders replies without this formatting a
 
 - `agent.py`, planning step 8, the first words only. Original: "8. Reply with the briefing first, as its own short paragraph, then the number of stops, ..." Now: "8. Reply with the briefing first, as its own blockquote (see Voice), then the number of stops, ..."
 
-Kyle confirmed that none of the text checks in `scripts/acceptance_checks.py` or `scripts/guiding_checks.py` break under the blockquote and list format.
+Kyle confirmed that none of the text checks in `scripts/acceptance_checks.py` or `scripts/guiding_checks.py` break under the blockquote and list format. Checked on Claude Sonnet 5.5 against a local server (September 30): acceptance 28/28, guiding 18/18, and `--scenario replan` 8/8, every turn answered by Sonnet.
