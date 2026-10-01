@@ -69,6 +69,67 @@ With the violations it returns:
 
 The evaluator checks arithmetic, references, and the rules above. It can't certify that a quoted source is true, and it doesn't see the agent's chat replies, so the instructions cover those.
 
+## `find_camera_checkpoints` and `capture_camera_checkpoint`: camera souvenirs (Jan's original tool)
+
+New York's Department of Transportation publishes live stills from its traffic cameras. These two tools turn some of those cameras into a souvenir photographer. Lou sends the user to a spot on the sidewalk where a camera can see them. When the user says they're in position, Lou saves that camera's live still, asks whether they can see themselves, and shows the photo again in the finale's case file.
+
+**The spots** (`data/camera_catalogue.json`). A camera's mounting point is useless to a pedestrian: it's on a pole above the road. So the catalogue holds standing positions instead: 151 spots on 102 Manhattan cameras (Upper East and West Side, and Midtown). Each spot has:
+
+- where to stand: coordinates, an address, a landmark, and the side of the street;
+- what to tell the user ("Stand beside the tall pole near the curb. Face south toward the intersection.");
+- what the camera sees: notes on the view, the box in the frame where a person appears (`person_region`), and how visible they'll be;
+- its verification: `field_verified` (someone stood there and saw themselves) or `image_verified` (the spot was matched on a live still against map imagery, but nobody has stood there yet). The date is recorded, and only `enabled` spots are offered.
+
+**How a spot is made** (`scripts/calibrate_camera.py`, `scripts/camera_geometry.py`).
+
+1. All 308 online Manhattan street cameras were pulled and screened, and 259 were usable.
+2. On a private calibration workbench, Claude drafted spots from each still and the street map, and Jan approved, edited, or skipped each one. He approved 151 spots and skipped 48 cameras.
+3. `import-spots` turns an approved pin into a catalogue entry. It derives the address, the stop's name, and the side of the street from OpenStreetMap geometry.
+4. Every spot gets a `field_log` record: who verified it, how, when, and the SHA-256 of the still it was judged on. The stills themselves stay outside Git.
+5. A Codex review found 4 flawed spots. They were excluded with the reason recorded, re-drafted, and re-approved.
+
+**Finding a spot** (`find_camera_checkpoints`). It takes a point or a route (2–50 coordinates) and returns up to 3 spots:
+
+- only enabled, verified spots, within 800 m of the route by default, ranked by distance from the standing position, never from the camera;
+- it checks at most the 5 nearest spots against DOT's live catalogue and fetches each one's current still, so a spot whose camera is offline or broken is skipped, not offered;
+- each result carries its distance, an out-and-back detour estimate, the time the feed was checked, and a fallback ("skip the photo and continue with a non-camera activity");
+- the warnings say what the tool can't promise: the distance isn't a walking route, a retrieved still doesn't prove the view still matches, and an `image_verified` spot must be disclosed to the user.
+
+**Capturing** (`capture_camera_checkpoint`, a session tool):
+
+- It runs only for an enabled, verified spot. It refuses disabled or unverified spots, and synthetic test fixtures can never be captured.
+- It fetches the still with bounded timeouts and a size limit. It checks that the bytes really are a JPEG, PNG, or WebP image matching the declared type, and it never follows redirects.
+- The photo is saved to the session at once (Cloud Storage when deployed), so it survives a turn that fails later. It is served at `/media/{asset_id}`, where the unguessable id is the only key.
+- At most one capture per spot per message: if a turn dies after taking the photo and the message is sent again, the saved photo is reused, not retaken.
+- The model never supplies URLs, storage, or session ids; the server binds them, and the finder rejects arguments meant only for the server.
+- The result says what it can't know: DOT gives no exposure time, so retrieval time isn't treated as the moment of the photo, and the user is asked whether they're visible (`set_photo_visibility`).
+
+**In planning and guiding.**
+
+- The evaluator accepts a camera stop only at an enabled, verified spot within 150 m of the stop (`CAMERA_UNAVAILABLE`, `CAMERA_ELSEWHERE`).
+- When the user asks for a camera and the plan has none, the evaluator searches the route itself and requires a spot whose detour fits the free time (`CAMERA_STOP_MISSING`). A camera that doesn't fit becomes a note instead.
+- When a plan runs long, the camera stop is suggested for cutting last.
+- At the stop, `get_next_directions` gives the standing instructions and the spot's verification status.
+
+**What the model sees.** From the tool results:
+
+- image-verified spot: "This position was matched on the camera image, not tested in person. If they cannot find themselves, suggest a step toward the curb and offer a retake."
+- offline feeds: "None of the candidate feeds checked is currently usable." The next step is "Offer a non-camera activity; retry later if the user still wants a photo."
+- after a capture: "Frame time is unknown; retrieval time is not exposure time. Ask the user whether they are visible. Reuse this saved media URL in the finale."
+
+**Why it is original.** Public traffic-camera feeds exist, but nothing maps them to where a person should stand to be seen, or turns them into a photo of a user walking a route. The tool's value is that dataset of calibrated, verified standing spots, plus a capture that is honest about what it can't verify.
+
+**Tests and limits.**
+
+- 54 tests across four files:
+  - `tests/test_cameras.py` covers the finder, the capture, and malformed DOT responses;
+  - `tests/test_camera_tools.py` covers the session wrappers and once-per-message reuse;
+  - `tests/test_calibrate_camera.py` covers import from approved notes;
+  - `tests/test_camera_geometry.py` covers street geometry and how a spot is described.
+- No spot is `field_verified` yet. That needs someone standing there, which is the walk test's job ([WALK_TEST.md](WALK_TEST.md)).
+- DOT stills carry no exposure time, so the user's own answer is the only proof they're in frame.
+- The spots cover parts of Manhattan only.
+
 ## Places and research
 
 - **`geocode_place(text)`**: a cross street, address, or landmark typed by the user → `data.location` (a `LocationContext`) and `match_type`. Intersections use the node both streets share in OpenStreetMap (Overpass, with a mirror); addresses use NYC Planning Labs GeoSearch; landmarks use Nominatim. Several places matching one cross street come back flagged for the user to confirm; places outside the five boroughs are `OUTSIDE_COVERAGE`.

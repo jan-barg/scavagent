@@ -5,6 +5,7 @@ capture. They are not fieldwork evidence and are never written to the catalogue.
 """
 
 import json
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -89,6 +90,18 @@ def no_accidental_network(monkeypatch):
     def denied(*args, **kwargs):
         raise AssertionError("Tests must mock every HTTP request")
     monkeypatch.setattr(cam.requests, "get", denied)
+
+
+def test_catalogue_street_ordinals_are_spelled_right():
+    # The page's sign and the directions show these fields; two spots once said "23st Street".
+    def suffix(n):
+        return "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    wrong = [(record.checkpoint_id, found.group(0))
+             for record in cam.load_checkpoints()
+             for text in (record.address, record.landmark, record.side_of_street, record.positioning_instructions)
+             for found in re.finditer(r"\b(\d+)(st|nd|rd|th)\b", text or "", re.IGNORECASE)
+             if found.group(2).lower() != suffix(int(found.group(1)))]
+    assert wrong == []
 
 
 def test_committed_checkpoints_are_verified_and_backed_by_a_field_log():

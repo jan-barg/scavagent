@@ -113,6 +113,14 @@ def test_camera_name_suffixes_are_ignored():
     assert geo.camera_streets("Rockefeller Plz @ 48 St (between 5 Ave and 6 Ave)") == ["rockefeller plaza", "48th street"]
 
 
+def test_a_number_run_into_st_is_a_street_not_a_misspelled_ordinal():
+    # DOT names one camera "7 Ave @ 23st"; it became "23st Street" in two catalogue spots.
+    assert geo.camera_streets("7 Ave @ 23st") == ["7th avenue", "23rd street"]
+    assert geo.camera_streets("7 Ave @ 23St") == ["7th avenue", "23rd street"]
+    assert geo.camera_streets("1st Ave @ 23st") == ["1st avenue", "23rd street"]  # a real ordinal stays
+    assert geo.camera_streets("E 21st St @ 1 Ave") == ["east 21st street", "1st avenue"]
+
+
 def test_a_three_street_camera_name_is_not_turned_into_one_invented_street():
     assert geo.camera_streets("Broadway @ 6 Ave / 33 St") is None
 
