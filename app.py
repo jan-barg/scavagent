@@ -13,12 +13,14 @@ import litellm
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 import state
 from schemas import NYC_TIMEZONE, ChatRequest, ChatResponse, tool_error
 from state import SessionRecord, ToolContext, VersionConflict
 from agent import SYSTEM_PROMPT
 from tools import SESSION_TOOLS, TOOL_MAP, TOOLS, run_tool
+from turn_progress import ProgressReporter
 
 # --- Config ---
 
@@ -73,19 +75,21 @@ _skip_until: dict[str, float] = {}  # model -> monotonic time before which turns
 
 
 def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | None = None,
-              model: str | None = None) -> str:
+              model: str | None = None, progress: ProgressReporter | None = None) -> str:
     """Complete until the model answers without asking for a tool.
 
     Returns the final text. Every tool call is appended to `tool_calls` as it runs,
     so the caller keeps the trace even if a later model call raises. Session tools
     receive `ctx`, which the server binds to the current session. A model that can't answer (see
     `unusable`) hands the turn to its fallback, which redoes it from the user's message (tools that
-    already ran stay in the trace and in the session's state).
+    already ran stay in the trace and in the session's state). `progress`, when given, hears about each model
+    call and tool as it happens (see `report`); a step's number is its position in `tool_calls`.
     """
     model = model or MODEL
     turn_start = len(messages)
     deadline = monotonic() + TURN_SECONDS
     for _ in range(MAX_TOOL_ROUNDS):
+        report(progress, "thinking")
         try:
             reply = complete(messages, deadline, model=model)
         except Exception as error:
@@ -112,7 +116,9 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
             return reply.content or "I didn't get an answer from the model. Please send that again."
 
         # The harness, not the model, runs each tool and appends the result
-        early = lookups_at_once(reply.tool_calls) if monotonic() < deadline else {}
+        report(progress, "new_round")
+        offset = len(tool_calls)  # This round's calls land at tool_calls[offset + i]
+        early = lookups_at_once(reply.tool_calls, progress, offset) if monotonic() < deadline else {}
         for i, call in enumerate(reply.tool_calls):
             try:
                 args = json.loads(call.function.arguments or "{}")
@@ -122,6 +128,8 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
                 # Vertex's OpenAI-compatible endpoint rejects every later request of a conversation that holds
                 # malformed arguments, so the model's copy gets {} next to the error; the trace keeps what it sent.
                 assistant["tool_calls"][i]["function"]["arguments"] = "{}"
+            if i not in early:
+                report(progress, "started", offset + i, call.function.name, args if isinstance(args, dict) else {})
             if i in early:
                 result = early[i]  # Started with its round, before the deadline
             elif monotonic() >= deadline:
@@ -142,12 +150,15 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
                 )
                 args = {"_unparsed": call.function.arguments}
             tool_calls += [{"name": call.function.name, "args": args, "result": result}]
+            if i not in early:
+                report(progress, "finished", offset + i, result)
 
             # The trace keeps the result as an object; the model receives it as JSON text.
             messages += [{"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)}]
 
     # Out of tool rounds: ask once more with tools off, so the user still gets an answer (for example the
     # briefing for a plan it just saved) instead of only the limit message.
+    report(progress, "thinking")
     reply = complete(messages, deadline, tool_choice="none", model=model)
     if reply is not None and reply.content:
         messages += [{"role": "assistant", "content": reply.content}]  # Any tool call it still made is dropped
@@ -155,12 +166,14 @@ def run_agent(messages: list[dict], tool_calls: list[dict], ctx: ToolContext | N
     return "Sorry, I hit my tool-call limit before finishing."
 
 
-def lookups_at_once(calls) -> dict[int, dict]:
+def lookups_at_once(calls, progress: ProgressReporter | None = None, offset: int = 0) -> dict[int, dict]:
     """Results by position for a round made only of lookups, run concurrently; {} for any other round.
 
     Lookups (every tool but the session tools) read public sources and never the session, so a
     round of them can run at once: three research_place calls took 16 s one after another (Kyle,
-    September 29). A round with a session tool keeps running in order, one call at a time."""
+    September 29). A round with a session tool keeps running in order, one call at a time.
+    `progress` hears each job start with the round and finish on its own; `offset` is where the round
+    starts in the turn's tool_calls, since this function sees only its own round."""
     jobs = {}
     for i, call in enumerate(calls):
         name = call.function.name
@@ -174,9 +187,23 @@ def lookups_at_once(calls) -> dict[int, dict]:
             jobs[i] = (name, args)
     if len(jobs) < 2:
         return {}
+    for i, (name, args) in jobs.items():
+        report(progress, "started", offset + i, name, args, True)
     with ThreadPoolExecutor(max_workers=len(jobs), thread_name_prefix="lookup") as pool:
         futures = {i: pool.submit(run_tool, name, args) for i, (name, args) in jobs.items()}
+        for i, future in futures.items():  # Runs in the pool's thread as each job ends
+            future.add_done_callback(lambda done, i=i: report(progress, "finished", offset + i, done.result()))
     return {i: future.result() for i, future in futures.items()}
+
+
+def report(progress: ProgressReporter | None, event: str, *args) -> None:
+    """Tell the turn's progress reporter what happened. Progress is only a view of the turn, so it never fails one."""
+    if progress is None:
+        return
+    try:
+        getattr(progress, event)(*args)
+    except Exception:
+        logger.warning("Turn progress %s failed", event, exc_info=True)
 
 
 def complete(messages: list[dict], deadline: float, tool_choice: str | None = None, model: str | None = None):
@@ -364,6 +391,9 @@ def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
 
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")  # Fonts and licenses
+
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     # Get or create the session. A client may choose its own id; the server makes one otherwise.
@@ -382,12 +412,16 @@ def chat(request: ChatRequest):
     claim = store.claim(session_id, message_id, state.utc_now())
     if claim is None:
         raise HTTPException(409, "Still working on that message. Send it again in a moment.")
+    progress = start_progress(session_id, message_id, claim)
     try:
-        record = store.load(session_id)  # The first turn may have finished between the load and the claim
-        if record and message_id in record.replies:
-            reply = record.replies[message_id]
-        else:
-            reply = run_turn(record or SessionRecord.new(session_id), request)
+        try:
+            record = store.load(session_id)  # The first turn may have finished between the load and the claim
+            if record and message_id in record.replies:
+                reply = record.replies[message_id]
+            else:
+                reply = run_turn(record or SessionRecord.new(session_id), request, progress)
+        finally:
+            report(progress, "stop")  # Before either release below, so no progress write lands after it
     except Exception:
         store.release(session_id, message_id, claim)
         raise
@@ -396,7 +430,16 @@ def chat(request: ChatRequest):
     return reply
 
 
-def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
+def start_progress(session_id: str, message_id: str, token: str) -> ProgressReporter | None:
+    """The live-steps reporter for a claimed message's turn, or None if it can't start (the turn runs anyway)."""
+    try:
+        return ProgressReporter(store, session_id, message_id, token).start()
+    except Exception:
+        logger.warning("Turn progress couldn't start", exc_info=True)
+        return None
+
+
+def run_turn(record: SessionRecord, request: ChatRequest, progress: ProgressReporter | None = None) -> dict:
     """Answer one user message, then store the whole turn in one save."""
     session_id = record.session_id
     now = state.utc_now()
@@ -413,7 +456,7 @@ def run_turn(record: SessionRecord, request: ChatRequest) -> dict:
     tool_calls = []
     try:
         ctx = ToolContext(record=record, store=store, message_id=request.client_message_id)
-        response = run_agent(conversation, tool_calls, ctx, model=model)
+        response = run_agent(conversation, tool_calls, ctx, model=model, progress=progress)
     except Exception as e:
         # Auth, billing, a model that is not running: show it in the chat, not as a 500.
         # Provider errors can quote request details, so those go only to the server log.
@@ -460,6 +503,36 @@ def history(session_id: str):
     if record is None:
         raise HTTPException(404, "No conversation with that session_id.")
     return {"session_id": session_id, "messages": record.transcript}
+
+
+@app.get("/progress")
+def turn_progress(session_id: str, client_message_id: str):
+    """The live steps of a message's turn, so the page can show each tool as it runs (see turn_progress.py).
+
+    While the turn runs this reads only the message's small claim. The session record (up to
+    state.MAX_RECORD_BYTES) is loaded only without a live claim, to tell a stored reply (done) from a turn that
+    has not started or has stopped (unknown). An expired claim is never reported as running.
+    """
+    session_id = session_id_or_400(session_id)
+    if not 1 <= len(client_message_id) <= 128:
+        raise HTTPException(400, "client_message_id must be 1-128 characters.")
+    ids = {"session_id": session_id, "client_message_id": client_message_id}
+    live = store.progress(session_id, client_message_id, state.utc_now())
+    if live is not None:
+        return {**ids, "state": "running", "started_at": live["started_at"], "phase": live["phase"],
+                "steps": live["steps"]}
+    record = store.load(session_id)
+    done = record is not None and client_message_id in record.replies
+    return {**ids, "state": "done" if done else "unknown", "started_at": None, "phase": None, "steps": []}
+
+
+@app.get("/adventure")
+def adventure(session_id: str):
+    """The page's current-stop sign and case board: nothing a later stop could spoil (state.board_summary)."""
+    record = store.load(session_id_or_400(session_id))
+    if record is None:
+        raise HTTPException(404, "No conversation with that session_id.")
+    return state.board_summary(record)
 
 
 @app.get("/media/{asset_id}")
