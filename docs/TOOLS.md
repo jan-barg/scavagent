@@ -6,8 +6,8 @@ Lou is one tool-calling agent. The loop is in `app.py`, the instructions are in 
 
 | Tool | What it does | External data | Owner |
 |---|---|---|---|
-| `evaluate_adventure_plan` | Original tool. Builds a draft into a routed plan and checks it. | OpenStreetMap routing, Google Routes, NYC DOT cameras | Kyle |
-| `find_camera_checkpoints` | Original tool. Finds sidewalk spots a traffic camera can see. | NYC DOT cameras, the calibrated catalogue | Jan |
+| `evaluate_adventure_plan` | Builds a draft into a routed plan and checks it. | OpenStreetMap routing, Google Routes, NYC DOT cameras | Kyle |
+| `find_camera_checkpoints` | Finds sidewalk spots a traffic camera can see. | NYC DOT cameras, the calibrated catalogue | Jan |
 | `capture_camera_checkpoint` | Saves the camera's live still of the user. | NYC DOT cameras | Jan |
 | `geocode_place` | Turns a typed place into coordinates. | OpenStreetMap, NYC GeoSearch | Kyle |
 | `find_places` | Lists candidate stops nearby. | Wikipedia, NYC Landmarks Preservation Commission | Kyle |
@@ -35,7 +35,7 @@ A failure reaches the model as a short error it can act on, never a stack trace.
 
 The harness (`tools.run_tool` and the loop in `app.py`) handles the model's own mistakes the same way. An unknown tool gets the list of real ones. A wrong argument gets the closest correct name ("Did you mean 'text'?"). Malformed JSON, and a tool that would start after the turn's 4-minute limit, also come back as errors. Any other exception becomes `INTERNAL_ERROR` with only its type, so request details and credentials stay in the server log.
 
-## `evaluate_adventure_plan`: the plan evaluator (Kyle's original tool)
+## `evaluate_adventure_plan`: the plan evaluator
 
 The agent never shows a plan it wrote freehand. It sends this tool a draft: where the user starts, what they asked for (time, destination, required stops, modes, theme, a camera stop), the story, and the stops in order. The tool builds a real plan from it, checks it, and returns each violation with its fix. Only a passing plan can be saved.
 
@@ -68,15 +68,11 @@ Each message names the rule and the fix. Two from live runs:
 - `REQUIRED_MISMARKED`: "stop_1 (American Museum of Natural History) is marked required but is not at a place the user required, 270 m from West 81st Street and Columbus Avenue. Keep it as an optional stop (required_by_user false), and put the required stop at the user's place itself."
 - `CLUE_BARE_NUMBER`: "stop_2's clue is only a number ("22"). Make it something the story needs, stated in words: a name, an alibi, a place, or a number as what it is ("locker 1021"), not digits to add up."
 
-### Why it is original
-
-It isn't a wrapper around an API. It turns the product's rules into checks with concrete fixes: real places, honest times, fiction kept apart from fact, no promises about things nobody has seen, clues that add up, and no lost progress when plans change. Several rules came from live runs where a plan passed and still disappointed.
-
 ### Tests and limits
 
 `tests/test_validation.py` and `tests/test_story.py` break one rule at a time, and `tests/test_story.py` replays two live drafts an earlier version wrongly accepted. `tests/test_planning_tools.py` covers drafts, revisions, saving, and camera requests. The evaluator can't confirm that a source is true, and it doesn't see the agent's chat replies; the instructions cover those.
 
-## `find_camera_checkpoints` and `capture_camera_checkpoint`: camera souvenirs (Jan's original tool)
+## `find_camera_checkpoints` and `capture_camera_checkpoint`: camera souvenirs
 
 New York's Department of Transportation publishes live stills from its traffic cameras. These tools turn some of them into a souvenir photographer: Lou sends the user to a spot a camera can see, saves the still when they're in position, asks whether they can see themselves, and shows the photo again in the finale.
 
@@ -102,10 +98,6 @@ The evaluator accepts a camera stop only at an enabled, verified spot within 150
 
 - An image-verified spot: "This position was matched on the camera image, not tested in person. If they cannot find themselves, suggest a step toward the curb and offer a retake."
 - After a capture: "Frame time is unknown; retrieval time is not exposure time. Ask the user whether they are visible. Reuse this saved media URL in the finale."
-
-### Why it is original
-
-Traffic-camera feeds are public, but nothing maps them to where a person should stand to be seen. The value is that dataset of calibrated spots, plus a capture that is honest about what it can't verify.
 
 ### Tests and limits
 

@@ -28,8 +28,8 @@ On the walk, a green street sign at the top of the page shows the current stop. 
 
 | Group | Tools |
 |---|---|
-| Plan evaluator (Kyle's original tool) | `evaluate_adventure_plan` |
-| Camera souvenirs (Jan's original tool) | `find_camera_checkpoints`, `capture_camera_checkpoint` |
+| Plan evaluator | `evaluate_adventure_plan` |
+| Camera souvenirs | `find_camera_checkpoints`, `capture_camera_checkpoint` |
 | Places and research | `geocode_place`, `find_places`, `research_place` |
 | Routes and transit | `get_route`, `get_transit_arrivals`, `get_next_directions` |
 | Progress | `save_adventure_plan`, `get_adventure_state`, `update_adventure_state` |
@@ -56,7 +56,7 @@ The tests run without network access: `uv run pytest` and `node --test tests/fro
 
 ## More
 
-- [docs/TOOLS.md](docs/TOOLS.md): every tool in detail, including both original tools.
+- [docs/TOOLS.md](docs/TOOLS.md): every tool in detail.
 - [docs/STORY_DESIGN.md](docs/STORY_DESIGN.md): what makes a good adventure, and how one plays.
 - [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md): the seven models we compared.
 - [docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md): who built what.
