@@ -333,10 +333,10 @@ class Exploding:
 @pytest.mark.parametrize("reporter", [Exploding, lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no thread"))])
 def test_a_broken_progress_reporter_never_fails_the_turn(client, monkeypatch, reporter):
     monkeypatch.setattr(app_module, "ProgressReporter", reporter)
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tool_ok({"temp_f": 70}))
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", lambda location: tool_ok({"temp_f": 70}))
     script(monkeypatch,
-           FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}'),
-                                                 tool_call("c2", "get_weather", '{"location": "LA"}')]),
+           FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}'),
+                                                 tool_call("c2", "fake_lookup", '{"location": "LA"}')]),
            FakeMessage(content="Nice out.", tool_calls=None))
     body = client.post("/chat", json={"message": "walk?", "session_id": "b", "client_message_id": "m"}).json()
     assert body["response"] == "Nice out." and len(body["tool_calls"]) == 2
@@ -345,8 +345,8 @@ def test_a_broken_progress_reporter_never_fails_the_turn(client, monkeypatch, re
 def test_no_progress_write_lands_after_the_claim_is_released(client, store, monkeypatch):
     store.write_delay = 0.03
     monkeypatch.setattr(app_module, "ProgressReporter", functools.partial(turn_progress.ProgressReporter, interval=0.02))
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tool_ok({"temp_f": 70}))
-    script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", lambda location: tool_ok({"temp_f": 70}))
+    script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
            FakeMessage(content="Nice out.", tool_calls=None))
     client.post("/chat", json={"message": "walk?", "session_id": "r", "client_message_id": "m"})
     time.sleep(0.1)
@@ -372,9 +372,9 @@ def test_no_progress_write_lands_after_release_when_the_turn_raises(store, monke
 
 
 def test_chat_is_unchanged_with_and_without_a_client_message_id(client, store, monkeypatch):
-    monkeypatch.setitem(tools.TOOL_MAP, "get_weather", lambda location: tool_ok({"temp_f": 70}))
+    monkeypatch.setitem(tools.TOOL_MAP, "fake_lookup", lambda location: tool_ok({"temp_f": 70}))
     for extra in ({}, {"client_message_id": "m-shape"}):
-        script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "get_weather", '{"location": "NYC"}')]),
+        script(monkeypatch, FakeMessage(content=None, tool_calls=[tool_call("c1", "fake_lookup", '{"location": "NYC"}')]),
                FakeMessage(content="Hi.", tool_calls=None))
         body = client.post("/chat", json={"message": "hi", "session_id": "shape", **extra}).json()
         assert set(body) == {"response", "session_id", "tool_calls"}

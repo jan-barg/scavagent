@@ -25,7 +25,7 @@ from turn_progress import ProgressReporter
 
 # --- Config ---
 
-# The agent's instructions live in agent.py (Kyle's workstream); see docs/SHARED_FILE_EDITS.md.
+# The agent's instructions live in agent.py (Kyle's workstream).
 # Planning a researched adventure takes more tool rounds than the starter's 8; TURN_SECONDS still bounds the turn.
 MAX_TOOL_ROUNDS = 16
 # A turn starts no model call or tool after this, and each model call gets only the time left. Tools bound

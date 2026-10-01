@@ -102,7 +102,7 @@ Keep every current check. Suggestions should say exactly what to add ("give stop
 
 ## Implementation plan (Kyle's agent)
 
-1. `schemas.py`: add the optional fields above (Jan-approved; record the edit in `docs/SHARED_FILE_EDITS.md`), keeping old plans loadable. Add a test that a stored plan without them still loads.
+1. `schemas.py`: add the optional fields above (Jan-approved), keeping old plans loadable. Add a test that a stored plan without them still loads.
 2. `adventure/drafts.py` and the `evaluate_adventure_plan` schema: accept and pass through the new draft fields.
 3. `adventure/validation.py`: the checks above, one test per code that fails on a draft breaking just that rule.
 4. Regression fixtures: the two accepted drafts in `fixtures/story_regressions/` must now fail (expected: `MISSING_BRIEFING`, `CLUE_*`, `SOLUTION_UNEARNED`, `TOO_FEW_STOPS`, plus `REAL_PERSON_IN_FICTION` and `OBJECT_UNEARNED` for Kyle's). The worked example should pass (seed its research from the Jan fixture's evidence).

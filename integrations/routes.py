@@ -22,7 +22,6 @@ from schemas import NYC_TIMEZONE, Freshness, RouteLeg, tool_error, tool_ok
 VALHALLA_URL = "https://valhalla1.openstreetmap.de"
 OSRM_URL = "https://routing.openstreetmap.de/routed-foot"
 MAX_STOPS = 10
-MAX_DESTINATIONS = 25
 MAX_INSTRUCTIONS = 12
 MAX_DWELL_MINUTES = 240
 SAME_SPOT_M = 25  # consecutive stops closer than this need no directions
@@ -142,41 +141,6 @@ def get_route(stops, modes=("walk", "transit"), depart_at=None, transit_types=("
         "arrive_at": legs[-1]["arrive_at"],
         "arrive_local": _local(datetime.fromisoformat(legs[-1]["arrive_at"])),
     }, warnings=warnings, freshness=freshness)
-
-
-def get_walking_times(origin, destinations):
-    """Walking minutes from one point to each of 1-25 destinations, for ranking and filtering candidates.
-
-    origin and destinations are points like {"id": "wiki:9238071", "lat": ..., "lng": ...}.
-    An unreachable destination gets duration_minutes None rather than a guessed value.
-    """
-    points = _read_points([origin], "origin", 1, 1)
-    if isinstance(points, dict):
-        return points
-    targets = _read_points(destinations, "destinations", 1, MAX_DESTINATIONS)
-    if isinstance(targets, dict):
-        return targets
-
-    warnings = []
-    try:
-        try:
-            pairs = _valhalla_matrix(points[0], targets)
-        except UpstreamError as first:
-            pairs = _osrm_table(points[0], targets)
-            warnings.append(f"Valhalla was unavailable ({first}); used OSRM.")
-    except UpstreamError as e:
-        return tool_error("UPSTREAM_UNAVAILABLE", f"Both walking routers failed; last error: {e}.", retryable=True,
-                          next_step="Try again shortly, or rank candidates by straight-line distance and say so.")
-
-    times = [{
-        "to_id": target["id"],
-        "duration_minutes": None if seconds is None else round(seconds / 60, 1),
-        "distance_m": None if meters is None else round(meters),
-    } for target, (seconds, meters) in zip(targets, pairs)]
-    if any(t["duration_minutes"] is None for t in times):
-        warnings.append("Some destinations are unreachable on foot; their duration_minutes is null.")
-    return tool_ok({"from_id": points[0]["id"], "mode": "walk", "times": times, "uncertainty": WALK_NOTE},
-                   warnings=warnings, freshness=reference())
 
 
 # --- Arguments ---
@@ -322,42 +286,6 @@ def _osrm_instruction(step):
     modifier = maneuver.get("modifier")
     turn = f" {modifier}" if modifier and modifier != "straight" else ""
     return f"{OSRM_VERBS.get(maneuver['type'], 'Continue')}{turn} onto {road}."
-
-
-def _valhalla_matrix(origin, targets):
-    payload = {
-        "sources": [{"lat": origin["lat"], "lon": origin["lng"]}],
-        "targets": [{"lat": t["lat"], "lon": t["lng"]} for t in targets],
-        "costing": "pedestrian",
-        "units": "kilometers",
-    }
-    body = fetch_json("valhalla", "POST", f"{VALHALLA_URL}/sources_to_targets", json=payload)
-    try:
-        cells = sorted(body["sources_to_targets"][0], key=lambda cell: cell["to_index"])
-        pairs = [(c.get("time"), None if c.get("distance") is None else c["distance"] * 1000) for c in cells]
-    except (KeyError, TypeError, IndexError) as e:
-        raise UpstreamError("valhalla", f"unexpected matrix shape ({e!r})") from e
-    if len(pairs) != len(targets):
-        raise UpstreamError("valhalla", f"expected {len(targets)} matrix cells, got {len(pairs)}")
-    return pairs
-
-
-def _osrm_table(origin, targets):
-    coordinates = ";".join(f"{p['lng']},{p['lat']}" for p in [origin, *targets])
-    body = fetch_json("osrm", "GET", f"{OSRM_URL}/table/v1/foot/{coordinates}",
-                      params={"sources": "0", "annotations": "duration,distance"})
-    if body.get("code") != "Ok":
-        raise UpstreamError("osrm", body.get("message") or body.get("code") or "table failed")
-    try:
-        pairs = list(zip(body["durations"][0][1:], body["distances"][0][1:]))
-    except (KeyError, TypeError, IndexError) as e:
-        raise UpstreamError("osrm", f"unexpected table shape ({e!r})") from e
-    if len(pairs) != len(targets):
-        raise UpstreamError("osrm", f"expected {len(targets)} table cells, got {len(pairs)}")
-    return pairs
-
-
-# --- Helpers ---
 
 
 def _heading(origin, destination):

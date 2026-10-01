@@ -6,8 +6,7 @@ Scavagent is one tool-calling agent (the loop in `app.py`, the instructions in `
 |---|---|---|
 | Planning and checking | `evaluate_adventure_plan` (original), `save_adventure_plan`, `get_next_directions` | Kyle |
 | Places and research | `geocode_place`, `find_places`, `research_place` | Kyle |
-| Travel | `get_route`, `get_walking_times`, `get_transit_arrivals` | Kyle |
-| History | `find_filming_records` | Kyle |
+| Travel | `get_route`, `get_transit_arrivals` | Kyle |
 | Progress and photos | `get_adventure_state`, `update_adventure_state`, `find_camera_checkpoints` (original), `capture_camera_checkpoint` | Jan |
 
 Tools marked as session tools receive the server's session context; the model never names a session.
@@ -139,13 +138,8 @@ New York's Department of Transportation publishes live stills from its traffic c
 ## Travel
 
 - **`get_route(stops, modes, depart_at, transit_types)`**: one `RouteLeg` per consecutive pair, timed from the departure plus time at each stop. Walking comes from FOSSGIS Valhalla (OSRM as fallback); legs start with a summary line ("Walk about 8 min heading southwest via Central Park West, then Columbus Avenue"), because Manhattan sidewalks are unnamed in OpenStreetMap. With transit allowed, a leg over 12 minutes on foot is looked up in Google Routes and rides only when it saves at least 4 minutes; transit legs name the line, direction, stations, departure and leave-by times, fare, and count the wait for the train.
-- **`get_walking_times(origin, destinations)`**: walking minutes to up to 25 candidates, for ranking.
 - **`get_transit_arrivals(station, line, direction, lat, lng)`**: live next trains per direction (Uptown/Downtown, with each train's terminal) from the MTA's GTFS-realtime feeds, plus the lines' active service alerts. Feeds older than 10 minutes are refused (`STALE_DATA`) rather than shown as live.
 - **`get_next_directions()`**: the way to the current stop from the saved plan; stale transit legs are looked up again, and a user who has wandered more than 200 m gets directions from where they are.
-
-## History
-
-- **`find_filming_records(street, zip_code, date_from, date_to)`**: film permits that held parking on a street, with the data's coverage. On September 28, 2026 the newest permit started June 29, 2026, so requests for later dates are `STALE_DATA` and the tool never implies a current set.
 
 ## Configuration
 
@@ -155,8 +149,8 @@ New York's Department of Transportation publishes live stills from its traffic c
 | `GOOGLE_MAPS_API_KEY` | Alternative to the above: an API key restricted to the Routes API. |
 | `SCAVAGENT_ROUTES_DAILY_LIMIT` | Transit lookups per server process per day (default 500); Google's free tier is 10,000 a month. |
 
-Walking, places, research, arrivals, and film permits need no keys. Public servers (Overpass, Nominatim, FOSSGIS) are shared and low-volume; the adapters identify the app, space Nominatim requests a second apart, and cache repeats.
+Walking, places, research, and arrivals need no keys. Public servers (Overpass, Nominatim, FOSSGIS) are shared and low-volume; the adapters identify the app, space Nominatim requests a second apart, and cache repeats.
 
 ## Sources and attribution
 
-Wikipedia (CC BY-SA 4.0); map and route data © OpenStreetMap contributors (ODbL) via Overpass, Nominatim, Valhalla, and OSRM; Google Routes API; NYC Landmarks Preservation Commission and NYC Film Permits via NYC Open Data; MTA Subway Stations via NY Open Data; MTA GTFS-realtime and service alert feeds; NYC Planning Labs GeoSearch. The page uses the Overpass and Atkinson Hyperlegible (Braille Institute) fonts under the SIL Open Font License (`static/fonts/OFL-*.txt`) and Phosphor Icons under the MIT License (`static/licenses/phosphor-MIT.txt`).
+Wikipedia (CC BY-SA 4.0); map and route data © OpenStreetMap contributors (ODbL) via Overpass, Nominatim, Valhalla, and OSRM; Google Routes API; NYC Landmarks Preservation Commission via NYC Open Data; MTA Subway Stations via NY Open Data; MTA GTFS-realtime and service alert feeds; NYC Planning Labs GeoSearch. The page uses the Overpass and Atkinson Hyperlegible (Braille Institute) fonts under the SIL Open Font License (`static/fonts/OFL-*.txt`) and Phosphor Icons under the MIT License (`static/licenses/phosphor-MIT.txt`).

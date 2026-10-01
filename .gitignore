@@ -16,3 +16,6 @@ __pycache__/
 
 # Local session store (SQLite)
 .data/
+
+# Local coding-agent state (Claude Code worktrees, settings)
+.claude/

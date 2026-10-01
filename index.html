@@ -510,12 +510,12 @@ function renderText(target, text, allowMarkdown) {
 
 const TOOL_LABELS = table({
   geocode_place: "Place lookup", find_places: "Place search", research_place: "Place research", get_route: "Route timing",
-  get_walking_times: "Walking times", get_next_directions: "Directions", get_transit_arrivals: "Train arrivals",
-  find_filming_records: "Film permit search", find_camera_checkpoints: "Camera spot search", capture_camera_checkpoint: "Camera frame",
+  get_next_directions: "Directions", get_transit_arrivals: "Train arrivals",
+  find_camera_checkpoints: "Camera spot search", capture_camera_checkpoint: "Camera frame",
   evaluate_adventure_plan: "Route check", save_adventure_plan: "Case saved", get_adventure_state: "Progress check",
-  update_adventure_state: "Progress update", load_dev_adventure: "Test adventure", get_weather: "Weather check",
+  update_adventure_state: "Progress update", load_dev_adventure: "Test adventure",
 });
-const SUBJECT_ARGS = table({ geocode_place: "text", find_places: "query", find_filming_records: "street", get_weather: "location" });
+const SUBJECT_ARGS = table({ geocode_place: "text", find_places: "query" });
 function toolLabel(name) { return TOOL_LABELS[name] || name.replaceAll("_", " ").slice(0, 60); }
 function toolSubject(name, args, result) {
   // The same whitelist as the server's /progress: never the plan check's or the state tools' arguments.

@@ -1,7 +1,7 @@
 """Shared records for Lou: the contract between the app, the agent, and the tools.
 
 Every workstream builds against these models. Change them only after both
-teammates agree (see docs/CONTRACTS.md). Timestamps must be timezone-aware;
+teammates agree. Timestamps must be timezone-aware;
 user-facing NYC times are interpreted in America/New_York. Unknown information
 stays None rather than becoming a model-invented value.
 """

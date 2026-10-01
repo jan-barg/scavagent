@@ -2,7 +2,7 @@
 
 One real adventure, start to finish, on the deployed site, before submission. It checks what the scripts can't: real walking times, directions that read right on the street, puzzles you can answer standing there, and the camera photo with a person in frame.
 
-**Route:** grader query 2, which takes about 45 minutes. It runs from Central Park West & West 86th Street, past Columbus Avenue & West 81st Street, to Broadway & West 72nd Street. The camera stop is the image-verified viewpoint at Broadway & 72nd, next to the finish, so a clear photo there also upgrades that spot to `field_verified` ([CAMERA_FIELDWORK.md](CAMERA_FIELDWORK.md), "Field route").
+**Route:** grader query 2, which takes about 45 minutes. It runs from Central Park West & West 86th Street, past Columbus Avenue & West 81st Street, to Broadway & West 72nd Street. The camera stop is the image-verified viewpoint at Broadway & 72nd, next to the finish, so a clear photo there also upgrades that spot to `field_verified`.
 
 **Roles:** one person walks and chats on their phone. The other walks along, takes notes, and at the camera watches the live still (the camera's still link) to confirm the walker is in frame.
 
@@ -49,5 +49,5 @@ One real adventure, start to finish, on the deployed site, before submission. It
 
 ## After
 
-- Put the results and any issues in [STATUS.md](STATUS.md), and open issues for anything broken.
-- If the walker was visible at the camera, record the spot as `field_verified` with the screenshot (`scripts/calibrate_camera.py entry`, "field" notes; see [CAMERA_FIELDWORK.md](CAMERA_FIELDWORK.md)).
+- Open issues for anything broken.
+- If the walker was visible at the camera, record the spot as `field_verified` with the screenshot (`scripts/calibrate_camera.py entry`, "field" notes).

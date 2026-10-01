@@ -11,7 +11,7 @@ warns so the agent can tell the user). Set the server-side SCAVAGENT_DEV_CAMERA_
 flag to include fixtures in FINDER results. Fixtures are explicitly labeled and cannot be
 captured. data/camera_catalogue.json keeps pending candidates apart from validated
 CameraCheckpoint records because stand_location cannot be null; see
-docs/CAMERA_FIELDWORK.md and scripts/calibrate_camera.py for how records are added.
+scripts/calibrate_camera.py for how records are added.
 
 Distances are geometric estimates using pedestrian positions, never camera mounts.
 Corridor detour is an out-and-back estimate from the nearest polyline point, not a

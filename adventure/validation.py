@@ -1,7 +1,7 @@
 """The adventure plan evaluator, Lou's original planning tool (evaluate_adventure_plan).
 
 It rebuilds a plan's timeline from its route legs and dwell times, then checks the plan against
-the user's request and the product rules in docs/PLAN.md:
+the user's request and the product's rules:
 
 - time: the finish, plus contingency, against a deadline or time budget; enough contingency; the
   stated total (travel, waits, and dwell, without contingency) matching the computed one;
@@ -57,7 +57,7 @@ ESTIMATE_TOLERANCE_MINUTES = 2
 MIN_CONTINGENCY_MINUTES = 2
 CONTINGENCY_SHARE = 0.10  # with a deadline or budget, keep at least 10% of travel and dwell in reserve
 MIN_BRIEFING_CHARS = 200  # about three sentences
-GUIDE_NAME = "Lou"  # the dispatcher the agent speaks as, outside the story (docs/FRONTEND_REDESIGN.md)
+GUIDE_NAME = "Lou"  # the dispatcher the agent speaks as, outside the story
 ROOM_FOR_A_STOP_MINUTES = 10  # unused minutes that would fit one more short stop
 STOPS_FOR_MINUTES = ((100, 4), (60, 3), (20, 2))  # a limit the user gives of at least this long: at least this many
 # A clue that is only a number ("22", "1897-1929") is arithmetic, not something the story needs.
