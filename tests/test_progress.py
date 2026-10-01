@@ -1,7 +1,10 @@
 """Live turn progress (GET /progress) and the page's board (GET /adventure), with the model scripted."""
 
 import functools
+import os
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
 from datetime import timedelta
@@ -491,3 +494,14 @@ def test_the_board_is_idle_without_a_plan_and_404_without_a_session(client, stor
     assert client.get("/adventure", params={"session_id": "empty"}).json() == {"status": "idle"}
     assert client.get("/adventure", params={"session_id": "nobody"}).status_code == 404
     assert client.get("/adventure", params={"session_id": "../x"}).status_code == 400
+
+
+def test_fonts_are_served_as_fonts_without_a_system_type_list():
+    # python:3.13-slim has no /etc/mime.types, and Python's own table has no .woff2: the deployed fonts went out as
+    # application/octet-stream. A fresh interpreter with the system lists switched off stands in for the image.
+    code = ("import mimetypes; mimetypes.knownfiles[:] = []; import app; from fastapi.testclient import TestClient; "
+            "print(TestClient(app.app).get('/static/fonts/Overpass-800.woff2').headers['content-type'])")
+    run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120,
+                         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         env={**os.environ, "SCAVAGENT_STORE": "memory"})
+    assert run.stdout.strip() == "font/woff2", run.stderr[-800:]

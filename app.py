@@ -1,6 +1,7 @@
 import copy
 import json
 import logging
+import mimetypes
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -391,6 +392,9 @@ def index():
     return FileResponse(Path(__file__).parent / "index.html")
 
 
+# Python's own type table has no .woff2, and the slim image has no system list (/etc/mime.types) to add it, so the
+# fonts went out as application/octet-stream.
+mimetypes.add_type("font/woff2", ".woff2")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")  # Fonts and licenses
 
 
