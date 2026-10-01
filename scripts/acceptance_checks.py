@@ -1,4 +1,4 @@
-"""Run the README's three grader queries against a running Scavagent and check what must hold.
+"""Run the README's three grader queries against a running Lou and check what must hold.
 
     uv run python scripts/acceptance_checks.py [BASE_URL] [--out transcript.json]
 

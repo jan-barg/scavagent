@@ -1,6 +1,6 @@
-# Scavagent
+# Lou
 
-A chat agent that turns a walk through New York City into a short mystery adventure. Tell it where you are, and optionally how much time you have, where you need to end up, a stop you must pass, how you want to travel, and a theme. It then:
+Lou is a chat agent that turns a walk through New York City into a short mystery adventure. Tell it where you are, and optionally how much time you have, where you need to end up, a stop you must pass, how you want to travel, and a theme. It then:
 
 - researches real places near your route (Wikipedia and NYC Landmarks Preservation Commission records);
 - times the route on foot and by subway;

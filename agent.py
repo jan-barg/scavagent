@@ -1,4 +1,4 @@
-"""Scavagent's agent instructions: how the model plans, guides, adapts, and ends an adventure.
+"""Lou's agent instructions: how the model plans, guides, adapts, and ends an adventure.
 
 app.py sends SYSTEM_PROMPT at the start of every turn, followed by the server's app context (time,
 latest location, adventure status). The tools do the looking up and the arithmetic; these

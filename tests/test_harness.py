@@ -227,6 +227,6 @@ def test_sessions_are_separate(client, monkeypatch):
 
 
 def test_the_agent_introduces_itself_as_lou():
-    # The guide's name is Lou on the page and in the instructions; "Scavagent" stays the project's name in the repo.
+    # The agent is Lou on the page and in the instructions; identifiers keep "scavagent" (env vars, URL, storage keys).
     assert app_module.SYSTEM_PROMPT.startswith("You are Lou,")
     assert "Scavagent" not in app_module.SYSTEM_PROMPT

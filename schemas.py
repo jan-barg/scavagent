@@ -1,4 +1,4 @@
-"""Shared records for Scavagent: the contract between the app, the agent, and the tools.
+"""Shared records for Lou: the contract between the app, the agent, and the tools.
 
 Every workstream builds against these models. Change them only after both
 teammates agree (see docs/CONTRACTS.md). Timestamps must be timezone-aware;

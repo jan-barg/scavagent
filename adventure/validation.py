@@ -1,4 +1,4 @@
-"""The adventure plan evaluator, Scavagent's original planning tool (evaluate_adventure_plan).
+"""The adventure plan evaluator, Lou's original planning tool (evaluate_adventure_plan).
 
 It rebuilds a plan's timeline from its route legs and dwell times, then checks the plan against
 the user's request and the product rules in docs/PLAN.md:
