@@ -1,36 +1,25 @@
 # Who built what
 
-Scavagent was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`). Each directed coding agents: Kyle worked with Claude Code, and Jan with Claude and Codex. Each owns one original tool, reviewed the other's pull requests before they merged, and can explain the other's design.
+Lou was built by Jan Barganowski (`jgb2170`) and Kyle Coletta (`kc3936`), each working with coding agents: Kyle with Claude Code, Jan with Claude Code and Codex. Each reviewed the other's pull requests.
 
-## Kyle: planning, research, and the plan evaluator
+## Jan
 
-- **Original tool: `evaluate_adventure_plan`** (`adventure/`).
-  - It builds the agent's draft into a routed plan, using only places and facts the research tools returned. It then checks the plan against the user's request and the product's rules before the user sees it: time, required stops, travel modes, physical honesty, sourced links, the story design, and revisions mid-adventure.
-  - A plan that fails can't be saved. [TOOLS.md](TOOLS.md) lists every check.
-- **The agent's instructions** (`agent.py`): how it plans, guides each stop, handles skips and changed limits, and ends. Kyle implemented story design v2, which Jan and Kyle agreed together.
-- **Research and travel tools** (`integrations/`):
-  - `geocode_place`: OpenStreetMap and NYC GeoSearch.
-  - `find_places` and `research_place`: claims pinned to Wikipedia revisions and NYC Landmarks Preservation Commission records.
-  - `get_route`: walking routes from Valhalla and OSRM, and subway or bus legs from Google Routes, including the wait for the train.
-  - `get_transit_arrivals`: live MTA GTFS-realtime.
-- **Planning tools:** `save_adventure_plan` and `get_next_directions`.
-- **Checks and documentation:** the grader-query acceptance script (`scripts/acceptance_checks.py`), the mid-adventure guiding checks (`scripts/guiding_checks.py`), the story regression tests, and [TOOLS.md](TOOLS.md).
+- Camera souvenirs (original tool). Sends the user to a sidewalk spot an NYC traffic camera can see and saves the photo, using 151 standing spots Jan calibrated and approved.
+- Chat server. Runs the agent loop and keeps the tool trace, with retries, a 4-minute turn limit, and a Gemini fallback when Claude can't answer.
+- Sessions and progress. Conversations, progress, and photos survive reloads and failed turns (SQLite locally, Firestore and Cloud Storage when deployed).
+- The page. The mobile chat with Lou, the current-stop sign, the case board, and a live log of each tool as it runs.
+- Model choice. Compared seven models on the same queries and picked Claude Sonnet 5.5.
+- Deployment. Cloud Run with continuous deployment from GitHub.
 
-## Jan: the app, progress, cameras, and deployment
+## Kyle
 
-- **Original tool: `find_camera_checkpoints` and `capture_camera_checkpoint`** (`integrations/cameras.py`).
-  - These find NYC DOT traffic-camera views at pedestrian standing positions, never the camera's mounting point.
-  - The positions come from a calibration workbench, where Jan approved 151 image-verified spots on 102 cameras.
-  - The capture tool saves the live still as a souvenir, at most once per message, and shows it again in the finale.
-- **App and harness** (`app.py`): the `/chat` loop and trace, retries, the final answer after the last tool round, and model selection (Claude Sonnet 5.5 through Anthropic, with a Gemini fallback and prompt caching). Also the model comparison ([MODEL_COMPARISON.md](MODEL_COMPARISON.md)).
-- **Progress and storage** (`state.py`, `tools.py`): durable sessions (SQLite locally, Firestore and Cloud Storage deployed), the progress operations and their guards (plan order, arrival at the destination), photos, and history.
-- **Frontend** (`index.html`): the mobile chat, optional location, and recovery after a reload or a slow reply.
-- **Deployment:** Cloud Run with continuous deployment from GitHub, secrets, the README, and `submission.json`.
-- **The shared contract** (`schemas.py`), which both halves build on, plus the story design write-up and its regression fixtures.
+- Plan evaluator (original tool). Builds the agent's draft into a routed plan and checks it against the user's request, the sources, and the story rules before anyone sees it.
+- Agent instructions. How Lou plans, guides each stop, handles changes of plan, and ends an adventure.
+- Research. Finds places and gathers sourced facts from Wikipedia and NYC Landmarks Preservation Commission records.
+- Routes and transit. Walking, subway, and bus routes, live train arrivals, and directions to each stop.
+- Check scripts. Replay the grader queries, a guided walk, and a camera stop against a running server.
 
 ## Together
 
-- The product plan and the shared contract.
-- Story design v2, agreed after two disappointing live runs.
-- The choice of image-verified camera positions.
-- Testing on the deployed site, and the walk-test.
+- The product idea and the story design, agreed after two disappointing live runs.
+- Testing on the deployed site, and the walk test planned for October 3 and 4.
