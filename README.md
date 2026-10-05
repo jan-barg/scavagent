@@ -57,19 +57,6 @@ What each tool does, where its data comes from, and how errors reach the model:
 
 The server is FastAPI with a LiteLLM tool-calling loop (`app.py`), and the page is a single HTML file (`index.html`). It runs on Google Cloud Run, which rebuilds and redeploys on every push to `main`. Sessions are stored in Firestore and camera photos in Cloud Storage. The model is Claude Sonnet 5.5 through Anthropic's API, with the key kept in Secret Manager; if Claude can't answer, Gemini 3.5 Flash-Lite runs as a fallback model. Sonnet vs Gemini model comparison can be found here: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md).
 
-## Run locally
-
-With Python 3.10 or later and `uv`:
-
-```sh
-uv sync
-gcloud auth application-default login
-uv run app.py
-```
-
-Then open http://localhost:8000. Locally the model defaults to Gemini 3.5 Flash-Lite on Vertex AI, which is what the `gcloud` login is for. To use Claude as the live site does, export `SCAVAGENT_MODEL=anthropic/claude-sonnet-5-5` and `ANTHROPIC_API_KEY` first. Other settings are in [.env.example](.env.example).
-
-The tests run without network access: `uv run pytest` and `node --test tests/frontend.test.cjs`.
 
 ## More
 
