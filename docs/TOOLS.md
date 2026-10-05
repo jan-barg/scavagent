@@ -4,20 +4,20 @@ Lou is one tool-calling agent. The loop is in `app.py`, the instructions are in 
 
 ## The tools
 
-| Tool | What it does | External data | Owner |
-|---|---|---|---|
-| `evaluate_adventure_plan` | Builds a draft into a routed plan and checks it. | OpenStreetMap routing, Google Routes, NYC DOT cameras | Kyle |
-| `find_camera_checkpoints` | Finds sidewalk spots a traffic camera can see. | NYC DOT cameras, the calibrated catalogue | Jan |
-| `capture_camera_checkpoint` | Saves the camera's live still of the user. | NYC DOT cameras | Jan |
-| `geocode_place` | Turns a typed place into coordinates. | OpenStreetMap, NYC GeoSearch | Kyle |
-| `find_places` | Lists candidate stops nearby. | Wikipedia, NYC Landmarks Preservation Commission | Kyle |
-| `research_place` | Collects sourced facts about one place. | Wikipedia, NYC Landmarks Preservation Commission | Kyle |
-| `get_route` | Times a walk, subway, or bus ride between stops. | OpenStreetMap routing, Google Routes | Kyle |
-| `get_transit_arrivals` | Next trains at a station, with service alerts. | MTA GTFS-realtime | Kyle |
-| `get_next_directions` | The way to the current stop. | OpenStreetMap routing, Google Routes | Kyle |
-| `save_adventure_plan` | Stores a plan that passed the evaluator. | None | Kyle |
-| `get_adventure_state` | Reads the user's progress. | None | Jan |
-| `update_adventure_state` | Records one change to progress. | None | Jan |
+| Tool                        | What it does                                     | External data                                         | Owner |
+| --------------------------- | ------------------------------------------------ | ----------------------------------------------------- | ----- |
+| `evaluate_adventure_plan`   | Builds a draft into a routed plan and checks it. | OpenStreetMap routing, Google Routes, NYC DOT cameras | Kyle  |
+| `find_camera_checkpoints`   | Finds sidewalk spots a traffic camera can see.   | NYC DOT cameras, the calibrated catalogue             | Jan   |
+| `capture_camera_checkpoint` | Saves the camera's live still of the user.       | NYC DOT cameras                                       | Jan   |
+| `geocode_place`             | Turns a typed place into coordinates.            | OpenStreetMap, NYC GeoSearch                          | Kyle  |
+| `find_places`               | Lists candidate stops nearby.                    | Wikipedia, NYC Landmarks Preservation Commission      | Kyle  |
+| `research_place`            | Collects sourced facts about one place.          | Wikipedia, NYC Landmarks Preservation Commission      | Kyle  |
+| `get_route`                 | Times a walk, subway, or bus ride between stops. | OpenStreetMap routing, Google Routes                  | Kyle  |
+| `get_transit_arrivals`      | Next trains at a station, with service alerts.   | MTA GTFS-realtime                                     | Kyle  |
+| `get_next_directions`       | The way to the current stop.                     | OpenStreetMap routing, Google Routes                  | Kyle  |
+| `save_adventure_plan`       | Stores a plan that passed the evaluator.         | None                                                  | Kyle  |
+| `get_adventure_state`       | Reads the user's progress.                       | None                                                  | Jan   |
+| `update_adventure_state`    | Records one change to progress.                  | None                                                  | Jan   |
 
 Tools that read or change a session get it from the server; the model never names one.
 
